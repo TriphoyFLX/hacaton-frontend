@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Play, Pause, Square, Circle, Mic, Plus, Volume2, Save, Download, Undo2, Redo2, Clock, Zap, Sliders, Music, Headphones, Activity, BarChart3, Settings, Monitor, Smartphone } from 'lucide-react';
+import { Play, Pause, Square, Circle, Mic, Plus, Volume2, Save, Download, Undo2, Redo2, Clock, Zap, Sliders, Music, Headphones, Activity, BarChart3, Settings, Monitor, Smartphone, Copy, Trash2, Search, Sparkles, GripVertical } from 'lucide-react';
 
 interface Track {
   id: string;
@@ -92,7 +92,76 @@ interface StudioProject {
   tracks: Track[];
 }
 
+interface MidiInputDevice {
+  id: string;
+  name: string;
+  manufacturer?: string;
+  state?: string;
+  connection?: string;
+  onmidimessage: ((event: MIDIMessageEvent) => void) | null;
+}
+
 const STORAGE_KEY = 'studio-projects-v1';
+const STUDIO_HINTS_STORAGE_KEY = 'studio-hints-v1';
+const TRACK_COLORS = ['bg-yellow-500', 'bg-pink-500', 'bg-indigo-500', 'bg-orange-500', 'bg-cyan-500', 'bg-emerald-500', 'bg-red-500'];
+const TRACK_TEMPLATES = [
+  { label: 'Vocal', color: 'bg-pink-500' },
+  { label: 'Drums', color: 'bg-red-500' },
+  { label: 'Bass', color: 'bg-green-500' },
+  { label: 'Synth', color: 'bg-indigo-500' },
+];
+const SMART_TRACK_PRESETS = {
+  vocalPolish: {
+    label: 'Vocal Polish',
+    fx: {
+      order: 'eq-comp-reverb' as FxOrder,
+      eq: { enabled: true, lowGain: -2, midGain: 3, highGain: 4 },
+      compressor: { enabled: true, threshold: -18, ratio: 4 },
+      reverb: { enabled: true, amount: 0.22 },
+      delay: { enabled: true, time: 0.24, feedback: 0.18, wet: 0.15 },
+      chorus: { enabled: false, rate: 1.5, depth: 0.2, wet: 0.1 },
+      limiter: { enabled: true, ceiling: -1.2 },
+    },
+  },
+  drumPunch: {
+    label: 'Drum Punch',
+    fx: {
+      order: 'comp-eq-reverb' as FxOrder,
+      eq: { enabled: true, lowGain: 5, midGain: 1, highGain: 2 },
+      compressor: { enabled: true, threshold: -16, ratio: 6 },
+      reverb: { enabled: true, amount: 0.12 },
+      delay: { enabled: false, time: 0.3, feedback: 0.2, wet: 0.1 },
+      chorus: { enabled: false, rate: 1.2, depth: 0.1, wet: 0.1 },
+      limiter: { enabled: true, ceiling: -0.8 },
+    },
+  },
+  bassTight: {
+    label: 'Bass Tight',
+    fx: {
+      order: 'comp-eq-reverb' as FxOrder,
+      eq: { enabled: true, lowGain: 3, midGain: -2, highGain: -3 },
+      compressor: { enabled: true, threshold: -22, ratio: 5 },
+      reverb: { enabled: false, amount: 0.1 },
+      delay: { enabled: false, time: 0.18, feedback: 0.12, wet: 0.08 },
+      chorus: { enabled: true, rate: 0.8, depth: 0.2, wet: 0.15 },
+      limiter: { enabled: true, ceiling: -1 },
+    },
+  },
+  synthWide: {
+    label: 'Synth Wide',
+    fx: {
+      order: 'eq-comp-reverb' as FxOrder,
+      eq: { enabled: true, lowGain: -1, midGain: 2, highGain: 5 },
+      compressor: { enabled: true, threshold: -20, ratio: 3 },
+      reverb: { enabled: true, amount: 0.28 },
+      delay: { enabled: true, time: 0.32, feedback: 0.28, wet: 0.22 },
+      chorus: { enabled: true, rate: 2.4, depth: 0.35, wet: 0.3 },
+      limiter: { enabled: true, ceiling: -1.5 },
+    },
+  },
+};
+type SmartTrackPresetKey = keyof typeof SMART_TRACK_PRESETS;
+type HintKey = 'quickStart' | 'addTrackAudio' | 'playButton' | 'commandPalette';
 
 const createDefaultTracks = (): Track[] => [
   {
@@ -197,6 +266,7 @@ export default function Studio() {
   const [isRecording, setIsRecording] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
+  const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
   const [projectName, setProjectName] = useState('New Project');
   const [dragOverTrackId, setDragOverTrackId] = useState<string | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -221,7 +291,22 @@ export default function Studio() {
   const [bpm, setBpm] = useState(120);
   const [selectedPreset, setSelectedPreset] = useState('default');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [midiDevices, setMidiDevices] = useState<any[]>([]);
+  const [midiDevices, setMidiDevices] = useState<MidiInputDevice[]>([]);
+  const [saveIndicator, setSaveIndicator] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [trackSearch, setTrackSearch] = useState('');
+  const [trackContextMenu, setTrackContextMenu] = useState<{ x: number; y: number; trackId: string } | null>(null);
+  const [draggingTrackId, setDraggingTrackId] = useState<string | null>(null);
+  const [showQuickTips, setShowQuickTips] = useState(true);
+  const [uiMessage, setUiMessage] = useState<{ text: string; tone: 'info' | 'success' | 'warning' } | null>(null);
+  const [armedTrackId, setArmedTrackId] = useState<string | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandSearch, setCommandSearch] = useState('');
+  const [seenHints, setSeenHints] = useState<Record<HintKey, boolean>>({
+    quickStart: false,
+    addTrackAudio: false,
+    playButton: false,
+    commandPalette: false,
+  });
 
   const pxPerSecond = 80;
   const snapSeconds = 0.25;
@@ -238,6 +323,8 @@ export default function Studio() {
   const playStartCtxTimeRef = useRef<number>(0);
   const playStartProjectTimeRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
+  const saveIndicatorTimeoutRef = useRef<number | null>(null);
+  const uiMessageTimeoutRef = useRef<number | null>(null);
   const spectrumAnalyzerRef = useRef<AnalyserNode | null>(null);
   const vuMeterLeftRef = useRef<AnalyserNode | null>(null);
   const vuMeterRightRef = useRef<AnalyserNode | null>(null);
@@ -299,6 +386,20 @@ export default function Studio() {
   const audioChunksRef = useRef<Blob[]>([]);
 
   const soloedTrackIds = useMemo(() => tracks.filter((t) => t.solo).map((t) => t.id), [tracks]);
+  const filteredTracks = useMemo(() => {
+    const query = trackSearch.trim().toLowerCase();
+    if (!query) return tracks;
+    return tracks.filter((track) => track.name.toLowerCase().includes(query));
+  }, [tracks, trackSearch]);
+  const selectedTracks = useMemo(() => {
+    const selectedSet = new Set(selectedTrackIds);
+    return tracks.filter((track) => selectedSet.has(track.id));
+  }, [tracks, selectedTrackIds]);
+  const groupVolumeValue = useMemo(() => {
+    if (selectedTracks.length === 0) return 100;
+    const avg = selectedTracks.reduce((sum, track) => sum + track.volume, 0) / selectedTracks.length;
+    return Math.round(avg);
+  }, [selectedTracks]);
 
   const projectDurationSeconds = useMemo(() => {
     const ends: number[] = [];
@@ -337,6 +438,10 @@ export default function Studio() {
     master.connect(vuRight);
     vuMeterLeftRef.current = vuLeft;
     vuMeterRightRef.current = vuRight;
+
+    if (!reverbImpulseCacheRef.current) {
+      reverbImpulseCacheRef.current = createReverbImpulse(ctx);
+    }
   };
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
@@ -344,6 +449,23 @@ export default function Studio() {
     const ms = Math.floor((time % 1) * 10);
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms}`;
   };
+
+  const clampBpm = (value: number) => Math.max(40, Math.min(300, value));
+
+  const notifyUser = useCallback((text: string, tone: 'info' | 'success' | 'warning' = 'info') => {
+    setUiMessage({ text, tone });
+    if (uiMessageTimeoutRef.current) {
+      window.clearTimeout(uiMessageTimeoutRef.current);
+    }
+    uiMessageTimeoutRef.current = window.setTimeout(() => {
+      setUiMessage(null);
+      uiMessageTimeoutRef.current = null;
+    }, 2500);
+  }, []);
+
+  const markHintSeen = useCallback((key: HintKey) => {
+    setSeenHints((prev) => ({ ...prev, [key]: true }));
+  }, []);
 
   const createProject = () => {
     const now = new Date().toISOString();
@@ -380,15 +502,77 @@ export default function Studio() {
   const saveProjects = (projectList: StudioProject[]) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(projectList));
-    } catch {}
+    } catch (error) {
+      console.error('Failed to save projects:', error);
+    }
   };
 
-  const addTrack = () => {
-    const colors = ['bg-yellow-500', 'bg-pink-500', 'bg-indigo-500', 'bg-orange-500'];
+  const saveCurrentProject = useCallback(() => {
+    setSaveIndicator('saving');
+    const now = new Date().toISOString();
+    let didSave = false;
+
+    setProjects((prev) => {
+      let nextProjects = prev;
+      if (activeProjectId) {
+        const exists = prev.some((p) => p.id === activeProjectId);
+        if (exists) {
+          nextProjects = prev.map((p) =>
+            p.id === activeProjectId
+              ? { ...p, name: projectName.trim() || 'New Project', tracks, updatedAt: now }
+              : p
+          );
+        } else {
+          nextProjects = [
+            {
+              id: activeProjectId,
+              name: projectName.trim() || 'New Project',
+              createdAt: now,
+              updatedAt: now,
+              tracks,
+            },
+            ...prev,
+          ];
+        }
+      } else {
+        const id = Date.now().toString();
+        setActiveProjectId(id);
+        nextProjects = [
+          {
+            id,
+            name: projectName.trim() || 'New Project',
+            createdAt: now,
+            updatedAt: now,
+            tracks,
+          },
+          ...prev,
+        ];
+      }
+
+      saveProjects(nextProjects);
+      didSave = true;
+      return nextProjects;
+    });
+
+    if (didSave) {
+      setSaveIndicator('saved');
+      if (saveIndicatorTimeoutRef.current) {
+        window.clearTimeout(saveIndicatorTimeoutRef.current);
+      }
+      saveIndicatorTimeoutRef.current = window.setTimeout(() => {
+        setSaveIndicator('idle');
+        saveIndicatorTimeoutRef.current = null;
+      }, 1800);
+    }
+  }, [activeProjectId, projectName, tracks]);
+
+  const buildTrack = (name?: string, color?: string): Track => {
+    const resolvedName = name?.trim() || `Audio ${tracks.length + 1}`;
+    const resolvedColor = color || TRACK_COLORS[tracks.length % TRACK_COLORS.length];
     const newTrack: Track = {
       id: Date.now().toString(),
-      name: `Audio ${tracks.length + 1}`,
-      color: colors[tracks.length % colors.length],
+      name: resolvedName,
+      color: resolvedColor,
       volume: 100,
       muted: false,
       solo: false,
@@ -404,7 +588,167 @@ export default function Studio() {
       },
       automation: {},
     };
-    setTracks([...tracks, newTrack]);
+    return newTrack;
+  };
+
+  const addTrack = (name?: string, color?: string) => {
+    const newTrack = buildTrack(name, color);
+    setTracks((prev) => [...prev, newTrack]);
+    setSelectedTrack(newTrack.id);
+    setSelectedTrackIds([newTrack.id]);
+  };
+
+  const addTrackAndOpenFilePicker = () => {
+    const newTrack = buildTrack();
+    setTracks((prev) => [...prev, newTrack]);
+    setSelectedTrack(newTrack.id);
+    setSelectedTrackIds([newTrack.id]);
+    openFilePickerForTrack(newTrack.id);
+  };
+
+  const quickCreateImportAndArmRecord = () => {
+    const newTrack = buildTrack('Quick Take', 'bg-cyan-500');
+    setTracks((prev) => [...prev, newTrack]);
+    setSelectedTrack(newTrack.id);
+    setSelectedTrackIds([newTrack.id]);
+    setArmedTrackId(newTrack.id);
+    openFilePickerForTrack(newTrack.id);
+    notifyUser('Track created, armed, and ready to record', 'success');
+  };
+
+  const getActiveTrackIds = () => {
+    if (selectedTrackIds.length > 0) return selectedTrackIds;
+    if (selectedTrack) return [selectedTrack];
+    return [];
+  };
+
+  const selectTrackFromList = (trackId: string, keepExisting: boolean) => {
+    setTrackContextMenu(null);
+    if (!keepExisting) {
+      setSelectedTrack(trackId);
+      setSelectedTrackIds([trackId]);
+      return;
+    }
+    setSelectedTrack(trackId);
+    setSelectedTrackIds((prev) => (prev.includes(trackId) ? prev.filter((id) => id !== trackId) : [...prev, trackId]));
+  };
+
+  const applyToTracks = (trackIds: string[], updater: (track: Track) => Track) => {
+    if (trackIds.length === 0) return;
+    const trackSet = new Set(trackIds);
+    setTracks((prev) => prev.map((track) => (trackSet.has(track.id) ? updater(track) : track)));
+  };
+
+  const applyGroupMute = () => {
+    const activeTrackIds = getActiveTrackIds();
+    if (activeTrackIds.length === 0) return;
+    const allMuted = activeTrackIds.every((id) => tracks.find((track) => track.id === id)?.muted);
+    applyToTracks(activeTrackIds, (track) => ({ ...track, muted: !allMuted }));
+  };
+
+  const applyGroupSolo = () => {
+    const activeTrackIds = getActiveTrackIds();
+    if (activeTrackIds.length === 0) return;
+    const allSolo = activeTrackIds.every((id) => tracks.find((track) => track.id === id)?.solo);
+    applyToTracks(activeTrackIds, (track) => ({ ...track, solo: !allSolo }));
+  };
+
+  const applyGroupVolume = (volume: number) => {
+    const activeTrackIds = getActiveTrackIds();
+    applyToTracks(activeTrackIds, (track) => ({ ...track, volume }));
+  };
+
+  const duplicateTrack = (trackId: string) => {
+    const sourceTrack = tracks.find((track) => track.id === trackId);
+    if (!sourceTrack) return;
+    const duplicate: Track = {
+      ...JSON.parse(JSON.stringify(sourceTrack)),
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name: `${sourceTrack.name} Copy`,
+      clips: sourceTrack.clips.map((clip) => ({
+        ...clip,
+        id: `${clip.id}-copy-${Math.random().toString(16).slice(2)}`,
+        trackId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      })),
+    };
+    duplicate.clips = duplicate.clips.map((clip) => ({ ...clip, trackId: duplicate.id }));
+    setTracks((prev) => [...prev, duplicate]);
+    setSelectedTrack(duplicate.id);
+    setSelectedTrackIds([duplicate.id]);
+  };
+
+  const removeTrack = (trackId: string) => {
+    if (tracks.length <= 1) {
+      notifyUser('Нужна хотя бы одна дорожка в проекте', 'warning');
+      return;
+    }
+    const track = tracks.find((t) => t.id === trackId);
+    if (!track) return;
+    const shouldRemove = confirm(`Удалить дорожку "${track.name}" вместе со всеми клипами?`);
+    if (!shouldRemove) return;
+    setTracks((prev) => prev.filter((t) => t.id !== trackId));
+    setSelectedTrackIds((prev) => prev.filter((id) => id !== trackId));
+    if (selectedTrack === trackId) {
+      const nextTrack = tracks.find((t) => t.id !== trackId);
+      setSelectedTrack(nextTrack?.id || null);
+    }
+    if (fxPanelTrackId === trackId) {
+      setFxPanelTrackId(null);
+      setFxPanelOpen(false);
+    }
+    setTrackContextMenu(null);
+  };
+
+  const removeTracks = (trackIds: string[]) => {
+    if (trackIds.length === 0) return;
+    if (tracks.length - trackIds.length < 1) {
+      notifyUser('Нужна хотя бы одна дорожка в проекте', 'warning');
+      return;
+    }
+    const shouldRemove = confirm(`Удалить ${trackIds.length} дорожек вместе со всеми клипами?`);
+    if (!shouldRemove) return;
+    const trackSet = new Set(trackIds);
+    setTracks((prev) => prev.filter((track) => !trackSet.has(track.id)));
+    setSelectedTrackIds([]);
+    if (selectedTrack && trackSet.has(selectedTrack)) {
+      const fallback = tracks.find((track) => !trackSet.has(track.id));
+      setSelectedTrack(fallback?.id || null);
+    }
+    if (fxPanelTrackId && trackSet.has(fxPanelTrackId)) {
+      setFxPanelTrackId(null);
+      setFxPanelOpen(false);
+    }
+    setTrackContextMenu(null);
+  };
+
+  const renameTrack = (trackId: string, name: string) => {
+    setTracks((prev) => prev.map((track) => (track.id === trackId ? { ...track, name } : track)));
+  };
+
+  const reorderTrackByDrop = (fromTrackId: string, toTrackId: string) => {
+    if (fromTrackId === toTrackId) return;
+    setTracks((prev) => {
+      const fromIdx = prev.findIndex((track) => track.id === fromTrackId);
+      const toIdx = prev.findIndex((track) => track.id === toTrackId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, item);
+      return next;
+    });
+  };
+
+  const applySmartPresetToTracks = (trackIds: string[], presetKey: SmartTrackPresetKey) => {
+    if (trackIds.length === 0) return;
+    const preset = SMART_TRACK_PRESETS[presetKey];
+    applyToTracks(trackIds, (track) => ({
+      ...track,
+      fx: {
+        ...track.fx,
+        ...preset.fx,
+      },
+    }));
+    saveToHistory();
   };
 
   const toggleMute = (trackId: string) => {
@@ -435,7 +779,7 @@ export default function Studio() {
     const fileArray = Array.from(files);
     const audioFiles = fileArray.filter((f) => f.type.startsWith('audio/'));
     if (audioFiles.length === 0) {
-      alert('Пожалуйста, выберите аудиофайлы (MP3, WAV, M4A и т.д.)');
+      notifyUser('Выберите аудиофайлы (MP3, WAV, M4A и т.д.)', 'warning');
       return;
     }
 
@@ -498,7 +842,8 @@ export default function Studio() {
   };
 
   const startRecording = async () => {
-    if (!selectedTrack) return;
+    const targetTrackId = armedTrackId || selectedTrack;
+    if (!targetTrackId) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -514,16 +859,16 @@ export default function Studio() {
         const url = URL.createObjectURL(blob);
         const clip: Clip = {
           id: Date.now().toString(),
-          trackId: selectedTrack,
+          trackId: targetTrackId,
           startTime: currentTime,
           duration: 5,
           sourceOffset: 0,
           name: 'Recording',
           audioUrl: url,
-          color: tracks.find((t) => t.id === selectedTrack)?.color || 'bg-gray-500',
+          color: tracks.find((t) => t.id === targetTrackId)?.color || 'bg-gray-500',
         };
         setTracks((prev) =>
-          prev.map((t) => (t.id === selectedTrack ? { ...t, clips: [...t.clips, clip] } : t))
+          prev.map((t) => (t.id === targetTrackId ? { ...t, clips: [...t.clips, clip] } : t))
         );
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -548,8 +893,8 @@ export default function Studio() {
       pausePlayback();
       setIsPlaying(false);
       await new Promise(r => setTimeout(r, 50));
-      setIsPlaying(true);
-      await startPlaybackFrom(time);
+      const started = await startPlaybackFrom(time);
+      setIsPlaying(started);
     }
   };
 
@@ -760,6 +1105,92 @@ export default function Studio() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyK') {
+        e.preventDefault();
+        setCommandPaletteOpen(true);
+        setCommandSearch('');
+        markHintSeen('commandPalette');
+        return;
+      }
+
+      const target = e.target as HTMLElement | null;
+      const isTypingTarget =
+        !!target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+      if (isTypingTarget) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
+        e.preventDefault();
+        saveCurrentProject();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY') {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD' && selectedTrack) {
+        e.preventDefault();
+        duplicateTrack(selectedTrack);
+        return;
+      }
+
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        if (fxPanelOpen) setFxPanelOpen(false);
+        if (trackContextMenu) setTrackContextMenu(null);
+        setSelectedClipId(null);
+        return;
+      }
+
+      if (e.code === 'KeyR' && selectedTrack) {
+        e.preventDefault();
+        if (isRecording) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+        return;
+      }
+
+      if (e.code === 'KeyN') {
+        e.preventDefault();
+        addTrack();
+        return;
+      }
+
+      if ((e.code === 'Delete' || e.code === 'Backspace') && e.shiftKey && selectedTrack && !selectedClipId) {
+        e.preventDefault();
+        const activeTrackIds = getActiveTrackIds();
+        if (activeTrackIds.length > 1) {
+          removeTracks(activeTrackIds);
+        } else {
+          removeTrack(selectedTrack);
+        }
+        return;
+      }
+
+      if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        e.preventDefault();
+        const step = e.shiftKey ? 5 : 1;
+        const next = e.code === 'ArrowRight' ? currentTime + step : currentTime - step;
+        seekTo(Math.max(0, next));
+        return;
+      }
+
       if (e.code === 'Space') {
         e.preventDefault();
         if (isPlaying) {
@@ -767,7 +1198,9 @@ export default function Studio() {
           setIsPlaying(false);
         } else {
           setIsPlaying(true);
-          startPlaybackFrom(currentTime);
+          void startPlaybackFrom(currentTime).then((started) => {
+            if (!started) setIsPlaying(false);
+          });
         }
       }
       if ((e.code === 'Delete' || e.code === 'Backspace') && selectedClipId) {
@@ -780,7 +1213,51 @@ export default function Studio() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, currentTime, selectedClipId]);
+  }, [isPlaying, currentTime, selectedClipId, saveCurrentProject, redo, undo, selectedTrack, isRecording, fxPanelOpen, trackContextMenu, selectedTrackIds, markHintSeen]);
+
+  useEffect(() => {
+    return () => {
+      if (saveIndicatorTimeoutRef.current) {
+        window.clearTimeout(saveIndicatorTimeoutRef.current);
+      }
+      if (uiMessageTimeoutRef.current) {
+        window.clearTimeout(uiMessageTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const timeoutId = window.setTimeout(() => {
+      saveCurrentProject();
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeProjectId, projectName, tracks, saveCurrentProject]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STUDIO_HINTS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<Record<HintKey, boolean>>;
+      setSeenHints((prev) => ({ ...prev, ...parsed }));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STUDIO_HINTS_STORAGE_KEY, JSON.stringify(seenHints));
+    } catch {
+      // ignore
+    }
+  }, [seenHints]);
+
+  useEffect(() => {
+    if (seenHints.quickStart) {
+      setShowQuickTips(false);
+    }
+  }, [seenHints.quickStart]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -1316,7 +1793,7 @@ export default function Studio() {
     URL.revokeObjectURL(url);
   };
 
-  const startPlaybackFrom = async (fromTime: number) => {
+  const startPlaybackFrom = async (fromTime: number): Promise<boolean> => {
     console.log('🎵 Starting playback from:', fromTime);
     
     ensureAudioGraph();
@@ -1336,7 +1813,7 @@ export default function Studio() {
 
     if (clipEntries.length === 0) {
       console.log('⚠️ No clips to play');
-      return;
+      return false;
     }
 
     console.log('📋 Found clips to play:', clipEntries.length);
@@ -1357,6 +1834,11 @@ export default function Studio() {
         }
       })
     );
+
+    if (decodedClips.size === 0) {
+      console.log('⚠️ No decodable clips to play');
+      return false;
+    }
 
     // Start playing clips
     decodedClips.forEach((buffer, clipId) => {
@@ -1425,6 +1907,7 @@ export default function Studio() {
 
     rafRef.current = requestAnimationFrame(tick);
     console.log('▶️ Playback started successfully');
+    return true;
   };
 
   const pausePlayback = () => {
@@ -1449,8 +1932,65 @@ export default function Studio() {
     setCurrentTime(0);
   };
 
+  const commandActions = useMemo(
+    () => [
+      { id: 'create-import-arm', label: 'Quick Start: Create + Import + Arm Record', run: quickCreateImportAndArmRecord },
+      { id: 'add-track', label: 'Add Empty Track', run: () => addTrack() },
+      { id: 'add-track-audio', label: 'Add Track + Audio', run: addTrackAndOpenFilePicker },
+      {
+        id: 'play-from-start',
+        label: 'Play From Start',
+        run: async () => {
+          await seekTo(0);
+          const started = await startPlaybackFrom(0);
+          setIsPlaying(started);
+        },
+      },
+      {
+        id: 'toggle-play',
+        label: isPlaying ? 'Pause Playback' : 'Start Playback',
+        run: async () => {
+          if (isPlaying) {
+            pausePlayback();
+            setIsPlaying(false);
+          } else {
+            const started = await startPlaybackFrom(currentTime);
+            setIsPlaying(started);
+          }
+        },
+      },
+      {
+        id: 'toggle-record',
+        label: isRecording ? 'Stop Recording' : 'Start Recording',
+        run: () => (isRecording ? stopRecording() : startRecording()),
+      },
+      { id: 'save-project', label: 'Save Project', run: saveCurrentProject },
+      { id: 'export-wav', label: 'Export WAV', run: exportWav },
+      { id: 'open-project-picker', label: 'Open Project Chooser', run: () => setShowProjectChooser(true) },
+    ],
+    [isPlaying, isRecording, currentTime, saveCurrentProject]
+  );
+
+  const filteredCommandActions = useMemo(() => {
+    const query = commandSearch.trim().toLowerCase();
+    if (!query) return commandActions;
+    return commandActions.filter((action) => action.label.toLowerCase().includes(query));
+  }, [commandActions, commandSearch]);
+
   return (
     <div className="h-full flex flex-col bg-gray-900">
+      {uiMessage && (
+        <div className={`fixed top-4 right-4 z-[70] px-3 py-2 rounded-lg shadow-xl text-sm ${
+          uiMessage.tone === 'success'
+            ? 'bg-green-600/90 text-white'
+            : uiMessage.tone === 'warning'
+              ? 'bg-yellow-600/90 text-black'
+              : 'bg-gray-800/95 text-gray-100 border border-gray-600'
+        }`}>
+          {uiMessage.text}
+        </div>
+      )}
+
       <input
         ref={fileInputRef}
         type="file"
@@ -1458,10 +1998,13 @@ export default function Studio() {
         multiple
         className="hidden"
         onChange={async (e) => {
-          const trackId = pendingDropTrackIdRef.current || selectedTrack;
+          let trackId = pendingDropTrackIdRef.current || selectedTrack;
           if (!trackId) {
-            alert('Сначала выберите дорожку (кликните на неё слева)');
-            return;
+            const autoTrack = buildTrack();
+            setTracks((prev) => [...prev, autoTrack]);
+            setSelectedTrack(autoTrack.id);
+            setSelectedTrackIds([autoTrack.id]);
+            trackId = autoTrack.id;
           }
           if (!e.target.files) return;
           console.log('📁 Загружаю файлы:', e.target.files.length, 'файлов');
@@ -1551,6 +2094,24 @@ export default function Studio() {
             
             {/* Visual Feedback */}
             <div className="flex items-center gap-3">
+              <div className={`px-2 py-1 rounded-md text-xs font-medium ${
+                theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-200 text-gray-700'
+              }`}>
+                MIDI: {midiDevices.length > 0 ? `${midiDevices.length} input(s)` : 'Not connected'}
+              </div>
+
+              <div className={`px-2 py-1 rounded-md text-xs font-medium ${
+                saveIndicator === 'saved'
+                  ? 'bg-green-600/20 text-green-300'
+                  : saveIndicator === 'saving'
+                    ? 'bg-yellow-600/20 text-yellow-300'
+                    : theme === 'dark'
+                      ? 'bg-gray-700 text-gray-300'
+                      : 'bg-gray-200 text-gray-700'
+              }`}>
+                {saveIndicator === 'saved' ? 'Saved' : saveIndicator === 'saving' ? 'Saving...' : 'Idle'}
+              </div>
+
               {isPlaying && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-600/20 animate-pulse">
                   <Activity className="text-red-400" size={16} />
@@ -1562,8 +2123,13 @@ export default function Studio() {
                 <Clock className="text-purple-400" size={16} />
                 <input
                   type="number"
+                  min={40}
+                  max={300}
                   value={bpm}
-                  onChange={(e) => setBpm(parseInt(e.target.value) || 120)}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    setBpm(Number.isFinite(parsed) ? clampBpm(parsed) : 120);
+                  }}
                   className={`w-16 bg-transparent text-sm focus:outline-none ${
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   }`}
@@ -1684,7 +2250,11 @@ export default function Studio() {
             >
               Проект
             </button>
-            <button className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-all">
+            <button
+              onClick={saveCurrentProject}
+              className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-all"
+              title="Save project (Ctrl/Cmd + S)"
+            >
               <Save size={16} />
             </button>
             <button
@@ -1694,6 +2264,24 @@ export default function Studio() {
             >
               <Download size={16} />
             </button>
+            <div className="relative">
+              {!seenHints.commandPalette && (
+                <div className="absolute -top-11 right-0 text-[11px] whitespace-nowrap bg-indigo-600 text-white px-2 py-1 rounded-lg shadow-lg z-20">
+                  Open command palette for instant actions
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  setCommandPaletteOpen(true);
+                  setCommandSearch('');
+                  markHintSeen('commandPalette');
+                }}
+                className="px-3 py-2 bg-indigo-700 hover:bg-indigo-600 rounded-lg text-white text-xs transition-all"
+                title="Command Palette (Ctrl/Cmd + K)"
+              >
+                Ctrl/Cmd + K
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1741,26 +2329,189 @@ export default function Studio() {
           <div className="sticky top-0 z-10 bg-gray-800/80 backdrop-blur border-b border-gray-700 p-3">
             <div className="flex items-center justify-between">
               <div className="text-xs text-gray-400">Tracks</div>
-              <div className="text-xs text-purple-400">Drag audio to add</div>
+              <div className="text-xs text-purple-400">{tracks.length} total</div>
+            </div>
+            <div className="mt-2 relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={trackSearch}
+                onChange={(e) => setTrackSearch(e.target.value)}
+                placeholder="Search tracks..."
+                className="w-full bg-gray-700/80 text-white pl-8 pr-3 py-1.5 rounded-lg text-xs border border-gray-600 focus:border-purple-500 focus:outline-none"
+              />
             </div>
           </div>
 
-          <div className="p-2 space-y-2">
-            {tracks.map((track) => (
+          <div
+            className="p-2 space-y-2"
+            onClick={(e) => {
+              if (e.target !== e.currentTarget) return;
+              setSelectedTrackIds([]);
+              setTrackContextMenu(null);
+            }}
+          >
+            {showQuickTips && (
+              <div className="rounded-xl border border-blue-600/40 bg-blue-900/10 p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-[11px] text-blue-300 font-medium">Quick start</div>
+                    <div className="text-[11px] text-gray-300 mt-1">1) Add Track + Audio</div>
+                    <div className="text-[11px] text-gray-300">2) Space to Play/Pause</div>
+                    <div className="text-[11px] text-gray-300">3) Ctrl/Cmd+Click to multiselect</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowQuickTips(false);
+                      markHintSeen('quickStart');
+                    }}
+                    className="text-[10px] px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+                  >
+                    Hide
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-gray-700 bg-gray-900/30 p-2">
+              <div className="text-[11px] text-gray-400 mb-2 flex items-center gap-1">
+                <Sparkles size={12} />
+                Quick Add
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {TRACK_TEMPLATES.map((template) => (
+                  <button
+                    key={template.label}
+                    onClick={() => addTrack(template.label, template.color)}
+                    className="px-2 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs"
+                  >
+                    + {template.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedTrackIds.length > 0 && (
+              <div className="rounded-xl border border-purple-600/40 bg-purple-900/10 p-2 space-y-2">
+                <div className="text-[11px] text-purple-300">Selected: {selectedTrackIds.length}</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    onClick={applyGroupMute}
+                    className="px-2 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs"
+                  >
+                    Mute
+                  </button>
+                  <button
+                    onClick={applyGroupSolo}
+                    className="px-2 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs"
+                  >
+                    Solo
+                  </button>
+                  <button
+                    onClick={() => removeTracks(selectedTrackIds)}
+                    className="px-2 py-1.5 rounded-lg bg-red-700/80 hover:bg-red-700 text-white text-xs"
+                  >
+                    Delete
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    const firstTrackId = selectedTrackIds[0];
+                    if (!firstTrackId) return;
+                    setFxPanelTrackId(firstTrackId);
+                    setFxPanelOpen(true);
+                  }}
+                  className="w-full px-2 py-1.5 rounded-lg bg-purple-700/70 hover:bg-purple-700 text-white text-xs"
+                >
+                  Open FX for first selected
+                </button>
+                <div className="flex items-center gap-2">
+                  <Volume2 size={12} className="text-gray-400" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={groupVolumeValue}
+                    onChange={(e) => applyGroupVolume(parseInt(e.target.value, 10))}
+                    className="flex-1"
+                  />
+                  <span className="text-[11px] text-gray-300 w-8 text-right">{groupVolumeValue}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(Object.keys(SMART_TRACK_PRESETS) as SmartTrackPresetKey[]).map((presetKey) => (
+                    <button
+                      key={presetKey}
+                      onClick={() => applySmartPresetToTracks(selectedTrackIds, presetKey)}
+                      className="px-2 py-1.5 rounded-lg bg-indigo-700/70 hover:bg-indigo-700 text-white text-[11px]"
+                    >
+                      {SMART_TRACK_PRESETS[presetKey].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredTracks.map((track) => {
+              const trackIndex = tracks.findIndex((t) => t.id === track.id);
+              const isTrackSelected = selectedTrackIds.includes(track.id);
+              return (
               <div
                 key={track.id}
                 className={`rounded-xl border transition-all cursor-pointer ${
-                  selectedTrack === track.id ? 'border-purple-500/60 bg-gray-900/40 shadow-lg shadow-purple-500/20' : 'border-gray-700 bg-gray-900/20 hover:border-gray-600 hover:bg-gray-900/30'
+                  isTrackSelected ? 'border-purple-500/60 bg-gray-900/40 shadow-lg shadow-purple-500/20' : 'border-gray-700 bg-gray-900/20 hover:border-gray-600 hover:bg-gray-900/30'
                 } p-3`}
-                onClick={() => setSelectedTrack(track.id)}
+                onClick={(e) => selectTrackFromList(track.id, e.ctrlKey || e.metaKey)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (!selectedTrackIds.includes(track.id)) {
+                    setSelectedTrack(track.id);
+                    setSelectedTrackIds([track.id]);
+                  }
+                  setTrackContextMenu({ x: e.clientX, y: e.clientY, trackId: track.id });
+                }}
+                draggable
+                onDragStart={(e) => {
+                  setDraggingTrackId(track.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (!draggingTrackId) return;
+                  reorderTrackByDrop(draggingTrackId, track.id);
+                  setDraggingTrackId(null);
+                }}
+                onDragEnd={() => setDraggingTrackId(null)}
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2 min-w-0">
+                    <GripVertical size={12} className="text-gray-500 shrink-0" />
                     <div className={`w-2.5 h-2.5 rounded-full ${track.color}`} />
-                    <div className="text-white text-sm font-medium truncate">{track.name}</div>
+                    <input
+                      value={track.name}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => renameTrack(track.id, e.target.value)}
+                      onBlur={(e) => {
+                        if (e.target.value.trim()) return;
+                        renameTrack(track.id, `Audio ${trackIndex + 1}`);
+                      }}
+                      className="bg-transparent text-white text-sm font-medium truncate focus:outline-none focus:ring-1 focus:ring-purple-500 rounded px-1 w-full"
+                    />
                   </div>
 
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setArmedTrackId((prev) => (prev === track.id ? null : track.id));
+                        setSelectedTrack(track.id);
+                        setSelectedTrackIds([track.id]);
+                      }}
+                      className={`px-2 py-1 rounded text-[10px] ${
+                        armedTrackId === track.id ? 'bg-fuchsia-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                      }`}
+                    >
+                      ARM
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1784,6 +2535,13 @@ export default function Studio() {
                       S
                     </button>
                   </div>
+                </div>
+
+                <div className="mb-2 flex items-center justify-between text-[11px] text-gray-400">
+                  <span>{track.clips.length} clip(s)</span>
+                  <span>
+                    {track.clips.reduce((sum, clip) => sum + clip.duration, 0).toFixed(1)}s total
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1815,6 +2573,28 @@ export default function Studio() {
                     or drag & drop files here
                   </div>
                 </div>
+                <div className="mt-2 grid grid-cols-4 gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      duplicateTrack(track.id);
+                    }}
+                    className="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs col-span-2"
+                    title="Duplicate track"
+                  >
+                    <Copy size={12} className="inline" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeTrack(track.id);
+                    }}
+                    className="px-2 py-1 rounded bg-red-700/80 hover:bg-red-700 text-white text-xs"
+                    title="Delete track"
+                  >
+                    <Trash2 size={12} className="inline" />
+                  </button>
+                </div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1826,18 +2606,62 @@ export default function Studio() {
                   FX
                 </button>
               </div>
-            ))}
+            )})}
 
             <button
-              onClick={addTrack}
+              onClick={() => addTrack()}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-xl text-white text-sm"
             >
               <Plus size={16} />
               Add Track
             </button>
-            <div className="mt-1 text-center text-gray-400 text-xs">
-              or drag & drop files here
+            <div className="relative">
+              {!seenHints.addTrackAudio && (
+                <div className="absolute -top-11 left-0 right-0 text-[11px] bg-indigo-600 text-white px-2 py-1 rounded-lg shadow-lg z-20">
+                  Fastest start: one click to create track and import audio
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  addTrackAndOpenFilePicker();
+                  markHintSeen('addTrackAudio');
+                }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white text-sm"
+              >
+                <Plus size={16} />
+                Add Track + Audio
+              </button>
             </div>
+            <button
+              onClick={async () => {
+                await seekTo(0);
+                const started = await startPlaybackFrom(0);
+                setIsPlaying(started);
+                if (!started) {
+                  notifyUser('Добавь хотя бы один аудиоклип для старта', 'warning');
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 rounded-xl text-white text-sm"
+            >
+              <Play size={16} />
+              Play From Start
+            </button>
+            <button
+              onClick={() => {
+                quickCreateImportAndArmRecord();
+                markHintSeen('quickStart');
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-700 hover:to-purple-700 rounded-xl text-white text-sm font-semibold shadow-lg"
+            >
+              <Sparkles size={16} />
+              Create + Import + Arm Record
+            </button>
+            <div className="mt-1 text-center text-gray-400 text-xs">
+              Drag cards to reorder. Ctrl/Cmd+Click for multiselect. Right-click for actions.
+            </div>
+            {filteredTracks.length === 0 && (
+              <div className="text-center text-xs text-gray-400 py-3">No tracks found for "{trackSearch}"</div>
+            )}
           </div>
         </div>
         <div
@@ -1865,7 +2689,11 @@ export default function Studio() {
               console.log('🎵 Drop на таймлайн, выбранная дорожка:', selectedTrack);
               await handleAudioFilesForTrack(selectedTrack, e.dataTransfer.files);
             } else {
-              alert('Сначала выберите дорожку (кликните на неё слева)');
+              const autoTrack = buildTrack(`Audio ${tracks.length + 1}`, TRACK_COLORS[tracks.length % TRACK_COLORS.length]);
+              setTracks((prev) => [...prev, autoTrack]);
+              setSelectedTrack(autoTrack.id);
+              setSelectedTrackIds([autoTrack.id]);
+              await handleAudioFilesForTrack(autoTrack.id, e.dataTransfer.files);
             }
           }}
         >
@@ -1984,11 +2812,11 @@ export default function Studio() {
                 className={`h-20 border-b border-gray-800 relative transition-all ${
                   dragOverTrackId === track.id
                     ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500/50'
-                    : selectedTrack === track.id
+                    : selectedTrackIds.includes(track.id)
                       ? 'bg-gray-800/30'
                       : 'hover:bg-gray-800/20'
                 }`}
-                onClick={() => setSelectedTrack(track.id)}
+                onClick={(e) => selectTrackFromList(track.id, e.ctrlKey || e.metaKey)}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOverTrackId(track.id);
@@ -2771,23 +3599,178 @@ export default function Studio() {
         </div>
       </div>
 
+      {trackContextMenu && (
+        <div
+          className="fixed inset-0 z-50"
+          onClick={() => setTrackContextMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setTrackContextMenu(null);
+          }}
+        >
+          <div
+            className="absolute min-w-56 rounded-xl border border-gray-700 bg-gray-900/95 shadow-2xl p-2 space-y-1"
+            style={{ left: trackContextMenu.x, top: trackContextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-700 text-sm text-gray-100"
+              onClick={() => {
+                setSelectedTrack(trackContextMenu.trackId);
+                setSelectedTrackIds([trackContextMenu.trackId]);
+                setTrackContextMenu(null);
+              }}
+            >
+              Select only this track
+            </button>
+            <button
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-700 text-sm text-gray-100"
+              onClick={() => {
+                setSelectedTrack(trackContextMenu.trackId);
+                setSelectedTrackIds((prev) =>
+                  prev.includes(trackContextMenu.trackId)
+                    ? prev.filter((id) => id !== trackContextMenu.trackId)
+                    : [...prev, trackContextMenu.trackId]
+                );
+                setTrackContextMenu(null);
+              }}
+            >
+              Toggle in multiselect
+            </button>
+            <button
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-700 text-sm text-gray-100"
+              onClick={() => {
+                duplicateTrack(trackContextMenu.trackId);
+                setTrackContextMenu(null);
+              }}
+            >
+              Duplicate track
+            </button>
+            <button
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-700 text-sm text-gray-100"
+              onClick={() => {
+                setFxPanelOpen(true);
+                setFxPanelTrackId(trackContextMenu.trackId);
+                setTrackContextMenu(null);
+              }}
+            >
+              Open FX panel
+            </button>
+            <div className="h-px bg-gray-700 my-1" />
+            {(Object.keys(SMART_TRACK_PRESETS) as SmartTrackPresetKey[]).map((presetKey) => (
+              <button
+                key={presetKey}
+                className="w-full text-left px-2 py-1.5 rounded hover:bg-indigo-700/60 text-sm text-gray-100"
+                onClick={() => {
+                  const targets = selectedTrackIds.includes(trackContextMenu.trackId)
+                    ? selectedTrackIds
+                    : [trackContextMenu.trackId];
+                  applySmartPresetToTracks(targets, presetKey);
+                  setTrackContextMenu(null);
+                }}
+              >
+                Apply preset: {SMART_TRACK_PRESETS[presetKey].label}
+              </button>
+            ))}
+            <div className="h-px bg-gray-700 my-1" />
+            <button
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-red-700/80 text-sm text-red-200"
+              onClick={() => {
+                removeTrack(trackContextMenu.trackId);
+                setTrackContextMenu(null);
+              }}
+            >
+              Delete track
+            </button>
+          </div>
+        </div>
+      )}
+
+      {commandPaletteOpen && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm flex items-start justify-center pt-24 px-4"
+          onClick={() => setCommandPaletteOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl border border-gray-700 bg-gray-900 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-3 border-b border-gray-700">
+              <input
+                autoFocus
+                value={commandSearch}
+                onChange={(e) => setCommandSearch(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Escape') {
+                    setCommandPaletteOpen(false);
+                    return;
+                  }
+                  if (e.key === 'Enter' && filteredCommandActions[0]) {
+                    const action = filteredCommandActions[0];
+                    await action.run();
+                    setCommandPaletteOpen(false);
+                    setCommandSearch('');
+                  }
+                }}
+                placeholder="Type a command... (e.g., add track, save, export)"
+                className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg text-sm border border-gray-600 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div className="max-h-80 overflow-auto p-2 space-y-1">
+              {filteredCommandActions.length === 0 ? (
+                <div className="text-sm text-gray-400 px-2 py-3">No matching command</div>
+              ) : (
+                filteredCommandActions.map((action) => (
+                  <button
+                    key={action.id}
+                    onClick={async () => {
+                      await action.run();
+                      setCommandPaletteOpen(false);
+                      setCommandSearch('');
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-100"
+                  >
+                    {action.label}
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="px-3 py-2 border-t border-gray-700 text-[11px] text-gray-400">
+              Enter to run first command · Esc to close
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Transport */}
       <div className="bg-gray-800/80 backdrop-blur border-t border-gray-700 p-4">
         <div className="flex justify-center items-center gap-4">
-          <button
-            onClick={async () => {
-              if (isPlaying) {
-                pausePlayback();
-                setIsPlaying(false);
-                return;
-              }
-              setIsPlaying(true);
-              await startPlaybackFrom(currentTime);
-            }}
-            className="p-3 bg-green-600 hover:bg-green-700 rounded-full text-white"
-          >
-            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-          </button>
+          <div className="relative">
+            {!seenHints.playButton && (
+              <div className="absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] bg-green-600 text-white px-2 py-1 rounded-lg shadow-lg">
+                Press Space or click Play to start
+              </div>
+            )}
+            <button
+              onClick={async () => {
+                markHintSeen('playButton');
+                if (isPlaying) {
+                  pausePlayback();
+                  setIsPlaying(false);
+                  return;
+                }
+                setIsPlaying(true);
+                const started = await startPlaybackFrom(currentTime);
+                if (!started) {
+                  setIsPlaying(false);
+                  notifyUser('Не удалось начать воспроизведение: добавьте аудио-клип или проверьте формат файла.', 'warning');
+                }
+              }}
+              className="p-3 bg-green-600 hover:bg-green-700 rounded-full text-white"
+            >
+              {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+            </button>
+          </div>
           
           <button
             onClick={() => {
@@ -2802,14 +3785,15 @@ export default function Studio() {
           
           <button
             onClick={isRecording ? stopRecording : startRecording}
-            disabled={!selectedTrack}
+            disabled={!selectedTrack && !armedTrackId}
             className={`p-3 rounded-full text-white ${
               isRecording 
                 ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
-                : selectedTrack 
+                : (selectedTrack || armedTrackId)
                   ? 'bg-gray-700 hover:bg-gray-600' 
                   : 'bg-gray-600 cursor-not-allowed opacity-50'
             }`}
+            title={armedTrackId ? `Armed track: ${tracks.find((t) => t.id === armedTrackId)?.name || 'unknown'}` : 'Record'}
           >
             <Mic size={20} />
           </button>
@@ -2828,6 +3812,10 @@ export default function Studio() {
           <span className="text-gray-400 text-xs">🔍 Zoom: Ctrl + Scroll</span>
           <span className="text-gray-400 text-xs">▶️ Space: Play/Pause</span>
           <span className="text-gray-400 text-xs">🗑️ Delete: Remove Clip</span>
+          <span className="text-gray-400 text-xs">💾 Ctrl/Cmd + S: Save</span>
+          <span className="text-gray-400 text-xs">⏺️ R: Record on selected track</span>
+          <span className="text-gray-400 text-xs">↔️ ←/→: Seek, Shift + ←/→: ±5s</span>
+          <span className="text-gray-400 text-xs">⎋ Esc: Close panels / clear clip select</span>
           <span className="text-gray-400 text-xs">🔄 Shift + drag on ruler: Set Loop</span>
         </div>
       </div>
