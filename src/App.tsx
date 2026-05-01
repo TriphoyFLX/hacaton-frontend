@@ -12,6 +12,7 @@ import PublicProfile from './pages/PublicProfile';
 import Chats from './pages/Chats';
 import ChatPage from './pages/ChatPage';
 import AdminPanel from './pages/AdminPanel';
+import AI from './pages/AI';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
           <Route path="chats" element={<Chats />} />
           <Route path="chats/:chatId" element={<ChatPage />} />
           <Route path="admin" element={<AdminPanel />} />
+          <Route path="ai" element={<AI />} />
         </Route>
       </Routes>
     </BrowserRouter>

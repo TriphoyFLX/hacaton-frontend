@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Music, Video, MessageCircle, User, Shield } from 'lucide-react';
+import { Home, Music, Video, MessageCircle, User, Shield, Wand2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { path: '/feed', label: 'Лента', icon: <Home /> },
   { path: '/projects', label: 'Проекты', icon: <Video /> },
   { path: '/soundtok', label: 'SoundTok', icon: <Video /> },
+  { path: '/ai', label: 'AI генерация', icon: <Wand2 /> },
   { path: '/chats', label: 'Чаты', icon: <MessageCircle /> },
   { path: '/profile', label: 'Профиль', icon: <User /> },
 ];
