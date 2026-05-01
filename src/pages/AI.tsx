@@ -139,15 +139,26 @@ export default function AI() {
 
   const pollForResult = async (requestId: number) => {
     setIsPolling(true);
-    const maxAttempts = 60; // Максимум 60 попыток (5 минут)
+    const maxAttempts = 80; // Максимум 80 попыток (4 минуты при 3 сек)
     let attempts = 0;
 
     const poll = async () => {
       try {
         attempts++;
         
-        // Эмуляция прогресса (увеличиваем на 2-5% каждую попытку)
-        const newProgress = Math.min(95, Math.floor((attempts / maxAttempts) * 100));
+        // Более реалистичная эмуляция прогресса
+        // Первые 20 попыток: быстрый рост 0-30%
+        // Следующие 30: средний рост 30-70%
+        // Последние: медленный рост 70-95%
+        let newProgress;
+        if (attempts <= 20) {
+          newProgress = Math.min(30, Math.floor((attempts / 20) * 30));
+        } else if (attempts <= 50) {
+          newProgress = Math.min(70, 30 + Math.floor(((attempts - 20) / 30) * 40));
+        } else {
+          newProgress = Math.min(95, 70 + Math.floor(((attempts - 50) / 30) * 25));
+        }
+        
         setProgress(newProgress);
         setGeneratedAudio(prev => prev ? { ...prev, progress: newProgress } : null);
         
@@ -199,9 +210,9 @@ export default function AI() {
 
         // Если ещё не готово и не превышен лимит попыток, продолжаем polling
         if (attempts < maxAttempts) {
-          setTimeout(poll, 5000); // Проверяем каждые 5 секунд
+          setTimeout(poll, 3000); // Проверяем каждые 3 секунды (быстрее)
         } else {
-          setError('Время ожидания истекло. Попробуйте позже.');
+          setError('Время ожидания истекло (4 минуты). Генерация может занять больше времени. Попробуйте позже.');
           setIsGenerating(false);
           setIsPolling(false);
           setProgress(0);
@@ -210,7 +221,7 @@ export default function AI() {
         console.error('Polling error:', err);
         // Продолжаем polling даже при ошибках
         if (attempts < maxAttempts) {
-          setTimeout(poll, 5000);
+          setTimeout(poll, 3000);
         } else {
           setError('Не удалось получить результат. Попробуйте позже.');
           setIsGenerating(false);
