@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Mail, MapPin, Link as LinkIcon, Users } from 'lucide-react';
+import { Calendar, Mail, MapPin, Link as LinkIcon, Users, MessageCircle } from 'lucide-react';
+import { chatsApi } from '../api/chats';
 
 export default function PublicProfile() {
   const { username } = useParams<{ username: string }>();
@@ -15,19 +16,26 @@ export default function PublicProfile() {
       
       setLoading(true);
       try {
-        // В реальном приложении здесь будет API для поиска пользователя по username
-        // Пока используем моковые данные
-        const mockUser = {
-          id: '1',
-          username: username,
-          email: `${username}@example.com`,
-          createdAt: new Date().toISOString(),
-          bio: 'Музыкант и творец',
-          followers: 0,
-          following: 0,
-          posts: 0
-        };
-        setUser(mockUser);
+        // Ищем пользователя через поиск API
+        const response = await fetch(`http://localhost:5002/api/search?q=${username}&type=users`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        const data = await response.json();
+        
+        if (data.users && data.users.length > 0) {
+          const foundUser = data.users.find((u: any) => u.username === username);
+          if (foundUser) {
+            setUser({
+              ...foundUser,
+              bio: 'Музыкант и творец',
+              followers: 0,
+              following: 0,
+              posts: 0
+            });
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch user:', error);
       } finally {
@@ -41,6 +49,15 @@ export default function PublicProfile() {
   const handleFollow = () => {
     setIsFollowing(!isFollowing);
     // TODO: API call для подписки
+  };
+
+  const startChat = async () => {
+    try {
+      const chat = await chatsApi.createChat(user.id);
+      navigate(`/chats/${chat.id}`);
+    } catch (error) {
+      console.error('Failed to create chat:', error);
+    }
   };
 
   if (loading) {
@@ -101,6 +118,13 @@ export default function PublicProfile() {
             }`}
           >
             {isFollowing ? 'Отписаться' : 'Подписаться'}
+          </button>
+          <button
+            onClick={startChat}
+            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition text-white flex items-center gap-2"
+          >
+            <MessageCircle size={16} />
+            Начать чат
           </button>
         </div>
 

@@ -10,6 +10,8 @@ import SoundTok from './pages/SoundTok';
 import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
 import Chats from './pages/Chats';
+import ChatPage from './pages/ChatPage';
+import AdminPanel from './pages/AdminPanel';
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="profile/:username" element={<PublicProfile />} />
           <Route path="chats" element={<Chats />} />
+          <Route path="chats/:chatId" element={<ChatPage />} />
+          <Route path="admin" element={<AdminPanel />} />
         </Route>
       </Routes>
     </BrowserRouter>

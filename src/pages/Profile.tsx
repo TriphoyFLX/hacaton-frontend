@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { Edit3, Calendar, Mail, MapPin, Link as LinkIcon } from 'lucide-react';
+import { Edit3, Calendar, Mail, MapPin, Link as LinkIcon, LogOut } from 'lucide-react';
 
 export default function Profile() {
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [bio, setBio] = useState('Музыкант и творец');
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/login';
+  };
 
   if (!user) {
     return (
@@ -19,12 +24,21 @@ export default function Profile() {
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-blue-600 h-48 rounded-t-2xl relative">
-        <button
-          onClick={() => setIsEditing(!isEditing)}
-          className="absolute top-4 right-4 bg-white/20 backdrop-blur p-2 rounded-lg hover:bg-white/30 transition"
-        >
-          <Edit3 size={20} className="text-white" />
-        </button>
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="bg-white/20 backdrop-blur p-2 rounded-lg hover:bg-white/30 transition"
+          >
+            <Edit3 size={20} className="text-white" />
+          </button>
+          <button
+            onClick={handleLogout}
+            className="bg-red-600/80 backdrop-blur p-2 rounded-lg hover:bg-red-600 transition"
+            title="Выйти из аккаунта"
+          >
+            <LogOut size={20} className="text-white" />
+          </button>
+        </div>
       </div>
 
       {/* Profile Info */}

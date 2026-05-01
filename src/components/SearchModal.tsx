@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { searchApi, SearchResult } from '../api/search';
-import { Search, X, Users, FileText, Video } from 'lucide-react';
+import { chatsApi } from '../api/chats';
+import { Search, X, Users, FileText, Video, MessageCircle } from 'lucide-react';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -14,6 +15,16 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'users' | 'posts' | 'soundtoks'>('all');
+
+  const startChat = async (userId: string) => {
+    try {
+      const chat = await chatsApi.createChat(userId);
+      navigate(`/chats/${chat.id}`);
+      onClose();
+    } catch (error) {
+      console.error('Failed to create chat:', error);
+    }
+  };
 
   useEffect(() => {
     const handleSearch = async () => {
@@ -115,19 +126,32 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                     {results.users.map((user) => (
                       <div 
                         key={user.id} 
-                        className="flex items-center gap-3 p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition cursor-pointer"
-                        onClick={() => {
-                          navigate(`/profile/${user.username}`);
-                          onClose();
-                        }}
+                        className="flex items-center gap-3 p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition"
                       >
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                          {user.username[0].toUpperCase()}
+                        <div 
+                          className="flex items-center gap-3 flex-1 cursor-pointer"
+                          onClick={() => {
+                            navigate(`/profile/${user.username}`);
+                            onClose();
+                          }}
+                        >
+                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                            {user.username[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">@{user.username}</p>
+                            <p className="text-gray-400 text-sm">{user.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-white font-medium">@{user.username}</p>
-                          <p className="text-gray-400 text-sm">{user.email}</p>
-                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startChat(user.id);
+                          }}
+                          className="p-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white"
+                        >
+                          <MessageCircle size={16} />
+                        </button>
                       </div>
                     ))}
                   </div>
