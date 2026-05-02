@@ -252,13 +252,8 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
     }
   }, []);
 
-  const handleLike = async (id: string) => {
-    try {
-      await soundTokApi.likeSoundTok(id);
-      onLike(id);
-    } catch (error) {
-      console.error('Failed to like:', error);
-    }
+  const handleLike = (id: string) => {
+    onLike(id);
   };
 
   const handleShare = async (soundTokId: string) => {
@@ -351,10 +346,15 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
               
               <button
                 onClick={() => handleLike(soundTok.id)}
-                className="flex flex-col items-center text-white"
+                disabled={soundTok.isLiked}
+                className={`flex flex-col items-center ${soundTok.isLiked ? 'text-red-500' : 'text-white'}`}
               >
-                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center mb-2 hover:bg-white/30 transition">
-                  <Heart size={24} fill="currentColor" />
+                <div className={`w-12 h-12 backdrop-blur rounded-full flex items-center justify-center mb-2 transition ${
+                  soundTok.isLiked 
+                    ? 'bg-red-500/30' 
+                    : 'bg-white/20 hover:bg-white/30'
+                }`}>
+                  <Heart size={24} fill={soundTok.isLiked ? "currentColor" : "none"} />
                 </div>
                 <span className="text-sm font-medium">{soundTok.likes}</span>
               </button>

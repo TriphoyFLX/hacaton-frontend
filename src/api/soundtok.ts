@@ -36,6 +36,7 @@ export interface SoundTok {
   commentsCount: number;
   createdAt: string;
   updatedAt: string;
+  isLiked?: boolean;
   author: {
     id: string;
     username: string;
