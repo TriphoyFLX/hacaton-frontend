@@ -16,6 +16,7 @@ export interface Clip {
   type: "audio" | "midi";
   name: string;
   color: string;
+  patternId?: string; // Link to pattern for pattern clips
 }
 
 export interface Note {

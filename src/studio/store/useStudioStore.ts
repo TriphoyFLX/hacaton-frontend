@@ -11,6 +11,9 @@ interface StudioState {
   ui: UIState & {
     activePatternId?: string;
     isChannelRackOpen: boolean;
+    sidebarWidth: number;
+    channelRackHeight: number;
+    swing: number;
   };
   playback: PlaybackState;
 }
@@ -24,10 +27,11 @@ interface StudioActions {
   // Clip actions
   addClip: (clip: Omit<Clip, "id">) => void;
   removeClip: (id: string) => void;
+  moveClip: (id: string, start: number, trackId?: string) => void;
+  resizeClip: (id: string, duration: number) => void;
+  selectClip: (id: string) => void;
+  updateClipPattern: (clipId: string, patternId: string) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
-  moveClip: (id: string, newStart: number, newTrackId?: string) => void;
-  resizeClip: (id: string, newDuration: number, newStart?: number) => void;
-  selectClip: (id?: string) => void;
   openPianoRoll: (clipId: string) => void;
   closePianoRoll: () => void;
   
@@ -45,6 +49,8 @@ interface StudioActions {
   setSnapStrength: (strength: number) => void;
   toggleLoop: () => void;
   setLoopRegion: (start: number, end: number) => void;
+  setSidebarWidth: (width: number) => void;
+  setChannelRackHeight: (height: number) => void;
   
   // Playback actions (called by engine)
   setCurrentTime: (time: number) => void;
@@ -64,6 +70,9 @@ interface StudioActions {
   openChannelRack: (patternId?: string) => void;
   closeChannelRack: () => void;
   selectPattern: (patternId: string) => void;
+  addPattern: (pattern: Omit<Pattern, "id">) => void;
+  removePattern: (id: string) => void;
+  setSwing: (swing: number) => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11);
@@ -86,7 +95,7 @@ const initialState: StudioState = {
     { id: "track-3", name: "Lead", type: "midi", color: TRACK_COLORS[2], muted: false, solo: false, volume: 0.9 },
   ],
   clips: [
-    { id: "clip-1", trackId: "track-1", start: 0, duration: 4, type: "audio", name: "Kick Pattern", color: TRACK_COLORS[0] },
+    { id: "clip-1", trackId: "track-1", start: 0, duration: 4, type: "audio", name: "Kick Pattern", color: TRACK_COLORS[0], patternId: "pat-1" },
     { id: "clip-2", trackId: "track-2", start: 0, duration: 4, type: "midi", name: "Bass Line", color: TRACK_COLORS[1] },
     { id: "clip-3", trackId: "track-3", start: 4, duration: 4, type: "midi", name: "Melody", color: TRACK_COLORS[2] },
   ],
@@ -109,6 +118,9 @@ const initialState: StudioState = {
     activePianoRollClipId: undefined,
     activePatternId: "pat-1", // Pre-select pattern so Channel Rack shows channels
     isChannelRackOpen: true, // OPEN BY DEFAULT - critical for UX
+    sidebarWidth: 256,
+    channelRackHeight: 320,
+    swing: 0,
     loopStart: 0,
     loopEnd: 8,
     loopEnabled: false,
@@ -122,7 +134,8 @@ const initialState: StudioState = {
     { id: "ch-4", name: "🔊 Clap", type: "synth", color: TRACK_COLORS[3], muted: false, solo: false, volume: 0.7, pan: -0.1, steps: Array(16).fill(false), stepCount: 16 },
   ],
   patterns: [
-    { id: "pat-1", name: "Pattern 1", channelIds: ["ch-1", "ch-2", "ch-3", "ch-4"], stepCount: 16 }
+    { id: "pat-1", name: "Pattern 1", channelIds: ["ch-1", "ch-2", "ch-3", "ch-4"], stepCount: 16 },
+    { id: "pat-2", name: "Pattern 2", channelIds: ["ch-1", "ch-2", "ch-3", "ch-4"], stepCount: 16 }
   ],
   playback: {
     isPlaying: false,
@@ -193,16 +206,24 @@ export const useStudioStore = create<StudioState & StudioActions>()(
         }));
       },
 
-      resizeClip: (id, newDuration, newStart) => {
+      resizeClip: (id, duration) => {
         set((state) => ({
           clips: state.clips.map((c) =>
-            c.id === id ? { ...c, duration: newDuration, start: newStart ?? c.start } : c
+            c.id === id ? { ...c, duration } : c
           ),
         }));
       },
 
       selectClip: (id) => {
-        set((state) => ({ ui: { ...state.ui, selectedClipId: id } }));
+        const clip = get().clips.find(c => c.id === id);
+        if (clip && clip.patternId) {
+          // Sync pattern with clip
+          set((state) => ({ 
+            ui: { ...state.ui, selectedClipId: id, activePatternId: clip.patternId }
+          }));
+        } else {
+          set((state) => ({ ui: { ...state.ui, selectedClipId: id } }));
+        }
       },
 
       openPianoRoll: (clipId) => {
@@ -268,6 +289,16 @@ export const useStudioStore = create<StudioState & StudioActions>()(
 
       setLoopRegion: (start, end) => {
         set((state) => ({ ui: { ...state.ui, loopStart: start, loopEnd: end } }));
+      },
+
+      setSidebarWidth: (width) => {
+        const clamped = Math.max(200, Math.min(420, width));
+        set((state) => ({ ui: { ...state.ui, sidebarWidth: clamped } }));
+      },
+
+      setChannelRackHeight: (height) => {
+        const clamped = Math.max(160, Math.min(520, height));
+        set((state) => ({ ui: { ...state.ui, channelRackHeight: clamped } }));
       },
 
       // Playback actions (called by engine)
@@ -368,6 +399,35 @@ export const useStudioStore = create<StudioState & StudioActions>()(
       
       selectPattern: (patternId) => {
         set((state) => ({ ui: { ...state.ui, activePatternId: patternId } }));
+      },
+
+      addPattern: (pattern) => {
+        const newPattern: Pattern = {
+          id: generateId(),
+          ...pattern,
+        };
+        set((state) => ({ patterns: [...state.patterns, newPattern] }));
+      },
+
+      removePattern: (id) => {
+        set((state) => ({
+          patterns: state.patterns.filter((p) => p.id !== id),
+          ui: state.ui.activePatternId === id 
+            ? { ...state.ui, activePatternId: state.patterns[0]?.id }
+            : state.ui,
+        }));
+      },
+
+      setSwing: (swing) => {
+        set((state) => ({ ui: { ...state.ui, swing: Math.max(0, Math.min(100, swing)) } }));
+      },
+
+      updateClipPattern: (clipId, patternId) => {
+        set((state) => ({
+          clips: state.clips.map((c) =>
+            c.id === clipId ? { ...c, patternId } : c
+          ),
+        }));
       },
     }),
     { name: "StudioStore" }

@@ -2,14 +2,20 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useStudioStore } from "../store/useStudioStore";
 import type { Note } from "../models";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 interface NoteBlockProps {
   note: Note;
   pixelsPerBeat: number;
   pixelsPerSemitone: number;
+  minPitch: number;
   maxPitch: number;
   onDelete: () => void;
+  isSelected?: boolean;
+  onSelect?: (noteId: string, selected: boolean) => void;
+  onUpdate?: (noteId: string, updates: Partial<Note>) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
 
 export function NoteBlock({
@@ -18,8 +24,12 @@ export function NoteBlock({
   pixelsPerSemitone,
   maxPitch,
   onDelete,
+  isSelected = false,
+  onSelect,
+  onUpdate,
+  onDragStart,
+  onDragEnd,
 }: NoteBlockProps) {
-  const resizeNote = useStudioStore((state) => state.resizeNote);
   const snapStrength = useStudioStore((state) => state.ui.snapStrength);
   const [, setIsResizing] = useState(false);
 
@@ -33,6 +43,15 @@ export function NoteBlock({
     data: { type: "note", note },
   });
 
+  // Notify parent of drag state changes
+  useEffect(() => {
+    if (isDragging) {
+      onDragStart?.();
+    } else {
+      onDragEnd?.();
+    }
+  }, [isDragging, onDragStart, onDragEnd]);
+
   const left = 60 + note.start * pixelsPerBeat;
   const top = (maxPitch - note.pitch) * pixelsPerSemitone;
   const width = Math.max(pixelsPerBeat * 0.25, note.duration * pixelsPerBeat - 2);
@@ -44,8 +63,8 @@ export function NoteBlock({
     top,
     width,
     height,
-    backgroundColor: "#3b82f6",
-    border: "1px solid #2563eb",
+    backgroundColor: isSelected ? "#60a5fa" : "#3b82f6",
+    border: isSelected ? "2px solid white" : "1px solid #2563eb",
     borderRadius: "3px",
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.7 : 1,
@@ -60,6 +79,10 @@ export function NoteBlock({
       style={style}
       {...listeners}
       {...attributes}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.(note.id, !isSelected);
+      }}
       onDoubleClick={(e) => {
         e.stopPropagation();
         onDelete();
@@ -87,7 +110,7 @@ export function NoteBlock({
             const deltaX = moveEvent.clientX - startX;
             const deltaBeats = deltaX / pixelsPerBeat;
             const newDuration = Math.max(0.125, snapToGrid(startDuration + deltaBeats));
-            resizeNote(note.id, newDuration);
+            onUpdate?.(note.id, { duration: newDuration });
           };
 
           const handleUp = () => {

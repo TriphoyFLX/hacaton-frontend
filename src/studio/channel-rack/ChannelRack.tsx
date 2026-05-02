@@ -1,12 +1,15 @@
-import { useState, useCallback, useEffect, useRef, memo } from 'react';
+import { useState, useCallback, useEffect, useRef, memo, useMemo } from 'react';
 import { useStudioStore } from '../store/useStudioStore';
 import { globalChannelRackEngine } from '../engine/channelRackEngine';
 import { getSampleLoader } from '../engine/sampleLoader';
-import { ChannelStrip } from './ChannelStrip';
-import { Plus, X, Music, ChevronDown, ChevronUp, Upload, Play, FileAudio } from 'lucide-react';
+import { ProChannelStrip } from '../components/ProChannelStrip';
+import { FLQuickStart } from './FLQuickStart';
+import { PatternSelector } from './PatternSelector';
+import { SwingControl } from './SwingControl';
+import { Plus, X, Music, ChevronDown, ChevronUp, Upload } from 'lucide-react';
 import type { Channel } from '../models';
 
-// Memoized channel list to prevent unnecessary re-renders
+// Ultimate Channel List with ProChannelStrip
 const ChannelList = memo(function ChannelList({ 
   channels, 
   currentStep,
@@ -24,10 +27,18 @@ const ChannelList = memo(function ChannelList({
   onRemoveChannel: (id: string) => void;
   onLoadSample: (channelId: string, file: File) => Promise<void>;
 }) {
+  // Preview step function
+  const handlePreviewStep = useCallback((channelId: string, stepIndex: number) => {
+    const channel = channels.find(c => c.id === channelId);
+    if (channel) {
+      globalChannelRackEngine.previewStep(channel);
+    }
+  }, [channels]);
+  
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-900/50 to-gray-900/80">
       {channels.map((channel, index) => (
-        <ChannelStrip
+        <ProChannelStrip
           key={channel.id}
           channel={channel}
           index={index}
@@ -37,11 +48,14 @@ const ChannelList = memo(function ChannelList({
           onUpdate={onUpdateChannel}
           onRemove={onRemoveChannel}
           onLoadSample={onLoadSample}
+          onPreviewStep={handlePreviewStep}
         />
       ))}
     </div>
   );
 });
+
+ChannelList.displayName = 'ChannelList';
 
 export function ChannelRack() {
   const store = useStudioStore();
@@ -69,7 +83,7 @@ export function ChannelRack() {
 
   // Sync with channel rack engine playback
   useEffect(() => {
-    globalChannelRackEngine.onStep((step) => {
+    globalChannelRackEngine.onStep((step: number) => {
       setCurrentStep(step);
     });
   }, []);
@@ -92,7 +106,14 @@ export function ChannelRack() {
   // Handle sample loading
   const handleLoadSample = useCallback(async (channelId: string, file: File) => {
     try {
-      const sampleLoader = getSampleLoader();
+      // Get AudioContext from engine and initialize SampleLoader
+      const audioContext = globalChannelRackEngine.getAudioContext();
+      if (!audioContext) {
+        console.error('AudioContext not available');
+        return;
+      }
+      
+      const sampleLoader = getSampleLoader(audioContext);
       const audioBuffer = await sampleLoader.loadSample(file);
       loadSampleToChannel(channelId, file, audioBuffer);
       globalChannelRackEngine.loadChannelSample(channelId, audioBuffer);
@@ -157,7 +178,13 @@ export function ChannelRack() {
       const lastChannel = state.channels[state.channels.length - 1];
       if (lastChannel) {
         try {
-          const sampleLoader = getSampleLoader();
+          const audioContext = globalChannelRackEngine.getAudioContext();
+          if (!audioContext) {
+            console.error('AudioContext not available for dropped sample');
+            return;
+          }
+          
+          const sampleLoader = getSampleLoader(audioContext);
           const audioBuffer = await sampleLoader.loadSample(file);
           loadSampleToChannel(lastChannel.id, file, audioBuffer);
           globalChannelRackEngine.loadChannelSample(lastChannel.id, audioBuffer);
@@ -179,62 +206,70 @@ export function ChannelRack() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Header - Clear branding */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-700">
-            <Music className="w-5 h-5 text-blue-400" />
-            <span className="text-sm font-bold text-white">STEP SEQUENCER</span>
+      {/* Header - Professional DAW branding */}
+      <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700/50 backdrop-blur-sm">
+        <div className="flex items-center gap-6">
+          {/* Logo section with hierarchy */}
+          <div className="flex items-center gap-3 bg-gradient-to-r from-blue-600/20 to-purple-600/20 px-4 py-2 rounded-xl border border-blue-500/30 shadow-lg shadow-blue-500/10">
+            <Music className="w-6 h-6 text-blue-400" />
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-white tracking-wide">CHANNEL RACK</span>
+              <span className="text-xs text-gray-400">Pattern Sequencer</span>
+            </div>
           </div>
           
-          {/* Playing indicator */}
+          {/* Professional playing indicator */}
           {isPlaying && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-green-500/20 rounded-full">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs font-medium text-green-400">PLAYING</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full border border-green-500/30 shadow-lg shadow-green-500/10">
+              <span className="w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse shadow-sm shadow-green-400/50" />
+              <span className="text-xs font-semibold text-green-300 tracking-wide">PLAYING</span>
             </div>
           )}
           
-          {/* Quick instruction hint */}
-          <span className="text-xs text-gray-500 hidden sm:inline">
-            Click squares to add beats • Press ▶ to play
-          </span>
+          {/* Pattern Selector */}
+          <PatternSelector />
+          
+          {/* Swing Control */}
+          <SwingControl />
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* BIG Add Sound Button - Primary Action */}
+        <div className="flex items-center gap-3">
+          {/* Professional Add Sound Button - Primary Action */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-lg transition-all shadow-lg hover:shadow-green-500/20"
+            className="group flex items-center gap-2.5 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white text-sm font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transform hover:scale-105"
           >
-            <Upload className="w-4 h-4" />
-            Add Your Sound
+            <Upload className="w-4.5 h-4.5 transition-transform group-hover:scale-110" />
+            <span>Add Sound</span>
           </button>
           
           {/* Add Synth Channel - Secondary */}
           <button
             onClick={handleAddChannel}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors border border-gray-600"
+            className="group flex items-center gap-2.5 px-4 py-2.5 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-gray-200 text-sm font-medium rounded-xl transition-all duration-200 border border-gray-600/50 hover:border-gray-500/70 shadow-md hover:shadow-lg transform hover:scale-105"
           >
-            <Plus className="w-4 h-4" />
-            Add Synth
+            <Plus className="w-4.5 h-4.5 transition-transform group-hover:rotate-90" />
+            <span>Add Synth</span>
           </button>
           
-          {/* Minimize/Close */}
-          <div className="flex items-center gap-1 ml-2 border-l border-gray-700 pl-2">
+          {/* Window controls - Professional style */}
+          <div className="flex items-center gap-1.5 ml-4 pl-4 border-l border-gray-700/50">
             <button
               onClick={() => setIsMinimized(!isMinimized)}
-              className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 transition-colors"
+              className="group p-2.5 hover:bg-gray-700/50 rounded-xl text-gray-400 transition-all duration-200 hover:text-gray-200"
               title="Minimize"
             >
-              {isMinimized ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              {isMinimized ? 
+                <ChevronUp className="w-5 h-5 transition-transform group-hover:translate-y-[-2px]" /> : 
+                <ChevronDown className="w-5 h-5 transition-transform group-hover:translate-y-[2px]" />
+              }
             </button>
             <button
               onClick={closeChannelRack}
-              className="p-2 hover:bg-red-500/20 hover:text-red-400 rounded-lg text-gray-400 transition-colors"
+              className="group p-2.5 hover:bg-red-500/20 hover:text-red-400 rounded-xl text-gray-400 transition-all duration-200"
               title="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 transition-transform group-hover:rotate-90" />
             </button>
           </div>
         </div>
@@ -264,59 +299,76 @@ export function ChannelRack() {
         </div>
       )}
 
-      {/* Empty State - When no channels */}
-      {!isMinimized && patternChannels.length === 0 && (
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="text-center max-w-md">
-            <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Play className="w-10 h-10 text-gray-600" />
+      {/* Empty State - Professional with FL Patterns */}
+      {patternChannels.length === 0 && (
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-2xl mx-auto">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/30">
+                <Music className="w-8 h-8 text-blue-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Welcome to FL Studio Mode</h3>
+              <p className="text-sm text-gray-400">
+                Start with professional drum patterns or create your own
+              </p>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">No sounds yet</h3>
-            <p className="text-gray-400 mb-6">
-              Add your first sound to start making beats
-            </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg transition-all"
-              >
-                <FileAudio className="w-5 h-5" />
-                Upload Sound
-              </button>
-              <button
-                onClick={handleAddChannel}
-                className="flex items-center gap-2 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-all"
-              >
-                <Plus className="w-5 h-5" />
-                Create Synth
-              </button>
+            
+            {/* FL Quick Start - Working patterns */}
+            <FLQuickStart />
+            
+            {/* Manual Options */}
+            <div className="mt-6 p-4 bg-gray-800/30 rounded-xl border border-gray-700/50">
+              <div className="flex items-center gap-2 mb-3">
+                <Plus className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-semibold text-gray-300">Or Create Manually</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddChannel}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-600/50 text-gray-200 text-sm font-medium rounded-lg transition-colors border border-gray-600/50"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Synth
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-600/50 text-gray-200 text-sm font-medium rounded-lg transition-colors border border-gray-600/50"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Sample
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Channel List */}
+      {/* Channel List - Professional Design */}
       {!isMinimized && patternChannels.length > 0 && (
         <>
-          {/* Column Headers */}
-          <div className="flex items-center px-4 py-2 bg-gray-850 border-b border-gray-800 text-xs text-gray-500">
-            <div className="w-8">#</div>
-            <div className="w-16 text-center">MUTE</div>
-            <div className="w-32">SOUND NAME</div>
-            <div className="flex-1 text-center">CLICK SQUARES TO MAKE BEATS</div>
-            <div className="w-24 text-center">VOLUME</div>
-            <div className="w-20 text-center">PAN</div>
-            <div className="w-8"></div>
+          {/* Ultimate Column Headers */}
+          <div className="flex items-center px-6 py-4 bg-gradient-to-b from-gray-800/60 to-gray-800/40 border-b border-gray-700/50 backdrop-blur-sm">
+            <div className="w-12 text-xs font-bold text-gray-400 tracking-wider">#</div>
+            <div className="w-24 text-center text-xs font-bold text-gray-400 tracking-wider">CTRL</div>
+            <div className="w-48 text-xs font-bold text-gray-400 tracking-wider">CHANNEL</div>
+            <div className="flex-1 text-center text-xs font-bold text-gray-400 tracking-wider">STEP SEQUENCER</div>
+            <div className="w-44 text-center text-xs font-bold text-gray-400 tracking-wider">OUTPUT</div>
+            <div className="w-16 text-center text-xs font-bold text-gray-400 tracking-wider">ACTIONS</div>
           </div>
-          <ChannelList
-            channels={patternChannels}
-            currentStep={currentStep}
-            isPlaying={isPlaying}
-            onToggleStep={toggleChannelStep}
-            onUpdateChannel={updateChannel}
-            onRemoveChannel={removeChannel}
-            onLoadSample={handleLoadSample}
-          />
+          
+          {/* Channel List with enhanced design */}
+          <div className="flex-1 bg-gradient-to-b from-gray-900/50 to-gray-900/80">
+            <ChannelList
+              channels={patternChannels}
+              currentStep={currentStep}
+              isPlaying={isPlaying}
+              onToggleStep={toggleChannelStep}
+              onUpdateChannel={updateChannel}
+              onRemoveChannel={removeChannel}
+              onLoadSample={handleLoadSample}
+            />
+          </div>
         </>
       )}
     </div>

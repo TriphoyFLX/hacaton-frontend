@@ -1,6 +1,7 @@
 import { Volume2, VolumeX, Trash2 } from "lucide-react";
 import { useStudioStore } from "../store/useStudioStore";
 import { globalScheduler } from "../engine/scheduler";
+import { useGrid } from "./useGrid";
 import type { Track } from "../models";
 
 interface TrackLaneProps {
@@ -11,6 +12,7 @@ interface TrackLaneProps {
 export function TrackLane({ track, height }: TrackLaneProps) {
   const updateTrack = useStudioStore((state) => state.updateTrack);
   const removeTrack = useStudioStore((state) => state.removeTrack);
+  const { config } = useGrid();
 
   return (
     <div
@@ -86,13 +88,13 @@ export function TrackLane({ track, height }: TrackLaneProps) {
         style={{ height }}
         data-track-id={track.id}
       >
-        {/* Grid lines */}
+        {/* Grid lines - now with zoom support */}
         <div className="absolute inset-0 pointer-events-none">
           {Array.from({ length: 33 }).map((_, i) => (
             <div
               key={i}
               className="absolute top-0 bottom-0 border-l border-gray-800/50"
-              style={{ left: i * 40 }}
+              style={{ left: i * config.pixelsPerBeat }}
             />
           ))}
         </div>

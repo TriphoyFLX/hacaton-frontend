@@ -1,5 +1,6 @@
 import { useStudioStore } from "../store/useStudioStore";
 import type { Note } from "../models";
+import { audioContextManager } from "./audioContext";
 
 export class Scheduler {
   private lookAhead = 0.1; // seconds
@@ -64,11 +65,13 @@ export class Scheduler {
 
   private async initAudio() {
     try {
-      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      this.masterGain = this.audioContext.createGain();
-      this.masterGain.gain.value = 1;
-      this.masterGain.connect(this.audioContext.destination);
-      console.log("[Scheduler] Audio initialized, master gain connected");
+      this.audioContext = await audioContextManager.getAudioContext();
+      if (this.audioContext) {
+        this.masterGain = this.audioContext.createGain();
+        this.masterGain.gain.value = 1;
+        this.masterGain.connect(this.audioContext.destination);
+        console.log("[Scheduler] Audio initialized, master gain connected");
+      }
     } catch (e) {
       console.warn("[Scheduler] Web Audio API not supported", e);
     }

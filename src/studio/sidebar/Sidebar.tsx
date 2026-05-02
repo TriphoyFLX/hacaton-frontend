@@ -2,6 +2,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { Music, AudioWaveform, Drum, Guitar, Piano, Mic, Waves, Plus } from "lucide-react";
 import { useStudioStore } from "../store/useStudioStore";
 import type { Track } from "../models";
+import { AudioSampleLoader } from "../components/AudioSampleLoader";
 
 interface SidebarItemProps {
   id: string;
@@ -43,6 +44,14 @@ const SAMPLES: SidebarItemProps[] = [
   { id: "hihat", name: "Hi-Hat", icon: <Waves className="w-5 h-5 text-white" />, type: "sample", color: "#22c55e" },
   { id: "clap", name: "Clap", icon: <AudioWaveform className="w-5 h-5 text-white" />, type: "sample", color: "#3b82f6" },
   { id: "bass", name: "Bass Shot", icon: <AudioWaveform className="w-5 h-5 text-white" />, type: "sample", color: "#8b5cf6" },
+];
+
+// Real sound files from sounds folder
+const REAL_SAMPLES: SidebarItemProps[] = [
+  { id: "choise-hat", name: "CHOISE Hat", icon: <Waves className="w-5 h-5 text-white" />, type: "sample", color: "#10b981" },
+  { id: "make-it-bleed-hat", name: "MAKE IT BLEED Op Hat", icon: <Waves className="w-5 h-5 text-white" />, type: "sample", color: "#06b6d4" },
+  { id: "masked-up-clap", name: "MASKED UP Clap", icon: <AudioWaveform className="w-5 h-5 text-white" />, type: "sample", color: "#f59e0b" },
+  { id: "you-ready-kick", name: "YOU READY？Kick", icon: <Drum className="w-5 h-5 text-white" />, type: "sample", color: "#ef4444" },
 ];
 
 const INSTRUMENTS: SidebarItemProps[] = [
@@ -91,9 +100,19 @@ export function Sidebar() {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Samples Section */}
+        {/* Real Samples Section */}
         <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Samples</h3>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Real Samples</h3>
+          <div className="space-y-2">
+            {REAL_SAMPLES.map((sample) => (
+              <SidebarItem key={sample.id} {...sample} />
+            ))}
+          </div>
+        </div>
+
+        {/* Basic Samples Section */}
+        <div>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Basic Samples</h3>
           <div className="space-y-2">
             {SAMPLES.map((sample) => (
               <SidebarItem key={sample.id} {...sample} />
@@ -109,6 +128,11 @@ export function Sidebar() {
               <SidebarItem key={instrument.id} {...instrument} />
             ))}
           </div>
+        </div>
+
+        {/* Audio Sample Loader */}
+        <div>
+          <AudioSampleLoader />
         </div>
       </div>
 

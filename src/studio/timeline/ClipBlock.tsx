@@ -8,14 +8,14 @@ import { Music, AudioWaveform } from "lucide-react";
 interface ClipBlockProps {
   clip: Clip;
   onResize: (clipId: string, newDuration: number) => void;
+  isSelected?: boolean;
+  onSelect?: (selected: boolean) => void;
 }
 
-export function ClipBlock({ clip, onResize }: ClipBlockProps) {
+export function ClipBlock({ clip, onResize, isSelected = false, onSelect }: ClipBlockProps) {
   const { config, beatToPixels, getTrackYPosition } = useGrid();
-  const selectedClipId = useStudioStore((state) => state.ui.selectedClipId);
   const selectClip = useStudioStore((state) => state.selectClip);
   const openPianoRoll = useStudioStore((state) => state.openPianoRoll);
-  const isSelected = selectedClipId === clip.id;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: clip.id,
@@ -39,6 +39,7 @@ export function ClipBlock({ clip, onResize }: ClipBlockProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     selectClip(clip.id);
+    onSelect?.(!isSelected);
   };
 
   const handleDoubleClick = () => {

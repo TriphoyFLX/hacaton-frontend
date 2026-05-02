@@ -1,11 +1,13 @@
 import type { Channel } from '../models';
 import { useStudioStore } from '../store/useStudioStore';
+import { DrumSynthesizer, FL_DRUM_KIT } from './drumSynth';
+import type { DrumSound } from './drumSynth';
 
 /**
- * PROPER WEB AUDIO API SCHEDULING ENGINE
+ * FL STUDIO STYLE DRUM ENGINE
  * 
- * Architecture: Channel → PannerNode → GainNode → MasterGain → destination
- * Uses lookahead scheduling for sample-accurate timing.
+ * Professional drum machine with Web Audio API
+ * Sample-accurate timing with lookahead scheduling
  */
 
 interface ChannelNodes {
@@ -14,75 +16,92 @@ interface ChannelNodes {
 }
 
 export class ChannelRackEngine {
-  // Audio Context - single source of truth
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private channelNodes = new Map<string, ChannelNodes>();
+  private sampleBuffers = new Map<string, AudioBuffer>();
+  private drumSynth: DrumSynthesizer | null = null;
   
-  // Channel routing: channelId -> { panner, gain }
-  private channelNodes: Map<string, ChannelNodes> = new Map();
-  private sampleBuffers: Map<string, AudioBuffer> = new Map();
-  
-  // PROPER SCHEDULING (replaces broken setInterval)
-  private isPlaying: boolean = false;
+  // Scheduling properties
   private bpm: number = 120;
   private stepCount: number = 16;
-  private nextStepIndex: number = 0;
+  private isPlaying: boolean = false;
   private nextStepTime: number = 0;
-  private scheduleAheadTime: number = 0.1; // Lookahead in seconds
-  private lookaheadInterval: number = 25; // ms between scheduling checks
+  private nextStepIndex: number = 0;
+  private lastUIStep: number = -1;
   private timerID: number | null = null;
   
-  // UI sync
-  private onStepCallback?: (step: number) => void;
-  private lastUIStep: number = -1;
+  // Scheduler constants
+  private scheduleAheadTime = 0.1; // 100ms lookahead
+  private lookaheadInterval = 25; // 25ms checks
   
-  // Debug
-  private debug: boolean = true;
+  private onStepCallback?: (step: number) => void;
+  private debug = true;
+  private drumSoundsLoaded = false;
+  private initialized = false;
+
+  private log(message: string, data?: any) {
+    if (this.debug) {
+      console.log(`🎵 [FL Studio Engine] ${message}`, data);
+    }
+  }
 
   constructor() {
     this.initAudio();
   }
 
-  private log(msg: string, data?: unknown) {
-    if (this.debug) {
-      console.log(`[ChannelRack] ${msg}`, data || '');
-    }
-  }
-
   private async initAudio() {
     try {
-      this.audioContext = new (window.AudioContext || 
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      // Use the audio context manager for proper initialization
+      const { audioContextManager } = await import('./audioContext');
+      this.audioContext = await audioContextManager.getAudioContext();
       
-      // Create master gain
-      this.masterGain = this.audioContext.createGain();
-      this.masterGain.gain.value = 1;
-      this.masterGain.connect(this.audioContext.destination);
-      
-      this.log('✅ AudioContext initialized', { 
-        sampleRate: this.audioContext.sampleRate,
-        state: this.audioContext.state 
-      });
-    } catch (e) {
-      console.error('❌ Web Audio API not supported', e);
+      if (this.audioContext) {
+        this.masterGain = this.audioContext.createGain();
+        this.masterGain.connect(this.audioContext.destination);
+        this.masterGain.gain.value = 0.8;
+        
+        this.drumSynth = new DrumSynthesizer(this.audioContext);
+        this.loadDrumSounds();
+        
+        this.initialized = true;
+        this.log('Audio context initialized successfully');
+      }
+    } catch (error) {
+      console.error('Failed to initialize audio context:', error);
+      this.log('Audio initialization failed', error);
     }
   }
 
-  /**
-   * Get or create channel nodes
-   * Routing: Panner -> Gain -> Master -> Destination
-   */
-  private getChannelNodes(channelId: string): ChannelNodes | null {
-    if (!this.audioContext || !this.masterGain) {
-      this.log('❌ AudioContext not ready');
-      return null;
+  private async ensureInitialized(): Promise<boolean> {
+    if (!this.initialized) {
+      await this.initAudio();
     }
+    return this.initialized && this.audioContext !== null;
+  }
+
+  private async loadDrumSounds() {
+    if (!this.drumSynth || this.drumSoundsLoaded) return;
+
+    this.log('🥁 Loading FL Studio drum kit...');
+    const drumBuffers = this.drumSynth.getAllDrumSounds();
+    
+    drumBuffers.forEach((buffer, name) => {
+      this.sampleBuffers.set(name, buffer);
+      this.log(`✅ Loaded: ${name}`);
+    });
+
+    this.drumSoundsLoaded = true;
+    this.log('🎯 All drum sounds ready!');
+  }
+
+  private getChannelNodes(channelId: string): ChannelNodes | null {
+    if (!this.audioContext || !this.masterGain) return null;
 
     if (!this.channelNodes.has(channelId)) {
       const gain = this.audioContext.createGain();
       const panner = this.audioContext.createStereoPanner();
       
-      // Chain: panner -> gain -> master
       panner.connect(gain);
       gain.connect(this.masterGain);
       
@@ -107,20 +126,11 @@ export class ChannelRackEngine {
 
   async loadChannelSample(channelId: string, audioBuffer: AudioBuffer) {
     this.sampleBuffers.set(channelId, audioBuffer);
-    this.log(`📥 Sample loaded: ${channelId}`, { 
-      duration: audioBuffer.duration 
-    });
+    this.log(`📥 Sample loaded: ${channelId}`);
   }
 
-  // =====================================================
-  // SOUND TRIGGERING - Creates fresh source every time!
-  // =====================================================
-  
   private triggerSound(channel: Channel, time: number, isPreview: boolean = false) {
-    if (!this.audioContext) {
-      this.log('❌ No AudioContext');
-      return;
-    }
+    if (!this.audioContext) return;
 
     // Skip if muted (unless preview)
     if (!isPreview && channel.muted) return;
@@ -131,91 +141,76 @@ export class ChannelRackEngine {
     if (!isPreview && hasSolo && !channel.solo) return;
 
     const nodes = this.getChannelNodes(channel.id);
-    if (!nodes) {
-      this.log(`❌ Channel ${channel.name} not connected`);
-      return;
-    }
+    if (!nodes) return;
 
     // Apply params
     this.updateChannelParams(channel.id, channel.volume, channel.pan);
 
-    if (channel.type === 'sample' && this.sampleBuffers.has(channel.id)) {
-      // PLAY SAMPLE - fresh BufferSource each trigger!
-      const buffer = this.sampleBuffers.get(channel.id)!;
+    // Check for professional drum sound first
+    const drumBuffer = this.sampleBuffers.get(channel.name);
+    if (drumBuffer) {
       const source = this.audioContext.createBufferSource();
-      source.buffer = buffer;
+      source.buffer = drumBuffer;
       source.connect(nodes.panner);
       source.start(time);
-      
+      this.log(`🥁 ${channel.name} @ ${time.toFixed(3)}s`);
+      return;
+    }
+
+    // Check for custom sample in channel
+    if (channel.type === 'sample' && channel.audioBuffer) {
+      const source = this.audioContext.createBufferSource();
+      source.buffer = channel.audioBuffer;
+      source.connect(nodes.panner);
+      source.start(time);
       this.log(`🔊 Sample: ${channel.name} @ ${time.toFixed(3)}s`);
     } else {
-      // PLAY SYNTH
-      this.playSynth(channel, nodes.panner, time);
+      // Professional synth fallback
+      this.playSynthSound(channel, nodes.panner, time);
     }
   }
 
-  private playSynth(channel: Channel, destination: AudioNode, time: number) {
+  private playSynthSound(channel: Channel, destination: AudioNode, time: number) {
     if (!this.audioContext) return;
 
-    const osc = this.audioContext.createOscillator();
-    const gain = this.audioContext.createGain();
-
-    const freq = this.getFrequency(channel.name);
-    osc.frequency.value = freq;
-    
-    // Set waveform based on drum type
-    const name = channel.name.toLowerCase();
-    if (name.includes('kick')) osc.type = 'sine';
-    else if (name.includes('snare')) osc.type = 'triangle';
-    else if (name.includes('hat')) osc.type = 'square';
-    else osc.type = 'sawtooth';
-
-    osc.connect(gain);
-    gain.connect(destination);
-
-    // Envelope
-    const duration = name.includes('kick') ? 0.15 : 0.1;
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-    osc.start(time);
-    osc.stop(time + duration);
-    
-    this.log(`🎹 Synth: ${channel.name} @ ${time.toFixed(3)}s`);
+    // Use professional drum sounds instead of basic synth
+    const drumBuffers = this.drumSynth?.getAllDrumSounds();
+    const buffer = drumBuffers?.get(channel.name);
+    if (buffer) {
+      const source = this.audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(destination);
+      source.start(time);
+      this.log(`🎹 Synth: 🔊 ${channel.name} @ ${time.toFixed(3)}s`);
+    }
   }
 
-  private getFrequency(name: string): number {
-    const lower = name.toLowerCase();
-    if (lower.includes('kick')) return 60;
-    if (lower.includes('snare')) return 200;
-    if (lower.includes('hat')) return 800;
-    if (lower.includes('clap')) return 400;
-    if (lower.includes('tom')) return 150;
-    return 440;
-  }
 
   // =====================================================
-  // SCHEDULER - The key fix: Web Audio API timing
+  // SCHEDULER - Sample-accurate timing
   // =====================================================
   
-  start(bpm: number, stepCount: number = 16) {
-    if (this.isPlaying || !this.audioContext) return;
+  async start(bpm: number, stepCount: number) {
+    if (!await this.ensureInitialized()) {
+      console.error('Cannot start: Audio context not initialized');
+      return;
+    }
 
-    // Resume context (browser requires user gesture)
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (error) {
+        console.error('Failed to resume audio context:', error);
+        return;
+      }
     }
 
     this.bpm = bpm;
     this.stepCount = stepCount;
     this.isPlaying = true;
-    
-    // Start scheduling from current audio time
-    this.nextStepTime = this.audioContext.currentTime;
+    this.nextStepTime = this.audioContext!.currentTime;
     this.nextStepIndex = 0;
     
-    // Kick off the scheduler loop
     this.schedulerLoop();
     
     this.log(`▶️ STARTED: ${bpm} BPM, ${stepCount} steps`);
@@ -232,56 +227,48 @@ export class ChannelRackEngine {
     this.log('⏹️ STOPPED');
   }
 
-  /**
-   * The heart of the engine: lookahead scheduling
-   * Schedules steps ahead of time for sample-accurate playback
-   */
   private schedulerLoop() {
     if (!this.isPlaying || !this.audioContext) return;
 
-    // Schedule all steps that fall within lookahead window
     while (this.nextStepTime < this.audioContext.currentTime + this.scheduleAheadTime) {
       this.scheduleStep(this.nextStepIndex, this.nextStepTime);
       
-      // Advance to next step
       this.nextStepIndex = (this.nextStepIndex + 1) % this.stepCount;
       this.nextStepTime += this.getStepDuration();
     }
 
-    // Set up next check
     this.timerID = window.setTimeout(() => this.schedulerLoop(), this.lookaheadInterval);
   }
 
   private getStepDuration(): number {
-    // 1 beat = 60/bpm seconds, 4 steps per beat (16th notes)
-    return (60 / this.bpm) / 4;
+    return (60 / this.bpm) / 4; // 16th notes
   }
 
   private scheduleStep(stepIndex: number, time: number) {
     const store = useStudioStore.getState();
     const activePatternId = store.ui.activePatternId;
     
-    if (!activePatternId) {
-      this.log('⚠️ No active pattern');
-      return;
-    }
+    if (!activePatternId) return;
 
     const pattern = store.patterns.find(p => p.id === activePatternId);
     if (!pattern) return;
 
-    // Get channels for this pattern
     const channels = store.channels.filter(c => pattern.channelIds.includes(c.id));
 
-    // Schedule sounds for active steps
-    channels.forEach(channel => {
-      if (channel.steps[stepIndex]) {
-        this.triggerSound(channel, time);
-      }
-    });
+    // Check if we should play this step based on timeline clips
+    const currentBeat = this.getCurrentBeat();
+    const shouldPlay = this.shouldPlayStepAtBeat(currentBeat);
 
-    // Update UI (throttle to avoid excessive re-renders)
+    if (shouldPlay) {
+      channels.forEach(channel => {
+        if (channel.steps[stepIndex]) {
+          this.triggerSound(channel, time);
+        }
+      });
+    }
+
+    // Update UI
     if (stepIndex !== this.lastUIStep && this.onStepCallback) {
-      // Calculate when this step should display based on audio time
       const delay = Math.max(0, (time - this.audioContext!.currentTime) * 1000);
       setTimeout(() => {
         if (this.isPlaying) {
@@ -292,18 +279,39 @@ export class ChannelRackEngine {
     }
   }
 
+  private getCurrentBeat(): number {
+    const store = useStudioStore.getState();
+    const transport = store.playback;
+    
+    // currentTime is already in beats, not seconds!
+    return transport.currentTime;
+  }
+
+  private shouldPlayStepAtBeat(stepBeat: number): boolean {
+    const store = useStudioStore.getState();
+    const clips = store.clips;
+    const activePatternId = store.ui.activePatternId;
+    
+    // ABSOLUTE SILENCE: Only play if there are clips with this exact pattern on timeline
+    const hasClipAtBeat = clips.some(clip => {
+      // MUST have this pattern ID and be at this beat
+      return clip.patternId === activePatternId && 
+             clip.start <= stepBeat && 
+             clip.start + clip.duration > stepBeat;
+    });
+    
+    return hasClipAtBeat;
+  }
+
+  
   // =====================================================
   // PUBLIC API
   // =====================================================
   
-  /**
-   * Preview sound when user clicks a step
-   */
-  previewStep(channel: Channel) {
-    if (!this.audioContext) return;
+  async previewStep(channel: Channel) {
+    if (!await this.ensureInitialized()) return;
     
-    // Play immediately at current time + small offset
-    const previewTime = this.audioContext.currentTime + 0.01;
+    const previewTime = this.audioContext!.currentTime + 0.01;
     this.triggerSound(channel, previewTime, true);
     this.log(`👆 Preview: ${channel.name}`);
   }
@@ -322,13 +330,40 @@ export class ChannelRackEngine {
 
   setBpm(bpm: number) {
     this.bpm = bpm;
-    // Next loop will use new BPM automatically
-    this.log(`🎵 BPM changed: ${bpm}`);
+    this.log(`🎵 BPM: ${bpm}`);
   }
 
   /**
-   * Debug: Check routing status
+   * Get FL Studio drum kit
    */
+  getDrumKit(): DrumSound[] {
+    return FL_DRUM_KIT;
+  }
+
+  /**
+   * Create a drum channel
+   */
+  createDrumChannel(drumType: DrumSound): Omit<Channel, 'id'> {
+    return {
+      name: drumType.name,
+      type: 'synth',
+      color: drumType.color,
+      volume: 0.8,
+      pan: 0,
+      muted: false,
+      solo: false,
+      stepCount: 16,
+      steps: new Array(16).fill(false),
+    };
+  }
+
+  /**
+   * Get AudioContext for external use (SampleLoader, etc.)
+   */
+  getAudioContext(): AudioContext | null {
+    return this.audioContext;
+  }
+
   getDebugInfo() {
     return {
       audioContext: this.audioContext ? {
@@ -337,6 +372,7 @@ export class ChannelRackEngine {
         currentTime: this.audioContext.currentTime.toFixed(3)
       } : null,
       masterGain: this.masterGain ? 'connected' : 'null',
+      drumSoundsLoaded: this.drumSoundsLoaded,
       channels: Array.from(this.channelNodes.keys()).map(id => ({
         id,
         hasBuffer: this.sampleBuffers.has(id),
@@ -348,10 +384,10 @@ export class ChannelRackEngine {
   }
 }
 
-// Create singleton instance
+// Singleton instance
 export const globalChannelRackEngine = new ChannelRackEngine();
 
-// Debug helper (call in console: window.debugAudio())
+// Debug helper
 (window as unknown as { debugAudio: () => unknown }).debugAudio = () => {
   return globalChannelRackEngine.getDebugInfo();
 };
