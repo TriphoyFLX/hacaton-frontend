@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, UserCheck, Clock, CheckCircle, XCircle, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles } from 'lucide-react';
 import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, judgeBattle, User, Battle, BattleRecording } from '../api/battles';
 import { useAuthStore } from '../store/authStore';
 

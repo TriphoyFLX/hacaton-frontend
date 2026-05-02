@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CreatePost from '../components/CreatePost';
 import { postsApi, Post } from '../api/posts';
 import {
-  Image, Video, Music, Heart, MessageCircle, Share2,
+  Video, Music, Heart, MessageCircle, Share2,
   MoreHorizontal, TrendingUp, Clock, Bookmark, Send,
   Play, Eye, ChevronDown, Bell, Search, Flame, Zap, ChevronRight
 } from 'lucide-react';
@@ -399,7 +399,7 @@ export default function Feed() {
     try {
       const data = await postsApi.getPosts();
       setPosts(
-        (data ?? []).map(post => ({
+        (data ?? []).map((post: Post) => ({
           ...post,
           likes: Math.floor(Math.random() * 3200) + 50,
           comments: Math.floor(Math.random() * 480) + 4,

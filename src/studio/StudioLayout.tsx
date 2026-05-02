@@ -6,29 +6,41 @@ import { ToolBar } from "./transport/ToolBar";
 import { Timeline } from "./timeline/Timeline";
 import { PianoRoll } from "./piano-roll/PianoRoll";
 import { ChannelRack } from "./channel-rack/ChannelRack";
+import { Mixer } from "./mixer/Mixer";
+import { Browser } from "./browser/Browser";
+import { MenuBar } from "./menu/MenuBar";
 import { useStudioStore } from "./store/useStudioStore";
 import { ResizablePanel } from "./components/ResizablePanel";
 import { useStudioHotkeys } from "./hooks/useStudioHotkeys";
 import { audioScheduler } from "./engine/audioScheduler";
 import { debugAudioSystem, createTestBufferForClip } from "./utils/audioDebug";
 import { midiPlayer } from "./engine/midiPlayer";
+import { FL_COLORS, FL_GRADIENTS, FL_SHADOWS, FL_SPACING, FL_BORDER_RADIUS } from "./styles/flStudioColors";
 
 /**
- * PROFESSIONAL DAW LAYOUT
+ * FL STUDIO 21 LAYOUT
  * 
- * Hierarchy (strict visual weight):
- * 1. Transport Controls (Play/Stop/BPM) - MOST IMPORTANT
- * 2. Timeline/Workspace - MEDIUM
- * 3. Channel Rack - MEDIUM
- * 4. Sidebar - LOW
- * 5. Tools/Settings - MINIMAL
+ * Exact FL Studio layout structure:
+ * 1. Menu Bar (top) - File, Edit, View, etc.
+ * 2. Browser Panel (left) - Samples, presets, patterns
+ * 3. Channel Rack (left-center) - Step sequencer
+ * 4. Playlist/Timeline (center) - Main workspace
+ * 5. Piano Roll (modal) - MIDI editor
+ * 6. Mixer (bottom) - Audio mixing
+ * 7. Transport Controls (top-left) - Play/Stop/BPM
  */
 
 export function StudioLayout() {
   const addClip = useStudioStore((state) => state.addClip);
   const tracks = useStudioStore((state) => state.tracks);
-  const sidebarWidth = useStudioStore((state) => state.ui.sidebarWidth);
-  const setSidebarWidth = useStudioStore((state) => state.setSidebarWidth);
+  const browserWidth = useStudioStore((state) => state.ui.browserWidth || 240);
+  const setBrowserWidth = useStudioStore((state) => state.setBrowserWidth);
+  const channelRackWidth = useStudioStore((state) => state.ui.channelRackWidth || 320);
+  const setChannelRackWidth = useStudioStore((state) => state.setChannelRackWidth);
+  const mixerHeight = useStudioStore((state) => state.ui.mixerHeight || 200);
+  const setMixerHeight = useStudioStore((state) => state.setMixerHeight);
+  const isMixerVisible = useStudioStore((state) => state.ui.isMixerVisible);
+  const toggleMixer = useStudioStore((state) => state.toggleMixer);
   
   // Enable FL Studio hotkeys
   useStudioHotkeys();
@@ -157,71 +169,100 @@ export function StudioLayout() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex flex-col h-screen w-full bg-gray-950 text-gray-100 overflow-hidden">
+      <div className="flex flex-col h-screen w-full overflow-hidden" style={{ backgroundColor: FL_COLORS.MAIN_BG }}>
         {/* 
-          HIERARCHY LAYER 1: TRANSPORT (Most Critical)
-          - Play/Stop/BPM controls
-          - Time display
-          - Recording controls
+          FL STUDIO LAYER 1: MENU BAR (Top)
+          - File, Edit, View, Options, Help
+          - FL Studio style menu
         */}
-        <div className="flex-shrink-0 border-b border-gray-800/50 backdrop-blur-sm bg-gray-900/95">
-          <Transport />
+        <div className="flex-shrink-0" style={{ backgroundColor: FL_COLORS.PANEL_BG, borderBottom: `1px solid ${FL_COLORS.BORDER_DARK}` }}>
+          <MenuBar />
         </div>
 
         {/* 
-          HIERARCHY LAYER 2: TOOLBAR (Secondary)
-          - Quick access tools
-          - Channel Rack toggle
-          - View options
+          FL STUDIO LAYER 2: MAIN WORKSPACE
+          - Browser (left)
+          - Channel Rack (left-center)
+          - Playlist/Timeline (center)
         */}
-        <div className="flex-shrink-0 border-b border-gray-800/30 bg-gray-900/50">
-          <ToolBar />
-        </div>
-
-        {/* 
-          HIERARCHY LAYER 3: MAIN WORKSPACE
-          - Timeline (primary)
-          - Sidebar (secondary)
-        */}
-        <div className="flex flex-1 overflow-hidden bg-gradient-to-b from-gray-900 to-gray-950">
-          {/* Sidebar - Resizable with FL Studio style */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Browser Panel - FL Style */}
           <ResizablePanel
-            width={sidebarWidth}
+            width={browserWidth}
             minWidth={200}
-            maxWidth={420}
-            onResize={setSidebarWidth}
+            maxWidth={400}
+            onResize={setBrowserWidth}
             resizeDirection="horizontal"
-            className="flex-shrink-0 border-r border-gray-800/30 bg-gray-900/30 backdrop-blur-sm transition-all duration-300 hover:border-gray-700/50"
+            className="flex-shrink-0 border-r"
+            style={{ 
+              borderColor: FL_COLORS.BORDER_DARK,
+              backgroundColor: FL_COLORS.BROWSER_BG,
+              boxShadow: FL_SHADOWS.PANEL
+            }}
           >
-            <Sidebar />
+            <Browser />
           </ResizablePanel>
 
-          {/* Main Timeline - Primary workspace */}
-          <div className="flex-1 overflow-hidden relative">
-            {/* Subtle grid background for professional feel */}
-            <div className="absolute inset-0 opacity-5 pointer-events-none">
-              <div className="h-full w-full" style={{
-                backgroundImage: `
-                  linear-gradient(to right, #374151 1px, transparent 1px),
-                  linear-gradient(to bottom, #374151 1px, transparent 1px)
-                `,
-                backgroundSize: '40px 20px'
-              }} />
+          {/* Channel Rack - FL Style */}
+          <ResizablePanel
+            width={channelRackWidth}
+            minWidth={280}
+            maxWidth={400}
+            onResize={setChannelRackWidth}
+            resizeDirection="horizontal"
+            className="flex-shrink-0 border-r"
+            style={{ 
+              borderColor: FL_COLORS.BORDER_DARK,
+              backgroundColor: FL_COLORS.CHANNEL_BG,
+              boxShadow: FL_SHADOWS.PANEL
+            }}
+          >
+            <ChannelRack />
+          </ResizablePanel>
+
+          {/* Main Playlist/Timeline - Primary workspace */}
+          <div className="flex-1 flex flex-col overflow-hidden relative" style={{ backgroundColor: FL_COLORS.PLAYLIST_BG }}>
+            {/* Transport Controls - FL Style (top-left of timeline) */}
+            <div className="absolute top-4 left-4 z-10" style={{ boxShadow: FL_SHADOWS.PANEL }}>
+              <Transport />
             </div>
             
-            <div className="relative z-10 h-full">
+            {/* Timeline - FL Style */}
+            <div className="flex-1 relative">
               <Timeline />
             </div>
           </div>
         </div>
 
         {/* 
-          HIERARCHY LAYER 4: MODAL OVERLAYS
+          FL STUDIO LAYER 3: MIXER (Bottom)
+          - Collapsible mixer panel
+          - Channel strips
+        */}
+        {isMixerVisible && (
+          <ResizablePanel
+            width={800}
+            height={mixerHeight}
+            minHeight={120}
+            maxHeight={400}
+            onResize={(w, h) => h && setMixerHeight(h)}
+            resizeDirection="vertical"
+            className="border-t"
+            style={{ 
+              borderColor: FL_COLORS.BORDER_DARK,
+              backgroundColor: FL_COLORS.MIXER_BG,
+              boxShadow: FL_SHADOWS.PANEL
+            }}
+          >
+            <Mixer />
+          </ResizablePanel>
+        )}
+
+        {/* 
+          FL STUDIO LAYER 4: MODAL OVERLAYS
           - Piano Roll (when editing)
-          - Channel Rack (docked but elevated)
         */}
         <PianoRoll />
-        <ChannelRack />
       </div>
     </DndContext>
   );

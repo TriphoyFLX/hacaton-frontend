@@ -11,6 +11,7 @@ import { LoopRegion } from "./LoopRegion";
 import type { Clip } from "../models";
 import { handleAudioFileDrop, filterAudioFiles } from "../utils/timelineUtils";
 import { TimelineDropZone } from "../components/TimelineDropZone";
+import { FL_COLORS, FL_SHADOWS } from "../styles/flStudioColors";
 
 function TimelineDroppable({
   children,
@@ -267,11 +268,14 @@ export function Timeline() {
 
   return (
     <DndContext onDragEnd={handleDragEnd} onDragStart={(e: any) => setActiveDrag(e.active.data.current?.clip)}>
-      <div className="flex flex-col h-full bg-gray-950 overflow-hidden">
+      <div className="flex flex-col h-full overflow-hidden" style={{ backgroundColor: FL_COLORS.PLAYLIST_BG }}>
         {/* Timeline Ruler */}
-        <div className="flex border-b border-gray-800">
-          <div className="w-48 bg-gray-900 border-r border-gray-800 flex items-center justify-center">
-            <span className="text-xs text-gray-500 font-medium">TRACKS</span>
+        <div className="flex border-b" style={{ borderColor: FL_COLORS.BORDER_DARK }}>
+          <div 
+            className="w-48 flex items-center justify-center" 
+            style={{ backgroundColor: FL_COLORS.TRACK_HEADER, borderColor: FL_COLORS.BORDER_DARK, borderRight: `1px solid ${FL_COLORS.BORDER_DARK}` }}
+          >
+            <span className="text-xs font-medium" style={{ color: FL_COLORS.TEXT_MUTED }}>TRACKS</span>
           </div>
           <div className="flex-1 overflow-hidden">
             <Ruler />
@@ -330,8 +334,10 @@ export function Timeline() {
               {/* Marquee selection overlay */}
               {isMarqueeSelecting && (
                 <div
-                  className="absolute border-2 border-blue-400 bg-blue-400/20 pointer-events-none"
+                  className="absolute border-2 pointer-events-none"
                   style={{
+                    borderColor: FL_COLORS.ACCENT_BLUE,
+                    backgroundColor: FL_COLORS.SELECTION_BG,
                     left: Math.min(marqueeStart.x, marqueeEnd.x),
                     top: Math.min(marqueeStart.y, marqueeEnd.y),
                     width: Math.abs(marqueeEnd.x - marqueeStart.x),
@@ -353,12 +359,13 @@ export function Timeline() {
       <DragOverlay>
         {activeDrag ? (
           <div
-            className="rounded pointer-events-none"
+            className="rounded pointer-events-none shadow-lg"
             style={{
               width: activeDrag.duration * config.pixelsPerBeat,
               height: config.trackHeight - 4,
               backgroundColor: activeDrag.color,
               opacity: 0.8,
+              boxShadow: FL_SHADOWS.PANEL
             }}
           />
         ) : null}

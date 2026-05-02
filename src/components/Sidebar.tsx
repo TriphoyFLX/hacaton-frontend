@@ -361,8 +361,9 @@ export default function Sidebar() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
 
-  const linkClass = ({ isActive }, extra = '') =>
-    `sb-item${isActive ? ' active' : ''}${extra ? ` ${extra}` : ''}`;
+  const linkClass = ({ isActive }: { isActive: boolean }, extra = '') => {
+    return `sb-item${isActive ? ' active' : ''}${extra ? ` ${extra}` : ''}`;
+  };
 
   return (
     <aside className="sb-root">

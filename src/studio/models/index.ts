@@ -39,6 +39,17 @@ export interface UIState {
   loopEnd: number;
   loopEnabled: boolean;
   snapStrength: number;
+  // FL Studio specific UI state
+  browserWidth: number;
+  channelRackWidth: number;
+  mixerHeight: number;
+  isMixerVisible: boolean;
+  isChannelRackVisible: boolean;
+  activePatternId?: string;
+  isChannelRackOpen: boolean;
+  sidebarWidth: number;
+  channelRackHeight: number;
+  swing: number;
 }
 
 export interface PlaybackState {

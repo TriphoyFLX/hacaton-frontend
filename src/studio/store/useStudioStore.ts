@@ -51,6 +51,12 @@ interface StudioActions {
   setLoopRegion: (start: number, end: number) => void;
   setSidebarWidth: (width: number) => void;
   setChannelRackHeight: (height: number) => void;
+  // FL Studio specific UI actions
+  setBrowserWidth: (width: number) => void;
+  setChannelRackWidth: (width: number) => void;
+  setMixerHeight: (height: number) => void;
+  toggleMixer: () => void;
+  toggleChannelRack: () => void;
   
   // Playback actions (called by engine)
   setCurrentTime: (time: number) => void;
@@ -125,6 +131,12 @@ const initialState: StudioState = {
     loopEnd: 8,
     loopEnabled: false,
     snapStrength: 0.25,
+    // FL Studio specific UI defaults
+    browserWidth: 240,
+    channelRackWidth: 320,
+    mixerHeight: 200,
+    isMixerVisible: false,
+    isChannelRackVisible: true,
   },
   channels: [
     // Pre-populated with example pattern so users immediately understand
@@ -428,6 +440,30 @@ export const useStudioStore = create<StudioState & StudioActions>()(
             c.id === clipId ? { ...c, patternId } : c
           ),
         }));
+      },
+
+      // FL Studio specific UI actions
+      setBrowserWidth: (width) => {
+        const clamped = Math.max(200, Math.min(400, width));
+        set((state) => ({ ui: { ...state.ui, browserWidth: clamped } }));
+      },
+
+      setChannelRackWidth: (width) => {
+        const clamped = Math.max(280, Math.min(400, width));
+        set((state) => ({ ui: { ...state.ui, channelRackWidth: clamped } }));
+      },
+
+      setMixerHeight: (height) => {
+        const clamped = Math.max(120, Math.min(400, height));
+        set((state) => ({ ui: { ...state.ui, mixerHeight: clamped } }));
+      },
+
+      toggleMixer: () => {
+        set((state) => ({ ui: { ...state.ui, isMixerVisible: !state.ui.isMixerVisible } }));
+      },
+
+      toggleChannelRack: () => {
+        set((state) => ({ ui: { ...state.ui, isChannelRackVisible: !state.ui.isChannelRackVisible } }));
       },
     }),
     { name: "StudioStore" }
