@@ -51,7 +51,6 @@ ${FONT_IMPORT}
 .sb-logo-icon {
   width: 28px;
   height: 28px;
-  background: var(--text-primary);
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -289,6 +288,105 @@ ${FONT_IMPORT}
   height: 12px;
   stroke-width: 1.5;
 }
+
+/* ── MOBILE APPBAR (≤768px) ── */
+@media (max-width: 768px) {
+  .sb-root {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    background: var(--bg);
+    border-top: 1px solid var(--b1);
+    border-left: none;
+    border-right: none;
+    z-index: 1000;
+    padding: 8px 0 12px;
+  }
+
+  .sb-logo,
+  .sb-footer,
+  .sb-section-label,
+  .sb-divider,
+  .sb-item-label,
+  .sb-badge,
+  .sb-ai,
+  .sb-admin {
+    display: none !important;
+  }
+
+  .sb-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0;
+    gap: 0;
+  }
+
+  .sb-item {
+    flex: 1;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 8px 4px !important;
+    min-height: 60px !important;
+    border-radius: 0 !important;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .sb-item.active {
+    background: transparent !important;
+    border-left: none !important;
+  }
+
+  .sb-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    background: var(--t1);
+    border-radius: 50%;
+  }
+
+  .sb-item-icon {
+    width: 22px !important;
+    height: 22px !important;
+    margin-bottom: 4px !important;
+    color: var(--t3) !important;
+  }
+
+  .sb-item.active .sb-item-icon {
+    color: var(--t1) !important;
+  }
+
+  .sb-item:hover {
+    background: var(--surf) !important;
+  }
+
+  .sb-item:hover .sb-item-icon {
+    color: var(--t2) !important;
+  }
+
+  /* Адаптация основного контента */
+  body:has(.sb-root) {
+    padding-bottom: 80px !important;
+  }
+}
+
+/* ── TABLET (769px - 1024px) ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sb-root {
+    width: 200px !important;
+  }
+}
 `;
 
 // ── Icons ──
@@ -338,13 +436,6 @@ const IconChevron = () => (
     <polyline points="6 9 12 15 18 9" />
   </svg>
 );
-const IconBrandLogo = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-    <path d="M9 18V5l12-2v13" />
-    <circle cx="6" cy="18" r="3" />
-    <circle cx="18" cy="16" r="3" />
-  </svg>
-);
 
 const MAIN_NAV = [
   { path: '/feed',     label: 'Лента',     icon: <IconHome /> },
@@ -372,8 +463,10 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="sb-logo">
         <div className="sb-logo-mark">
-          <div className="sb-logo-icon"><IconBrandLogo /></div>
-          <span className="sb-logo-name">BandLab</span>
+          <div className="sb-logo-icon">
+            <img src="/soundlab.svg" alt="SoundLab" style={{ width: '24px', height: '24px' }} />
+          </div>
+          <span className="sb-logo-name">SoundLab</span>
         </div>
         <div className="sb-logo-tag">Studio Platform</div>
       </div>

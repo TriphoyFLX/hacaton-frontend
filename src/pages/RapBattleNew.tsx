@@ -471,6 +471,73 @@ textarea.rb-input { resize:vertical; min-height:80px; line-height:1.6; }
   font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.06em;
   text-transform:uppercase; color:var(--t3); min-width:100px;
 }
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  .rb {
+    padding-left: 0 !important;
+  }
+  .rb-wrap {
+    padding: 24px 16px 100px !important;
+  }
+  .rb-topbar {
+    padding-bottom: 16px !important;
+    margin-bottom: 32px !important;
+  }
+  .rb-page-name {
+    font-size: 20px !important;
+  }
+  .rb-hero {
+    padding: 40px 0 32px !important;
+  }
+  .rb-hero-title {
+    font-size: 22px !important;
+  }
+  .rb-vs-card {
+    padding: 16px !important;
+  }
+  .rb-vs-avatar {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 14px !important;
+  }
+  .rb-player {
+    padding: 16px !important;
+  }
+  .rb-card {
+    padding: 16px !important;
+  }
+  .rb-rec-card {
+    padding: 16px !important;
+  }
+  .rb-timer-display {
+    font-size: 48px !important;
+  }
+  .rb-mic-btn {
+    width: 60px !important;
+    height: 60px !important;
+  }
+  .rb-mic-btn svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  .rb-quality-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .rb-stars {
+    gap: 8px !important;
+  }
+  .rb-star-btn {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 16px !important;
+  }
+  .rb-score-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
 `;
 
 // ─────────────────────────────────────────────────────────

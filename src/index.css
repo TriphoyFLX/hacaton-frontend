@@ -7,9 +7,10 @@
     @apply border-gray-200;
   }
   body {
-    @apply bg-gray-950 text-gray-100;
+    background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 25%, #0d0d0d 50%, #1a1a1a 75%, #0f0f0f 100%);
+    color: #f0ede8;
     font-feature-settings: "rlig" 1, "calt" 1;
-    
+    min-height: 100vh;
   }
 }
 

@@ -220,6 +220,49 @@ ${FONT_IMPORT}
   color: #c5c0b8;
   letter-spacing: 0.04em;
 }
+
+/* Кастомный скроллбар для VideoFeed */
+.vf-feed-container::-webkit-scrollbar {
+  width: 6px;
+}
+.vf-feed-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.vf-feed-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+.vf-feed-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.vf-feed-container::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Индикатор прогресса */
+.vf-progress-indicator {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vf-progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.vf-progress-dot.active {
+  background: white;
+  transform: scale(1.2);
+}
 `;
 
 interface VideoFeedProps {
@@ -296,6 +339,76 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
     }
   };
 
+  const scrollToVideo = (index: number) => {
+    if (containerRef.current) {
+      const videoHeight = containerRef.current.clientHeight;
+      containerRef.current.scrollTo({
+        top: index * videoHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const handleSwipe = (direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' 
+      ? Math.min(currentIndex + 1, soundToks.length - 1)
+      : Math.max(currentIndex - 1, 0);
+    
+    if (newIndex !== currentIndex) {
+      scrollToVideo(newIndex);
+    }
+  };
+
+  // Touch handlers for mobile swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const startY = touch.clientY;
+    
+    const handleTouchMove = (moveEvent: TouchEvent) => {
+      const touch = moveEvent.touches[0];
+      const currentY = touch.clientY;
+      const diff = startY - currentY;
+      
+      // Prevent default scrolling behavior
+      if (Math.abs(diff) > 50) {
+        moveEvent.preventDefault();
+      }
+    };
+    
+    const handleTouchEnd = (endEvent: TouchEvent) => {
+      const touch = endEvent.changedTouches[0];
+      const endY = touch.clientY;
+      const diff = startY - endY;
+      
+      // Swipe threshold
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) {
+          handleSwipe('up'); // Swipe up - next video
+        } else {
+          handleSwipe('down'); // Swipe down - previous video
+        }
+      }
+      
+      // Clean up
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+    
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+  };
+
+  // Wheel handler for desktop
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    
+    if (e.deltaY > 0) {
+      handleSwipe('up'); // Scroll down - next video
+    } else {
+      handleSwipe('down'); // Scroll up - previous video
+    }
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -316,8 +429,9 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
       <style>{css}</style>
       <div 
         ref={containerRef}
-        className="h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth"
-        style={{ scrollbarWidth: 'none' }}
+        className="vf-feed-container h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth"
+        onTouchStart={handleTouchStart}
+        onWheel={handleWheel}
       >
         {soundToks.map((soundTok, index) => (
           <div
@@ -391,6 +505,17 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
               </div>
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Progress Indicator */}
+      <div className="vf-progress-indicator">
+        {soundToks.map((_, index) => (
+          <div
+            key={index}
+            className={`vf-progress-dot ${index === currentIndex ? 'active' : ''}`}
+            onClick={() => scrollToVideo(index)}
+          />
         ))}
       </div>
 
