@@ -1,419 +1,300 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, UserCheck, Clock, CheckCircle, XCircle, Sparkles } from 'lucide-react';
-import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, saveBattleRecording, judgeBattle, User, Battle, BattleRecording } from '../api/battles';
+import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, judgeBattle, User, Battle, BattleRecording } from '../api/battles';
+import { useAuthStore } from '../store/authStore';
 
-// Компонент для воспроизведения голоса + бита с микшированием и контролем
+// Простой компонент для воспроизведения голоса + бита
 const MixedTrackPlayer = ({ voiceUrl, beatUrl, label }: { voiceUrl: string; beatUrl: string; label: string }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string>('');
-  const [showControls, setShowControls] = useState(false);
-  const [voiceVolume, setVoiceVolume] = useState(0.8);
-  const [beatVolume, setBeatVolume] = useState(0.4);
-  const [masterVolume, setMasterVolume] = useState(1.0);
-  const [reverbAmount, setReverbAmount] = useState(0);
-  const [trimStart, setTrimStart] = useState(0);
-  const [trimEnd, setTrimEnd] = useState(1);
+  const [voiceLoaded, setVoiceLoaded] = useState(false);
+  const [beatLoaded, setBeatLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
   
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const voiceGainRef = useRef<GainNode | null>(null);
-  const beatGainRef = useRef<GainNode | null>(null);
-  const sourceNodesRef = useRef<AudioBufferSourceNode[]>([]);
-  const audioBuffersRef = useRef<{ voice?: AudioBuffer; beat?: AudioBuffer }>({});
-  const convolverRef = useRef<ConvolverNode | null>(null);
-  const loadingRef = useRef(false);
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+  const beatAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Загрузка и подготовка аудио
-  const prepareAudio = async () => {
-    if (loadingRef.current || !voiceUrl || !beatUrl) return;
-    
-    loadingRef.current = true;
-    setError('');
-    
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioContext;
+  // Track component mount state
+  const isMountedRef = useRef(true);
+  
+  // Загрузка аудио - используем blob URLs из БД с защитой от race conditions
+  useEffect(() => {
+    const loadAudio = async (attempt: number = 0) => {
+      console.log('Debug: MixedTrackPlayer - loadAudio called, voiceUrl:', voiceUrl);
+      console.log('Debug: MixedTrackPlayer - voiceAudioRef.current:', voiceAudioRef.current);
+      console.log('Debug: MixedTrackPlayer - isMountedRef.current:', isMountedRef.current);
       
-      // Создаем gain node для контроля громкости
-      const masterGain = audioContext.createGain();
-      masterGain.connect(audioContext.destination);
-      masterGain.gain.value = masterVolume;
-      gainNodeRef.current = masterGain;
+      if (!voiceUrl || !isMountedRef.current) {
+        console.log('Debug: MixedTrackPlayer - Skipping load: no voiceUrl or component unmounted');
+        return;
+      }
       
-      // Создаем individual gain nodes
-      const voiceGainNode = audioContext.createGain();
-      const beatGainNode = audioContext.createGain();
-      voiceGainRef.current = voiceGainNode;
-      beatGainRef.current = beatGainNode;
+      if (!voiceAudioRef.current) {
+        console.log('Debug: MixedTrackPlayer - Ref not ready, retrying...');
+        if (attempt < 5) {
+          const delay = Math.min(100 * Math.pow(2, attempt), 1000);
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              loadAudio(attempt + 1);
+            }
+          }, delay);
+        } else {
+          console.log('Debug: MixedTrackPlayer - Max retry attempts reached for ref');
+        }
+        return;
+      }
       
-      // Создаем convolver для реверберации
-      const convolver = audioContext.createConvolver();
-      const convolverGain = audioContext.createGain();
-      convolverGain.gain.value = 0;
-      convolverRef.current = convolver;
+      setLoading(true);
+      setError('');
       
-      // Создаем импульсную характеристику для реверберации
-      const impulseLength = audioContext.sampleRate * 2; // 2 секунды реверберации
-      const impulse = audioContext.createBuffer(2, impulseLength, audioContext.sampleRate);
-      for (let channel = 0; channel < 2; channel++) {
-        const channelData = impulse.getChannelData(channel);
-        for (let i = 0; i < impulseLength; i++) {
-          channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 2);
+      console.log('Debug: MixedTrackPlayer - Loading voice from DB...');
+      console.log('Debug: MixedTrackPlayer - voiceUrl:', voiceUrl);
+      console.log('Debug: MixedTrackPlayer - voiceAudioRef.current:', voiceAudioRef.current);
+      
+      try {
+        // Проверяем что ref все еще существует и компонент смонтирован
+        if (!voiceAudioRef.current || !isMountedRef.current) {
+          throw new Error('Audio ref is null or component unmounted');
+        }
+        
+        console.log('Debug: MixedTrackPlayer - Creating blob URL...');
+        
+        // Создаем blob URL из файла
+        const fullUrl = voiceUrl.startsWith('http') ? voiceUrl : `http://localhost:5002${voiceUrl}`;
+        const response = await fetch(fullUrl);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Финальная проверка что ref все еще существует и компонент смонтирован
+        if (!voiceAudioRef.current || !isMountedRef.current) {
+          throw new Error('Audio ref became null during load or component unmounted');
+        }
+        
+        voiceAudioRef.current.src = blobUrl;
+        voiceAudioRef.current.load();
+        
+        try {
+          await new Promise<void>((resolve, reject) => {
+            // Check if component is still mounted before setting up audio events
+            if (!isMountedRef.current || !voiceAudioRef.current) {
+              reject(new Error('Component unmounted during audio setup'));
+              return;
+            }
+            
+            const audio = voiceAudioRef.current;
+            const timeout = setTimeout(() => {
+              reject(new Error('Voice loading timeout (10s)'));
+            }, 10000);
+            
+            const cleanup = () => {
+              clearTimeout(timeout);
+              if (audio) {
+                audio.onloadeddata = null;
+                audio.onerror = null;
+              }
+            };
+            
+            audio.onloadeddata = () => {
+              if (isMountedRef.current) {
+                cleanup();
+                resolve();
+              } else {
+                cleanup();
+                reject(new Error('Component unmounted during audio loading'));
+              }
+            };
+            
+            audio.onerror = (e) => {
+              if (isMountedRef.current) {
+                cleanup();
+                reject(new Error('Voice loading error'));
+              } else {
+                cleanup();
+              }
+            };
+          });
+          
+          // Only update state if component is still mounted
+          if (isMountedRef.current) {
+            setVoiceLoaded(true);
+            setBeatLoaded(true); // Считаем что бит готов
+            console.log('Debug: MixedTrackPlayer - Voice loaded successfully from blob');
+          }
+        } catch (voiceErr) {
+          console.error('Debug: MixedTrackPlayer - Voice loading failed:', voiceErr);
+          throw voiceErr;
+        }
+        
+      } catch (err) {
+        // Only update error state if component is still mounted
+        if (isMountedRef.current) {
+          console.error('Debug: MixedTrackPlayer - Error loading audio:', err);
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          setError(`Ошибка загрузки аудио: ${errorMessage}`);
+        }
+      } finally {
+        // Only update loading state if component is still mounted
+        if (isMountedRef.current) {
+          setLoading(false);
         }
       }
-      convolver.buffer = impulse;
+    };
+    
+    // Начинаем загрузку с небольшой задержкой чтобы DOM успел отрисоваться
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        loadAudio();
+      }
+    }, 100);
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [voiceUrl]);
+
+  // Устанавливаем URL бита напрямую без загрузки
+  useEffect(() => {
+    if (beatUrl && beatAudioRef.current) {
+      const fullBeatUrl = beatUrl.startsWith('http') ? beatUrl : `http://localhost:5002${beatUrl}`;
+      beatAudioRef.current.src = fullBeatUrl;
+      console.log('Debug: MixedTrackPlayer - Beat URL set:', fullBeatUrl);
+    }
+  }, [beatUrl]);
+
+  const playAudio = () => {
+    if (!voiceAudioRef.current || !beatAudioRef.current || !voiceLoaded || !beatLoaded) {
+      console.log('Debug: MixedTrackPlayer - Cannot play: audio not ready');
+      return;
+    }
+    
+    try {
+      // Устанавливаем громкость
+      voiceAudioRef.current.volume = 0.8;
+      beatAudioRef.current.volume = 0.4;
       
-      // Подключаем реверберацию
-      convolver.connect(convolverGain);
-      convolverGain.connect(masterGain);
+      // Синхронизируем начало
+      const currentTime = 0;
+      voiceAudioRef.current.currentTime = currentTime;
+      beatAudioRef.current.currentTime = currentTime;
       
-      // Загружаем оба аудио файла параллельно
-      const [voiceResponse, beatResponse] = await Promise.all([
-        fetch(voiceUrl),
-        fetch(beatUrl)
+      // Запускаем воспроизведение с обработкой AbortError
+      const playPromise = Promise.all([
+        voiceAudioRef.current.play(),
+        beatAudioRef.current.play()
       ]);
       
-      const [voiceArrayBuffer, beatArrayBuffer] = await Promise.all([
-        voiceResponse.arrayBuffer(),
-        beatResponse.arrayBuffer()
-      ]);
-      
-      const [voiceBuffer, beatBuffer] = await Promise.all([
-        audioContext.decodeAudioData(voiceArrayBuffer),
-        audioContext.decodeAudioData(beatArrayBuffer)
-      ]);
-      
-      audioBuffersRef.current = { voice: voiceBuffer, beat: beatBuffer };
-      setIsLoaded(true);
-      console.log('Audio prepared successfully', { 
-        voiceDuration: voiceBuffer.duration, 
-        beatDuration: beatBuffer.duration 
+      playPromise.then(() => {
+        setIsPlaying(true);
+        console.log('Debug: MixedTrackPlayer - Audio playing successfully');
+      }).catch(err => {
+        // Игнорируем AbortError - это нормально при перерисовках
+        if (err.name === 'AbortError') {
+          console.log('Debug: MixedTrackPlayer - Play aborted (normal during re-renders)');
+        } else {
+          console.error('Debug: MixedTrackPlayer - Error playing audio:', err);
+          setError('Ошибка воспроизведения');
+        }
       });
+      
     } catch (err) {
-      console.error('Error loading audio:', err);
-      setError('Ошибка загрузки аудио');
-    } finally {
-      loadingRef.current = false;
+      console.error('Debug: MixedTrackPlayer - Error playing audio:', err);
+      setError('Ошибка воспроизведения');
     }
   };
 
-  // Загружаем аудио при изменении URL
-  useEffect(() => {
-    if (voiceUrl && beatUrl) {
-      prepareAudio();
+  const stopAudio = () => {
+    if (voiceAudioRef.current) {
+      voiceAudioRef.current.pause();
+      voiceAudioRef.current.currentTime = 0;
     }
-    return () => {
-      stopPlayback();
-    };
-  }, [voiceUrl, beatUrl]);
-
-  const stopPlayback = () => {
-    sourceNodesRef.current.forEach(source => {
-      try {
-        source.stop();
-      } catch (e) {
-        // Игнорируем ошибки остановки
-      }
-    });
-    sourceNodesRef.current = [];
+    if (beatAudioRef.current) {
+      beatAudioRef.current.pause();
+      beatAudioRef.current.currentTime = 0;
+    }
     setIsPlaying(false);
   };
 
-  const togglePlayback = async () => {
-    if (!audioContextRef.current || !audioBuffersRef.current.voice || !audioBuffersRef.current.beat) {
-      setError('Аудио не загружено');
-      return;
-    }
-
-    try {
-      const ctx = audioContextRef.current;
-      
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-
-      if (isPlaying) {
-        stopPlayback();
-        return;
-      }
-
-      // Останавливаем предыдущее воспроизведение
-      stopPlayback();
-
-      // Создаем новые source nodes
-      const voiceSource = ctx.createBufferSource();
-      const beatSource = ctx.createBufferSource();
-      
-      voiceSource.buffer = audioBuffersRef.current.voice;
-      beatSource.buffer = audioBuffersRef.current.beat;
-
-      // Используем существующие gain nodes
-      if (voiceGainRef.current && beatGainRef.current) {
-        voiceGainRef.current.gain.value = voiceVolume;
-        beatGainRef.current.gain.value = beatVolume;
-        
-        // Подключаем: source -> gain -> master
-        voiceSource.connect(voiceGainRef.current);
-        beatSource.connect(beatGainRef.current);
-        
-        // Подключаем к основному выходу и реверберации
-        voiceGainRef.current.connect(gainNodeRef.current!);
-        beatGainRef.current.connect(gainNodeRef.current!);
-        
-        // Добавляем реверберацию для голоса
-        if (convolverRef.current && reverbAmount > 0) {
-          const convolverGain = ctx.createGain();
-          convolverGain.gain.value = reverbAmount;
-          voiceGainRef.current.connect(convolverRef.current);
-          convolverRef.current.connect(convolverGain);
-          convolverGain.connect(gainNodeRef.current!);
-        }
-      }
-
-      // Применяем обрезку для голоса
-      const voiceBuffer = audioBuffersRef.current.voice!;
-      const voiceDuration = voiceBuffer.duration * (trimEnd - trimStart);
-      const voiceStartTime = voiceBuffer.duration * trimStart;
-      
-      // Запускаем синхронно с учетом обрезки
-      const startTime = ctx.currentTime;
-      voiceSource.start(startTime, voiceStartTime, voiceDuration);
-      beatSource.start(startTime);
-
-      // Зацикливаем бит, если он короче голоса
-      if (audioBuffersRef.current.beat.duration < audioBuffersRef.current.voice.duration) {
-        beatSource.loop = true;
-        beatSource.loopEnd = audioBuffersRef.current.beat.duration;
-        
-        // Останавливаем бит когда голос заканчивается
-        voiceSource.onended = () => {
-          beatSource.stop();
-          setIsPlaying(false);
-        };
-      } else {
-        // Если бит длиннее, останавливаем оба когда голос заканчивается
-        voiceSource.onended = () => {
-          beatSource.stop();
-          setIsPlaying(false);
-        };
-      }
-
-      sourceNodesRef.current = [voiceSource, beatSource];
-      setIsPlaying(true);
-
-    } catch (err) {
-      console.error('Error playing mixed audio:', err);
-      setError('Ошибка воспроизведения');
+  // Автоматическая остановка при окончании
+  useEffect(() => {
+    const handleEnded = () => {
       setIsPlaying(false);
-    }
-  };
+    };
+    
+    const voiceAudio = voiceAudioRef.current;
+    const beatAudio = beatAudioRef.current;
+    
+    if (voiceAudio) voiceAudio.addEventListener('ended', handleEnded);
+    if (beatAudio) beatAudio.addEventListener('ended', handleEnded);
+    
+    return () => {
+      if (voiceAudio) voiceAudio.removeEventListener('ended', handleEnded);
+      if (beatAudio) beatAudio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
 
-  return (
-    <div className="space-y-4">
-      {/* Основные элементы управления */}
-      <div className="flex items-center gap-3">
+  if (error) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-center">
+        <p className="text-red-400 text-sm">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-2 text-xs text-red-300 hover:text-red-400 underline"
+        >
+          Обновить страницу
+        </button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <div className="w-8 h-8 mx-auto border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin mb-2"></div>
+        <p className="text-gray-400 text-sm">Загрузка аудио...</p>
+      </div>
+    );
+  }
+
+              return (
+    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-white font-medium">{label}</h3>
+        <div className="flex items-center gap-2">
+          {voiceLoaded && <span className="text-green-400 text-xs">✓ Голос</span>}
+          {beatLoaded && <span className="text-green-400 text-xs">✓ Бит</span>}
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-4 mb-4">
         <button
-          onClick={togglePlayback}
-          disabled={!isLoaded}
-          className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${
-            isPlaying 
-              ? 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/30' 
-              : isLoaded 
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-600/30' 
-                : 'bg-gray-600 cursor-not-allowed'
+          onClick={isPlaying ? stopAudio : playAudio}
+          disabled={!voiceLoaded || !beatLoaded}
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+            !voiceLoaded || !beatLoaded
+              ? 'bg-gray-500 cursor-not-allowed text-gray-300'
+              : isPlaying 
+                ? 'bg-red-500 hover:bg-red-600 text-white' 
+                : 'bg-purple-500 hover:bg-purple-600 text-white'
           }`}
         >
-          {isPlaying ? (
-            <>
-              <Pause size={14} />
-              Пауза
-            </>
-          ) : (
-            <>
-              <Play size={14} />
-              {isLoaded ? 'Слушать трек' : 'Загрузка...'}
-            </>
-          )}
+          {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
         </button>
         
-        <button
-          onClick={() => setShowControls(!showControls)}
-          className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 text-sm transition-colors"
-        >
-          <Volume2 size={14} />
-          Настройки
-        </button>
-        
-        <div className="flex items-center gap-2 text-sm">
-          <Disc className={`w-4 h-4 ${isPlaying ? 'text-green-400 animate-spin' : 'text-gray-400'}`} />
-          <span className="text-gray-300">{label}</span>
+        <div className="flex-1">
+          <p className="text-gray-400 text-sm">
+            {isPlaying ? 'Воспроизведение...' : 'Нажмите для воспроизведения'}
+          </p>
         </div>
-        
-        {error && (
-          <span className="text-red-400 text-xs">{error}</span>
-        )}
       </div>
 
-      {/* Расширенные контролы */}
-      {showControls && (
-        <div className="bg-white/5 rounded-lg p-4 space-y-4 border border-white/10">
-          {/* Громкость */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-gray-300">Громкость</h4>
-            
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 w-16">Голос</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={voiceVolume}
-                  onChange={(e) => {
-                    const newVolume = parseFloat(e.target.value);
-                    setVoiceVolume(newVolume);
-                    if (voiceGainRef.current) {
-                      voiceGainRef.current.gain.value = newVolume;
-                    }
-                  }}
-                  className="flex-1 accent-purple-500"
-                />
-                <span className="text-xs text-gray-400 w-12">{Math.round(voiceVolume * 100)}%</span>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 w-16">Бит</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={beatVolume}
-                  onChange={(e) => {
-                    const newVolume = parseFloat(e.target.value);
-                    setBeatVolume(newVolume);
-                    if (beatGainRef.current) {
-                      beatGainRef.current.gain.value = newVolume;
-                    }
-                  }}
-                  className="flex-1 accent-pink-500"
-                />
-                <span className="text-xs text-gray-400 w-12">{Math.round(beatVolume * 100)}%</span>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 w-16">Общая</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={masterVolume}
-                  onChange={(e) => {
-                    const newVolume = parseFloat(e.target.value);
-                    setMasterVolume(newVolume);
-                    if (gainNodeRef.current) {
-                      gainNodeRef.current.gain.value = newVolume;
-                    }
-                  }}
-                  className="flex-1 accent-green-500"
-                />
-                <span className="text-xs text-gray-400 w-12">{Math.round(masterVolume * 100)}%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Эффекты */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-gray-300">Эффекты</h4>
-            
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-400 w-16">Реверб.</span>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={reverbAmount}
-                onChange={(e) => setReverbAmount(parseFloat(e.target.value))}
-                className="flex-1 accent-blue-500"
-              />
-              <span className="text-xs text-gray-400 w-12">{Math.round(reverbAmount * 100)}%</span>
-            </div>
-          </div>
-
-          {/* Обрезка */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-gray-300">Обрезка трека</h4>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-gray-400">Начало</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={trimStart}
-                  onChange={(e) => setTrimStart(parseFloat(e.target.value))}
-                  className="w-full accent-yellow-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400">Конец</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={trimEnd}
-                  onChange={(e) => setTrimEnd(Math.max(trimStart + 0.1, parseFloat(e.target.value)))}
-                  className="w-full accent-orange-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Быстрые пресеты */}
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold text-gray-300">Быстрые пресеты</h4>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => {
-                  setVoiceVolume(0.9);
-                  setBeatVolume(0.3);
-                  setReverbAmount(0.1);
-                }}
-                className="px-2 py-1 bg-purple-600/30 hover:bg-purple-600/50 rounded text-xs transition-colors"
-              >
-                🎤 Вокал
-              </button>
-              <button
-                onClick={() => {
-                  setVoiceVolume(0.6);
-                  setBeatVolume(0.6);
-                  setReverbAmount(0);
-                }}
-                className="px-2 py-1 bg-pink-600/30 hover:bg-pink-600/50 rounded text-xs transition-colors"
-              >
-                🎵 Баланс
-              </button>
-              <button
-                onClick={() => {
-                  setVoiceVolume(0.4);
-                  setBeatVolume(0.8);
-                  setReverbAmount(0.2);
-                }}
-                className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded text-xs transition-colors"
-              >
-                🎧 Клуб
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Скрытые audio элементы */}
+      <audio ref={voiceAudioRef} preload="auto" />
+      <audio ref={beatAudioRef} preload="auto" loop />
     </div>
   );
 };
@@ -442,8 +323,11 @@ const AudioVisualizer = ({ isActive }: { isActive: boolean }) => {
 
 // ==================== ГЛАВНЫЙ КОМПОНЕНТ ====================
 export default function RapBattleNew() {
+  // Auth store
+  const { user } = useAuthStore();
+  
   // Основные состояния
-  const [currentPhase, setCurrentPhase] = useState<'waiting' | 'creating' | 'selecting_beat_creation' | 'selecting_opponent' | 'inviting' | 'waiting_for_opponent' | 'selecting_beat' | 'waiting_for_beat' | 'user1_turn' | 'user2_turn' | 'judging' | 'finished' | 'history'>('waiting');
+  const [currentPhase, setCurrentPhase] = useState<'waiting' | 'creating' | 'selecting_beat_creation' | 'selecting_opponent' | 'inviting' | 'waiting_for_opponent' | 'selecting_beat' | 'waiting_for_beat' | 'user1_turn' | 'user2_turn' | 'mutual_judging' | 'waiting_for_opponent_rating' | 'finished' | 'history'>('waiting');
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedOpponent, setSelectedOpponent] = useState<User | null>(null);
   const [currentBattle, setCurrentBattle] = useState<Battle | null>(null);
@@ -465,11 +349,18 @@ export default function RapBattleNew() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [currentTurn, setCurrentTurn] = useState<'user1' | 'user2'>('user1');
   
-  // Записи текущего баттла
+  // Записанные треки
   const [user1Recording, setUser1Recording] = useState<BattleRecording | null>(null);
   const [user2Recording, setUser2Recording] = useState<BattleRecording | null>(null);
   
-  // Настройки качества записи
+  // Взаимная оценка
+  const [user1Rating, setUser1Rating] = useState<number | null>(null);
+  const [user2Rating, setUser2Rating] = useState<number | null>(null);
+  const [hasRated, setHasRated] = useState(false);
+  const [opponentHasRated, setOpponentHasRated] = useState(false);
+  const [isLoadingRecordings, setIsLoadingRecordings] = useState(false);
+  
+  // Настройки качество записи
   const [recordingQuality, setRecordingQuality] = useState<'low' | 'medium' | 'high'>('high');
   const [showRecordingSettings, setShowRecordingSettings] = useState(false);
   
@@ -548,8 +439,8 @@ export default function RapBattleNew() {
         setCurrentBattle(updatedBattle);
         
         // Обновляем фазу в зависимости от нового статуса
-        const currentUserId = localStorage.getItem('userId');
-        const isCreator = String(updatedBattle.creator.id) === currentUserId;
+        const currentUserId = user?.id;
+        const isCreator = currentUserId && String(updatedBattle.creator.id) === currentUserId;
         
         console.log('Debug: currentUserId:', currentUserId, 'type:', typeof currentUserId);
         console.log('Debug: creator.id:', updatedBattle.creator.id, 'type:', typeof updatedBattle.creator.id);
@@ -561,7 +452,7 @@ export default function RapBattleNew() {
         } else if (updatedBattle.status === 'USER2_TURN') {
           setCurrentPhase('user2_turn');
         } else if (updatedBattle.status === 'JUDGING') {
-          setCurrentPhase('judging');
+          setCurrentPhase('mutual_judging');
         } else if (updatedBattle.status === 'CANCELLED') {
           setCurrentPhase('waiting');
           setCurrentBattle(null);
@@ -573,37 +464,41 @@ export default function RapBattleNew() {
   };
 
   const getCurrentUserRole = () => {
-    if (!currentBattle) return null;
+    if (!currentBattle || !user) return null;
     
-    const currentUserId = localStorage.getItem('userId');
+    const currentUserId = user.id;
+    console.log('Debug: getCurrentUserRole - currentUserId:', currentUserId);
+    console.log('Debug: getCurrentUserRole - user:', user);
+    
     const isCreator = String(currentBattle.creator.id) === currentUserId;
+    console.log('Debug: isCreator:', isCreator, 'creator.id:', currentBattle.creator.id);
     
     if (isCreator) return 'CREATOR';
     
     const opponent = currentBattle.participants.find(p => p.role === 'OPPONENT');
     if (opponent && String(opponent.user.id) === currentUserId) return 'OPPONENT';
     
+    console.log('Debug: User is neither creator nor opponent');
     return null;
   };
 
   const canCurrentUserRecord = () => {
     const userRole = getCurrentUserRole();
     console.log('Debug: userRole:', userRole);
-    console.log('Debug: currentTurn:', currentTurn);
+    console.log('Debug: currentPhase:', currentPhase);
+    console.log('Debug: currentBattle status:', currentBattle?.status);
     
     if (!userRole) return false;
     
-    // user1 - это всегда создатель, user2 - оппонент
-    const isUser1Turn = currentTurn === 'user1';
-    console.log('Debug: isUser1Turn:', isUser1Turn);
-    
-    if (userRole === 'CREATOR') {
-      const canRecord = isUser1Turn;
-      console.log('Debug: CREATOR can record:', canRecord);
+    // При USER1_TURN всегда записывает создатель
+    // При USER2_TURN всегда записывает оппонент
+    if (currentPhase === 'user1_turn') {
+      const canRecord = userRole === 'CREATOR';
+      console.log('Debug: user1_turn, CREATOR can record:', canRecord);
       return canRecord;
-    } else if (userRole === 'OPPONENT') {
-      const canRecord = !isUser1Turn;
-      console.log('Debug: OPPONENT can record:', canRecord);
+    } else if (currentPhase === 'user2_turn') {
+      const canRecord = userRole === 'OPPONENT';
+      console.log('Debug: user2_turn, OPPONENT can record:', canRecord);
       return canRecord;
     }
     
@@ -613,7 +508,7 @@ export default function RapBattleNew() {
   // ==================== ОБРАБОТЧИКИ ====================
   
   const createNewBattle = async () => {
-    if (!selectedOpponent || !battleTitle || !beatFile || !beatUrl) {
+    if (!selectedOpponent || !battleTitle || !beatFile) {
       setError('Выберите оппонента, введите название баттла и загрузите бит');
       return;
     }
@@ -622,14 +517,20 @@ export default function RapBattleNew() {
     setError('');
     
     try {
+      // Сначала загружаем бит на сервер
+      console.log('Debug: Uploading beat file to server...');
+      const { url: serverBeatUrl } = await uploadBeatFile(beatFile);
+      console.log('Debug: Beat uploaded to server:', serverBeatUrl);
+      
+      // Создаем баттл
       const battle = await createBattle(battleTitle, battleDescription, selectedOpponent.id);
       setCurrentBattle(battle);
       
-      // Сразу сохраняем бит в баттл
-      await updateBattleBeat(battle.id, beatUrl, beatFile.name);
+      // Сохраняем бит в баттл
+      await updateBattleBeat(battle.id, serverBeatUrl, beatFile.name);
       
       // Обновляем баттл с битом
-      const updatedBattle = { ...battle, beatUrl, beatName: beatFile.name, status: 'INVITING' as const };
+      const updatedBattle = { ...battle, beatUrl: serverBeatUrl, beatName: beatFile.name, status: 'INVITING' as const };
       setCurrentBattle(updatedBattle);
       
       // Для создателя показываем экран ожидания оппонента
@@ -653,8 +554,8 @@ export default function RapBattleNew() {
         setCurrentBattle(updatedBattle);
         
         // Определяем правильную фазу в зависимости от роли пользователя
-        const currentUserId = localStorage.getItem('userId');
-        const isCreator = String(updatedBattle.creator.id) === currentUserId;
+        const currentUserId = user?.id;
+        const isCreator = currentUserId && String(updatedBattle.creator.id) === currentUserId;
         
         console.log('Debug: currentUserId:', currentUserId, 'type:', typeof currentUserId);
         console.log('Debug: creator.id:', updatedBattle.creator.id, 'type:', typeof updatedBattle.creator.id);
@@ -691,7 +592,15 @@ export default function RapBattleNew() {
   };
 
   const toggleBeatPlayback = async () => {
-    if (!beatAudioRef.current || !beatUrl) return;
+    const currentBeatUrl = beatUrl || currentBattle?.beatUrl;
+    console.log('Debug: toggleBeatPlayback - currentBeatUrl:', currentBeatUrl);
+    console.log('Debug: toggleBeatPlayback - beatUrl:', beatUrl);
+    console.log('Debug: toggleBeatPlayback - currentBattle.beatUrl:', currentBattle?.beatUrl);
+    
+    if (!beatAudioRef.current || !currentBeatUrl) {
+      console.log('Debug: No beat URL or audio element');
+      return;
+    }
     
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -710,8 +619,8 @@ export default function RapBattleNew() {
           setIsPlayingBeat(false);
         };
       }
-    } catch (error) {
-      console.error('Error playing beat:', error);
+    } catch (err) {
+      console.error('Error playing beat:', err);
     }
   };
 
@@ -732,15 +641,20 @@ export default function RapBattleNew() {
       streamRef.current = stream;
       
       // Запускаем бит для записи
-      if (beatAudioRef.current && beatUrl) {
+      const currentBeatUrl = beatUrl || currentBattle?.beatUrl;
+      if (beatAudioRef.current && currentBeatUrl) {
         beatAudioRef.current.currentTime = 0;
         beatAudioRef.current.loop = true;
         await beatAudioRef.current.play();
         setIsPlayingBeat(true);
       }
       
-      // Выбираем кодек в зависимости от качества
-      const mimeType = recordingQuality === 'high' ? 'audio/webm;codecs=opus' : 'audio/webm';
+      // Используем webm формат - лучше поддерживается HTML5 audio
+      const mimeType = 'audio/webm;codecs=opus';
+      const fileExtension = 'webm';
+      
+      console.log('Debug: Using mimeType:', mimeType);
+      
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
         audioBitsPerSecond: recordingQuality === 'high' ? 128000 : recordingQuality === 'medium' ? 96000 : 64000
@@ -771,23 +685,50 @@ export default function RapBattleNew() {
         // Сохраняем запись на сервер
         if (currentBattle) {
           try {
-            // Преобразуем Blob в File
-            const voiceFile = new File([voiceBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
+            // Преобразуем Blob в File с правильным расширением
+            const voiceFile = new File([voiceBlob], `recording-${Date.now()}.${fileExtension}`, { type: mimeType });
             const recording = await saveBattleRecording(
               currentBattle.id,
               voiceFile,
-              beatUrl,
+              currentBattle.beatUrl || '',
               recordingTime,
               recordingQuality
             );
             
-            if (currentTurn === 'user1') {
+            console.log('Debug: Recording saved:', recording);
+            console.log('Debug: Recording voiceUrl:', recording.voiceUrl);
+            console.log('Debug: Recording beatUrl:', recording.beatUrl);
+            
+            // Определяем чей был ход и передаем ход следующему
+            const userRole = getCurrentUserRole();
+            console.log('Debug: User role for recording:', userRole);
+            
+            if (userRole === 'CREATOR') {
+              // Создатель записал, передаем ход оппоненту
               setUser1Recording(recording);
-              setCurrentTurn('user2');
+              console.log('Debug: Set user1Recording:', recording);
               setCurrentPhase('user2_turn');
-            } else {
+              
+              // Обновляем статус баттла на сервере
+              await updateBattleStatus(currentBattle.id, 'USER2_TURN');
+              
+              // Принудительно обновляем данные баттла для мгновенного обновления
+              setTimeout(() => {
+                checkBattleStatus();
+              }, 500);
+            } else if (userRole === 'OPPONENT') {
+              // Оппонент записал, переходим к взаимной оценке
               setUser2Recording(recording);
-              setCurrentPhase('judging');
+              console.log('Debug: Set user2Recording:', recording);
+              setCurrentPhase('mutual_judging');
+              
+              // Обновляем статус баттла на сервере
+              await updateBattleStatus(currentBattle.id, 'JUDGING');
+              
+              // Принудительно обновляем данные баттла для мгновенного обновления
+              setTimeout(() => {
+                checkBattleStatus();
+              }, 500);
             }
           } catch (err: any) {
             setError(err.message || 'Не удалось сохранить запись');
@@ -818,13 +759,20 @@ export default function RapBattleNew() {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      console.log('Debug: Stopping recording...');
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       
+      // Останавливаем таймер
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
+        console.log('Debug: Timer stopped');
       }
+      
+      // Сбрасываем время записи
+      setRecordingTime(0);
+      console.log('Debug: Recording time reset');
       
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -833,19 +781,62 @@ export default function RapBattleNew() {
     }
   };
 
-  const performAIGudgment = async () => {
+  const loadBattleRecordings = async () => {
     if (!currentBattle) return;
     
-    setLoading(true);
+    setIsLoadingRecordings(true);
     try {
-      const result = await judgeBattle(currentBattle.id);
-      setJudgeResult(result);
-      setCurrentPhase('finished');
-      loadUserBattles();
+      console.log('Debug: Loading battle recordings...');
+      const recordings = await getBattleRecordings(currentBattle.id);
+      console.log('Debug: Loaded recordings:', recordings);
+      
+      // Определяем какая запись принадлежит какому пользователю
+      recordings.forEach(recording => {
+        if (recording.userId === currentBattle.creator.id) {
+          setUser1Recording(recording);
+          console.log('Debug: Set user1Recording from server:', recording);
+        } else {
+          setUser2Recording(recording);
+          console.log('Debug: Set user2Recording from server:', recording);
+        }
+      });
     } catch (err: any) {
-      setError(err.message || 'Не удалось выполнить судейство');
+      console.error('Debug: Error loading recordings:', err);
+      setError(err.message || 'Не удалось загрузить записи');
     } finally {
-      setLoading(false);
+      setIsLoadingRecordings(false);
+    }
+  };
+
+  const handleRatingSubmit = async (rating: number) => {
+    const userRole = getCurrentUserRole();
+    if (!userRole || !currentBattle) return;
+    
+    try {
+      // Сохраняем оценку пользователя
+      if (userRole === 'CREATOR') {
+        setUser1Rating(rating);
+      } else {
+        setUser2Rating(rating);
+      }
+      
+      setHasRated(true);
+      
+      // Обновляем статус баттла чтобы показать что оценка сделана
+      // Здесь можно добавить API вызов для сохранения оценки на сервере
+      console.log('Debug: User rated opponent:', rating);
+      
+      // Переключаемся на ожидание оценки оппонента
+      setCurrentPhase('waiting_for_opponent_rating');
+      
+      // Имитируем получение оценки от оппонента (в реальном приложении это будет через WebSocket или polling)
+      setTimeout(() => {
+        setOpponentHasRated(true);
+        setCurrentPhase('mutual_judging');
+      }, 3000); // 3 секунды для демонстрации
+      
+    } catch (err: any) {
+      setError(err.message || 'Не удалось сохранить оценку');
     }
   };
 
@@ -883,8 +874,32 @@ export default function RapBattleNew() {
       }, 1500);
       
       return () => clearInterval(interval);
+    } else if (currentPhase === 'user1_turn' || currentPhase === 'user2_turn') {
+      // Во время записи - проверяем статус каждую секунду для мгновенных обновлений
+      const interval = setInterval(() => {
+        checkBattleStatus();
+      }, 1000);
+      
+      return () => clearInterval(interval);
     }
   }, [currentPhase]);
+
+  // Обновляем audio элемент когда бит меняется
+  useEffect(() => {
+    if (beatAudioRef.current) {
+      const currentBeatUrl = beatUrl || currentBattle?.beatUrl;
+      console.log('Debug: Updating audio element with beat URL:', currentBeatUrl);
+      beatAudioRef.current.src = currentBeatUrl || '';
+      beatAudioRef.current.load(); // Перезагружаем элемент
+    }
+  }, [beatUrl, currentBattle?.beatUrl]);
+
+  // Загружаем записи при входе в фазу оценки
+  useEffect(() => {
+    if (currentPhase === 'mutual_judging' && currentBattle) {
+      loadBattleRecordings();
+    }
+  }, [currentPhase, currentBattle?.id]);
 
   // Очистка
   useEffect(() => {
@@ -1192,7 +1207,7 @@ export default function RapBattleNew() {
           <h2 className="text-3xl font-bold mb-2">🎤 Баттл начался!</h2>
           <p className="text-gray-400 text-lg">
             Ход: <span className="text-purple-400 font-semibold">
-              {currentTurn === 'user1' ? creator?.username : opponent?.username}
+              {currentPhase === 'user1_turn' ? creator?.username : opponent?.username}
             </span>
           </p>
           {canRecord ? (
@@ -1204,12 +1219,12 @@ export default function RapBattleNew() {
 
       <div className="max-w-2xl mx-auto">
         {/* Информация о бите */}
-        {beatUrl && (
+        {(beatUrl || currentBattle?.beatUrl) && (
           <div className="mb-6 p-4 bg-white/10 rounded-xl border border-white/10">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <Disc className={`w-5 h-5 ${isPlayingBeat ? 'text-green-400 animate-spin' : 'text-purple-400'}`} />
-                <span className="font-medium">{beatFile?.name || 'Бит'}</span>
+                <span className="font-medium">{beatFile?.name || currentBattle?.beatName || 'Бит'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1275,7 +1290,7 @@ export default function RapBattleNew() {
             
             <audio 
               ref={beatAudioRef} 
-              src={beatUrl}
+              src={beatUrl || currentBattle?.beatUrl}
               preload="auto"
               className="hidden"
             />
@@ -1308,11 +1323,11 @@ export default function RapBattleNew() {
         <div className="text-center">
           <button
             onClick={isRecording ? stopRecording : startRecording}
-            disabled={!beatUrl || !canRecord}
+            disabled={(!beatUrl && !currentBattle?.beatUrl) || !canRecord}
             className={`w-24 h-24 rounded-full flex items-center justify-center transition-all transform hover:scale-105 ${
               isRecording 
                 ? 'bg-red-600 animate-pulse shadow-lg shadow-red-600/50 scale-110' 
-                : beatUrl && canRecord
+                : (beatUrl || currentBattle?.beatUrl) && canRecord
                   ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-600/30'
                   : 'bg-gray-600 cursor-not-allowed'
             }`}
@@ -1327,9 +1342,9 @@ export default function RapBattleNew() {
           <p className="mt-4 text-gray-400">
             {isRecording ? (
               <span className="text-red-400 font-semibold">🎵 Запись под бит...</span>
-            ) : beatUrl && canRecord ? (
+            ) : (beatUrl || currentBattle?.beatUrl) && canRecord ? (
               <span className="text-green-400">Нажми для начала записи</span>
-            ) : beatUrl ? (
+            ) : (beatUrl || currentBattle?.beatUrl) ? (
               <span className="text-orange-400">⏳ Ожидайте вашей очереди...</span>
             ) : (
               <span className="text-yellow-400">Сначала загрузите бит</span>
@@ -1390,28 +1405,174 @@ export default function RapBattleNew() {
     );
   };
 
-  const renderJudgingPhase = () => (
-    <div className="text-center py-12">
-      <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-      <h2 className="text-2xl font-bold mb-4">🔥 Судейство AI</h2>
-      <p className="text-gray-400 mb-8">Искусственный интеллект оценивает выступления</p>
-      
-      <div className="max-w-md mx-auto">
-        <div className="mb-8">
-          <div className="w-16 h-16 mx-auto border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-gray-400">Анализ выступлений...</p>
+  const renderMutualJudgingPhase = () => {
+    const userRole = getCurrentUserRole();
+    const opponentRecording = userRole === 'CREATOR' ? user2Recording : user1Recording;
+    const myRecording = userRole === 'CREATOR' ? user1Recording : user2Recording;
+    
+    console.log('Debug: renderMutualJudgingPhase - userRole:', userRole);
+    console.log('Debug: renderMutualJudgingPhase - opponentRecording:', opponentRecording);
+    console.log('Debug: renderMutualJudgingPhase - myRecording:', myRecording);
+    console.log('Debug: renderMutualJudgingPhase - hasRated:', hasRated);
+    console.log('Debug: renderMutualJudgingPhase - user1Recording:', user1Recording);
+    console.log('Debug: renderMutualJudgingPhase - user2Recording:', user2Recording);
+    
+    if (!hasRated && opponentRecording) {
+      // Показываем интерфейс оценки
+      return (
+        <div className="text-center py-12">
+          <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
+          <h2 className="text-2xl font-bold mb-4">Оцените трек оппонента</h2>
+          <p className="text-gray-400 mb-8">Прослушайте трек и поставьте оценку</p>
+          
+          {/* Плеер с треком оппонента */}
+          <div className="max-w-md mx-auto mb-8">
+            <div className="bg-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">Трек оппонента</h3>
+              <MixedTrackPlayer 
+                voiceUrl={opponentRecording.voiceUrl} 
+                beatUrl={opponentRecording.beatUrl} 
+                label="Трек оппонента" 
+              />
+            </div>
+          </div>
+          
+          {/* Система оценки */}
+          <div className="max-w-md mx-auto">
+            <h3 className="text-lg font-semibold mb-4">Ваша оценка</h3>
+            <div className="flex justify-center gap-2 mb-6">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  onClick={() => handleRatingSubmit(rating)}
+                  className="w-12 h-12 rounded-full bg-white/10 hover:bg-yellow-400/20 transition-colors flex items-center justify-center"
+                >
+                  <span className="text-2xl">⭐</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-sm text-gray-400">Нажмите на звезды для оценки</p>
+          </div>
         </div>
-        
-        <button
-          onClick={performAIGudgment}
-          disabled={loading}
-          className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold disabled:opacity-50"
-        >
-          {loading ? 'Судейство...' : 'Оценить баттл'}
-        </button>
+      );
+    } else if (hasRated && !opponentHasRated) {
+      // Ждем оценки от оппонента
+      return (
+        <div className="text-center py-12">
+          <Clock className="w-16 h-16 mx-auto mb-4 text-orange-400 animate-pulse" />
+          <h2 className="text-2xl font-bold mb-4">Ожидайте оценки оппонента</h2>
+          <p className="text-gray-400 mb-8">Вы оценили трек, теперь ждем оценки от оппонента...</p>
+          
+          <div className="max-w-md mx-auto">
+            <div className="bg-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">Ваша оценка</h3>
+              <div className="flex justify-center">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <span key={rating} className="text-2xl">
+                    {rating <= (userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) ? '⭐' : '☆'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    } else if (hasRated && opponentHasRated) {
+      // Показываем результаты
+      return (
+        <div className="text-center py-12">
+          <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
+          <h2 className="text-2xl font-bold mb-4">Результаты баттла</h2>
+          <p className="text-gray-400 mb-8">Оба участника оценили треки друг друга</p>
+          
+          <div className="max-w-md mx-auto space-y-4">
+            <div className="bg-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">Оценки</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span>Ваша оценка оппоненту:</span>
+                  <span>{userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)} ⭐</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Оценка оппонента вам:</span>
+                  <span>{userRole === 'CREATOR' ? (user2Rating || 0) : (user1Rating || 0)} ⭐</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">Победитель</h3>
+              <p className="text-xl font-bold">
+                {((userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) > (userRole === 'CREATOR' ? (user2Rating || 0) : (user1Rating || 0))) 
+                  ? 'Вы победили! 🎉' 
+                  : ((userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) < (userRole === 'CREATOR' ? (user2Rating || 0) : (user1Rating || 0)))
+                  ? 'Оппонент победил'
+                  : 'Ничья! 🤝'
+                }
+              </p>
+            </div>
+            
+            <button
+              onClick={() => setCurrentPhase('finished')}
+              className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-medium transition-all"
+            >
+              Завершить баттл
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="text-center py-12">
+        {isLoadingRecordings ? (
+          <div>
+            <div className="w-16 h-16 mx-auto border-4 border-purple-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-400 mb-2">Загрузка записей...</p>
+            <div className="w-48 mx-auto bg-white/10 rounded-full h-2">
+              <div className="bg-purple-400 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+            </div>
+            <p className="text-sm text-gray-500 mt-2">60%</p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-gray-400">Загрузка...</p>
+            <button 
+              onClick={loadBattleRecordings}
+              className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm"
+            >
+              Загрузить записи
+            </button>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderWaitingForOpponentRatingPhase = () => {
+    const userRole = getCurrentUserRole();
+    
+    return (
+      <div className="text-center py-12">
+        <Clock className="w-16 h-16 mx-auto mb-4 text-orange-400 animate-pulse" />
+        <h2 className="text-2xl font-bold mb-4">Ожидайте оценки оппонента</h2>
+        <p className="text-gray-400 mb-8">Вы оценили трек, теперь ждем оценки от оппонента...</p>
+        
+        <div className="max-w-md mx-auto">
+          <div className="bg-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-semibold mb-4">Ваша оценка</h3>
+            <div className="flex justify-center">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <span key={rating} className="text-2xl">
+                  {rating <= (userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) ? '⭐' : '☆'}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderFinishedPhase = () => {
     if (!judgeResult || !currentBattle) return null;
@@ -1572,7 +1733,8 @@ export default function RapBattleNew() {
           Debug: currentPhase = {currentPhase}
         </div>
         {(currentPhase === 'user1_turn' || currentPhase === 'user2_turn') && renderBattlePhase()}
-        {currentPhase === 'judging' && renderJudgingPhase()}
+        {currentPhase === 'mutual_judging' && renderMutualJudgingPhase()}
+        {currentPhase === 'waiting_for_opponent_rating' && renderWaitingForOpponentRatingPhase()}
         {currentPhase === 'finished' && renderFinishedPhase()}
         {currentPhase === 'history' && renderHistory()}
       </div>

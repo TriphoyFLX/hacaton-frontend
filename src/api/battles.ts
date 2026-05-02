@@ -175,6 +175,37 @@ export const respondToBattle = async (battleId: string, accept: boolean): Promis
   console.log(`Frontend: Battle response successful`);
 };
 
+// Upload beat file to server
+export const uploadBeatFile = async (file: File): Promise<{ url: string }> => {
+  const formData = new FormData();
+  formData.append('beat', file);
+  
+  const token = localStorage.getItem('token');
+  console.log('Debug: Uploading beat file, token exists:', !!token);
+  console.log('Debug: File:', file.name, file.type);
+  
+  const response = await fetch(`${API_BASE}/upload/beat`, {
+    method: 'POST',
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` })
+    },
+    body: formData
+  });
+  
+  console.log('Debug: Upload response status:', response.status);
+  console.log('Debug: Upload response headers:', response.headers.get('content-type'));
+  
+  if (!response.ok) {
+    const text = await response.text();
+    console.log('Debug: Error response text:', text);
+    throw new Error(`Upload failed: ${response.status} - ${text}`);
+  }
+  
+  const result = await response.json();
+  console.log('Debug: Upload success:', result);
+  return result;
+};
+
 // Update battle beat
 export const updateBattleBeat = async (battleId: string, beatUrl: string, beatName: string): Promise<void> => {
   const response = await fetch(`${API_BASE}/battles/${battleId}/beat`, {
@@ -187,6 +218,29 @@ export const updateBattleBeat = async (battleId: string, beatUrl: string, beatNa
     const error = await response.json();
     throw new Error(error.error || 'Failed to update beat');
   }
+};
+
+// Update battle status
+export const updateBattleStatus = async (battleId: string, status: string): Promise<void> => {
+  console.log('Debug: Updating battle status:', battleId, 'to', status);
+  
+  const response = await fetch(`${API_BASE}/battles/${battleId}/status`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ status })
+  });
+  
+  console.log('Debug: Status update response:', response.status);
+  
+  if (!response.ok) {
+    const text = await response.text();
+    console.log('Debug: Status update error:', text);
+    const error = await response.json().catch(() => ({ error: text }));
+    throw new Error(error.error || 'Failed to update battle status');
+  }
+  
+  const result = await response.json();
+  console.log('Debug: Status update success:', result);
 };
 
 // Save battle recording
@@ -214,6 +268,20 @@ export const saveBattleRecording = async (
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to save recording');
+  }
+  
+  return response.json();
+};
+
+// Get battle recordings
+export const getBattleRecordings = async (battleId: string): Promise<BattleRecording[]> => {
+  const response = await fetch(`${API_BASE}/battles/${battleId}/recordings`, {
+    headers: getAuthHeaders()
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to get battle recordings');
   }
   
   return response.json();
