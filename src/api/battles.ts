@@ -28,6 +28,7 @@ export interface Battle {
   creatorId: string;
   beatUrl?: string;
   beatName?: string;
+  currentTurn?: 'USER1' | 'USER2'; // Текущий ход записи
   winner?: 'USER1' | 'USER2' | 'DRAW';
   judgedBy?: string;
   judgedAt?: string;
@@ -68,6 +69,7 @@ export interface BattleRecording {
   id: string;
   battleId: string;
   userId: string;
+  round: 1 | 2; // Номер раунда записи
   voiceUrl: string;
   beatUrl: string;
   duration: number;
@@ -249,13 +251,15 @@ export const saveBattleRecording = async (
   audioFile: File,
   beatUrl: string,
   duration: number,
-  recordingQuality: string = 'medium'
+  recordingQuality: string = 'medium',
+  round: 1 | 2 = 1
 ): Promise<BattleRecording> => {
   const formData = new FormData();
   formData.append('audio', audioFile);
   formData.append('beatUrl', beatUrl);
   formData.append('duration', duration.toString());
   formData.append('recordingQuality', recordingQuality);
+  formData.append('round', round.toString()); // Добавляем номер раунда
   
   const response = await fetch(`${API_BASE}/battles/${battleId}/recordings`, {
     method: 'POST',
@@ -282,6 +286,25 @@ export const getBattleRecordings = async (battleId: string): Promise<BattleRecor
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to get battle recordings');
+  }
+  
+  return response.json();
+};
+
+// Submit user rating for battle
+export const submitRating = async (battleId: string, rating: number): Promise<{
+  success: boolean;
+  message: string;
+}> => {
+  const response = await fetch(`${API_BASE}/battles/${battleId}/rate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ rating })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to submit rating');
   }
   
   return response.json();
