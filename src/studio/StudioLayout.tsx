@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { DndContext, DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { Sidebar } from "./sidebar/Sidebar";
 import { Transport } from "./transport/Transport";
@@ -10,7 +10,6 @@ import { useStudioStore } from "./store/useStudioStore";
 import { ResizablePanel } from "./components/ResizablePanel";
 import { useStudioHotkeys } from "./hooks/useStudioHotkeys";
 import { audioScheduler } from "./engine/audioScheduler";
-import { audioBufferManager } from "./utils/audioBufferManager";
 import { debugAudioSystem, createTestBufferForClip } from "./utils/audioDebug";
 import { midiPlayer } from "./engine/midiPlayer";
 
