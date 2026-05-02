@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
 import Dashboard from './components/Dashboard';
 import Studio from './pages/Studio';
 import Feed from './pages/Feed';
@@ -13,6 +14,7 @@ import Chats from './pages/Chats';
 import ChatPage from './pages/ChatPage';
 import AdminPanel from './pages/AdminPanel';
 import AI from './pages/AI';
+import RapBattle from './pages/RapBattleNew';
 
 function App() {
   return (
@@ -21,7 +23,11 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="studio" element={<Studio />} />
@@ -34,6 +40,7 @@ function App() {
           <Route path="chats/:chatId" element={<ChatPage />} />
           <Route path="admin" element={<AdminPanel />} />
           <Route path="ai" element={<AI />} />
+          <Route path="rap-battle" element={<RapBattle />} />
         </Route>
       </Routes>
     </BrowserRouter>

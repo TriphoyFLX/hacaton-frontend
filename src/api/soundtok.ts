@@ -15,18 +15,32 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export interface Comment {
+  id: string;
+  text: string;
+  authorId: string;
+  soundTokId: string;
+  createdAt: string;
+  author: {
+    id: string;
+    username: string;
+  };
+}
+
 export interface SoundTok {
   id: string;
   description: string;
   videoUrl: string;
   authorId: string;
   likes: number;
+  commentsCount: number;
   createdAt: string;
   updatedAt: string;
   author: {
     id: string;
     username: string;
   };
+  comments?: Comment[];
 }
 
 export const soundTokApi = {
@@ -50,6 +64,16 @@ export const soundTokApi = {
   
   likeSoundTok: async (id: string) => {
     const response = await api.post(`/soundtok/${id}/like`);
+    return response.data;
+  },
+
+  getComments: async (soundTokId: string): Promise<Comment[]> => {
+    const response = await api.get(`/soundtok/${soundTokId}/comments`);
+    return response.data;
+  },
+
+  createComment: async (soundTokId: string, text: string): Promise<Comment> => {
+    const response = await api.post(`/soundtok/${soundTokId}/comments`, { text });
     return response.data;
   },
 };
