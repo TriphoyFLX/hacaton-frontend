@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save, Loader as FaSpinner } from 'lucide-react';
-import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, judgeBattle, User, Battle, BattleRecording } from '../api/battles';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save } from 'lucide-react';
+import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, User, Battle, BattleRecording } from '../api/battles';
 import { useAuthStore } from '../store/authStore';
 
 // ─────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ ${FONT_IMPORT}
 }
 
 /* ── LAYOUT ── */
-.rb-wrap      { max-width: 860px; margin: 0 auto; padding: 48px 28px 100px; }
+.rb-wrap      { max-width: 1200px; margin: 0 auto; padding: 48px 28px 100px; }
 
 /* ── TOPBAR ── */
 .rb-topbar    { display:flex; align-items:center; justify-content:space-between;
@@ -478,7 +478,8 @@ textarea.rb-input { resize:vertical; min-height:80px; line-height:1.6; }
     padding-left: 0 !important;
   }
   .rb-wrap {
-    padding: 24px 16px 100px !important;
+    padding: 24px 20px 100px !important;
+    max-width: 100% !important;
   }
   .rb-topbar {
     padding-bottom: 16px !important;

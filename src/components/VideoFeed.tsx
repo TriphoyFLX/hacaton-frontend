@@ -1,11 +1,103 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Heart, MessageCircle, Share, X, Send } from 'lucide-react';
 import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
 
+// TikTok стиль VideoFeed - без скролла, чистое переключение видео
 const css = `
 ${FONT_IMPORT}
+
+.vf-root {
+  height: 100vh;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+.vf-video-container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease-out;
+}
+
+.vf-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vf-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  color: white;
+}
+
+.vf-actions {
+  position: absolute;
+  right: 20px;
+  bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.vf-action-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.vf-action-btn:hover {
+  background: rgba(255,255,255,0.2);
+  transform: scale(1.1);
+}
+
+.vf-action-btn.liked {
+  background: #ff4444;
+}
+
+.vf-progress-indicator {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vf-progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.vf-progress-dot.active {
+  background: white;
+  transform: scale(1.2);
+}
 
 .vf-modal-overlay {
   position: fixed;
@@ -240,6 +332,17 @@ ${FONT_IMPORT}
   background: transparent;
 }
 
+/* Настройка snap-center для TikTok поведения */
+.vf-feed-container {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+.snap-center {
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
 /* Индикатор прогресса */
 .vf-progress-indicator {
   position: fixed;
@@ -272,54 +375,82 @@ interface VideoFeedProps {
 
 export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [commentsModalOpen, setCommentsModalOpen] = useState(false);
   const [currentSoundTokId, setCurrentSoundTokId] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  
+  const touchStartY = useRef<number>(0);
+  const touchStartTime = useRef<number>(0);
+  const lastWheelTime = useRef<number>(0);
 
-  const handleScroll = () => {
-    if (!containerRef.current) return;
-    const { scrollTop, clientHeight } = containerRef.current;
-    const newIndex = Math.round(scrollTop / clientHeight);
-    setCurrentIndex(newIndex);
+  // Обработчики свайпов
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchStartTime.current = Date.now();
   };
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      return () => container.removeEventListener('scroll', handleScroll);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const touchEndY = e.changedTouches[0].clientY;
+    const diffY = touchStartY.current - touchEndY;
+    const timeDiff = Date.now() - touchStartTime.current;
+    
+    // Условия для свайпа: расстояние > 50px, время < 500ms
+    if (Math.abs(diffY) > 50 && timeDiff < 500) {
+      if (diffY > 0) {
+        // Свайп вверх - следующее видео
+        nextVideo();
+      } else {
+        // Свайп вниз - предыдущее видео
+        prevVideo();
+      }
     }
-  }, []);
+  };
 
-  const handleLike = (id: string) => {
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    
+    const now = Date.now();
+    if (now - lastWheelTime.current < 300) return;
+    lastWheelTime.current = now;
+    
+    if (e.deltaY > 0) {
+      nextVideo();
+    } else {
+      prevVideo();
+    }
+  };
+
+  const nextVideo = () => {
+    if (currentIndex < soundToks.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    }
+  };
+
+  const prevVideo = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    }
+  };
+
+  const scrollToVideo = (index: number) => {
+    setCurrentIndex(index);
+  };
+
+  const handleLike = async (id: string) => {
     onLike(id);
   };
 
-  const handleShare = async (soundTokId: string) => {
-    const url = `${window.location.origin}/soundtok/${soundTokId}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      alert('Ссылка скопирована!');
-    } catch (error) {
-      console.error('Failed to copy:', error);
-    }
-  };
-
-  const openComments = async (soundTokId: string) => {
-    setCurrentSoundTokId(soundTokId);
+  const handleComments = async (id: string) => {
+    setCurrentSoundTokId(id);
     setCommentsModalOpen(true);
-    setLoadingComments(true);
+    
     try {
-      const data = await soundTokApi.getComments(soundTokId);
-      setComments(data);
+      const commentsData = await soundTokApi.getComments(id);
+      setComments(commentsData);
     } catch (error) {
       console.error('Failed to fetch comments:', error);
-    } finally {
-      setLoadingComments(false);
     }
   };
 
@@ -329,6 +460,19 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
 
     setSubmittingComment(true);
     try {
+      const currentSoundTok = soundToks[currentIndex];
+
+      if (!currentSoundTok) {
+        return (
+          <div className="vf-root">
+            <style>{css}</style>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'white' }}>
+              Нет видео
+            </div>
+          </div>
+        );
+      }
+
       const comment = await soundTokApi.createComment(currentSoundTokId, newComment);
       setComments(prev => [...prev, comment]);
       setNewComment('');
@@ -339,176 +483,73 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
     }
   };
 
-  const scrollToVideo = (index: number) => {
-    if (containerRef.current) {
-      const videoHeight = containerRef.current.clientHeight;
-      containerRef.current.scrollTo({
-        top: index * videoHeight,
-        behavior: 'smooth'
-      });
-    }
-  };
-
-  const handleSwipe = (direction: 'up' | 'down') => {
-    const newIndex = direction === 'up' 
-      ? Math.min(currentIndex + 1, soundToks.length - 1)
-      : Math.max(currentIndex - 1, 0);
-    
-    if (newIndex !== currentIndex) {
-      scrollToVideo(newIndex);
-    }
-  };
-
-  // Touch handlers for mobile swipe
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    const startY = touch.clientY;
-    
-    const handleTouchMove = (moveEvent: TouchEvent) => {
-      const touch = moveEvent.touches[0];
-      const currentY = touch.clientY;
-      const diff = startY - currentY;
-      
-      // Prevent default scrolling behavior
-      if (Math.abs(diff) > 50) {
-        moveEvent.preventDefault();
-      }
-    };
-    
-    const handleTouchEnd = (endEvent: TouchEvent) => {
-      const touch = endEvent.changedTouches[0];
-      const endY = touch.clientY;
-      const diff = startY - endY;
-      
-      // Swipe threshold
-      if (Math.abs(diff) > 50) {
-        if (diff > 0) {
-          handleSwipe('up'); // Swipe up - next video
-        } else {
-          handleSwipe('down'); // Swipe down - previous video
-        }
-      }
-      
-      // Clean up
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-    
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleTouchEnd);
-  };
-
-  // Wheel handler for desktop
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    
-    if (e.deltaY > 0) {
-      handleSwipe('up'); // Scroll down - next video
-    } else {
-      handleSwipe('down'); // Scroll up - previous video
-    }
-  };
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'только что';
-    if (diffMins < 60) return `${diffMins}м`;
-    if (diffHours < 24) return `${diffHours}ч`;
-    if (diffDays < 7) return `${diffDays}д`;
-    return date.toLocaleDateString('ru-RU');
-  };
-
   return (
-    <>
+    <div className="vf-root">
       <style>{css}</style>
+      
+      {/* Контейнер видео с TikTok поведением */}
       <div 
-        ref={containerRef}
-        className="vf-feed-container h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth"
         onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
       >
         {soundToks.map((soundTok, index) => (
           <div
             key={soundTok.id}
-            className="h-full w-full snap-start relative flex items-center justify-center bg-black"
+            className="vf-video-container"
+            style={{
+              transform: `translateY(${(index - currentIndex) * 100}vh)`,
+              opacity: index === currentIndex ? 1 : 0
+            }}
           >
             <video
               src={`http://localhost:5002${soundTok.videoUrl}`}
-              className="h-full w-full object-cover"
-              loop
+              className="vf-video"
               autoPlay={index === currentIndex}
               muted={index !== currentIndex}
+              loop
               playsInline
             />
             
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/60" />
-            
-            {/* Right side actions */}
-            <div className="absolute right-4 bottom-24 flex flex-col gap-6">
-              <div className="flex flex-col items-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
-                  {soundTok.author.username[0].toUpperCase()}
+            {/* Оверлей с информацией */}
+            {index === currentIndex && (
+              <div className="vf-overlay">
+                <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  {soundTok.description || 'Без описания'}
+                </div>
+                <div style={{ fontSize: '14px', opacity: 0.8 }}>
+                  @{soundTok.author?.username || 'user'}
                 </div>
               </div>
-              
-              <button
-                onClick={() => handleLike(soundTok.id)}
-                disabled={soundTok.isLiked}
-                className={`flex flex-col items-center ${soundTok.isLiked ? 'text-red-500' : 'text-white'}`}
-              >
-                <div className={`w-12 h-12 backdrop-blur rounded-full flex items-center justify-center mb-2 transition ${
-                  soundTok.isLiked 
-                    ? 'bg-red-500/30' 
-                    : 'bg-white/20 hover:bg-white/30'
-                }`}>
-                  <Heart size={24} fill={soundTok.isLiked ? "currentColor" : "none"} />
-                </div>
-                <span className="text-sm font-medium">{soundTok.likes}</span>
-              </button>
-              
-              <button 
-                onClick={() => openComments(soundTok.id)}
-                className="flex flex-col items-center text-white"
-              >
-                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center mb-2 hover:bg-white/30 transition">
+            )}
+            
+            {/* Кнопки действий */}
+            {index === currentIndex && (
+              <div className="vf-actions">
+                <button 
+                  className={`vf-action-btn ${soundTok.isLiked ? 'liked' : ''}`}
+                  onClick={() => handleLike(soundTok.id)}
+                >
+                  <Heart size={24} fill={soundTok.isLiked ? 'white' : 'none'} />
+                </button>
+                
+                <button 
+                  className="vf-action-btn"
+                  onClick={() => handleComments(soundTok.id)}
+                >
                   <MessageCircle size={24} />
-                </div>
-                <span className="text-sm font-medium">{soundTok.commentsCount || 0}</span>
-              </button>
-              
-              <button 
-                onClick={() => handleShare(soundTok.id)}
-                className="flex flex-col items-center text-white"
-              >
-                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center mb-2 hover:bg-white/30 transition">
+                </button>
+                
+                <button className="vf-action-btn">
                   <Share size={24} />
-                </div>
-                <span className="text-sm font-medium">Поделиться</span>
-              </button>
-            </div>
-            
-            {/* Bottom info */}
-            <div className="absolute left-4 bottom-8 right-20 text-white">
-              <p className="font-bold text-lg mb-2">@{soundTok.author.username}</p>
-              <p className="text-sm mb-2">{soundTok.description}</p>
-              <div className="flex items-center gap-2">
-                <div className="bg-white/20 backdrop-blur px-3 py-1 rounded-full text-xs">
-                  🎵 Оригинальный звук
-                </div>
+                </button>
               </div>
-            </div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Progress Indicator */}
+      {/* Индикатор прогресса */}
       <div className="vf-progress-indicator">
         {soundToks.map((_, index) => (
           <div
@@ -519,68 +560,42 @@ export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
         ))}
       </div>
 
-      {/* Comments Modal */}
+      {/* Модальное окно комментариев */}
       {commentsModalOpen && (
         <div className="vf-modal-overlay" onClick={() => setCommentsModalOpen(false)}>
-          <div className="vf-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="vf-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="vf-modal-header">
-              <div className="vf-modal-title">Комментарии</div>
-              <button className="vf-modal-close" onClick={() => setCommentsModalOpen(false)}>
-                <X />
+              <h3>Комментарии</h3>
+              <button onClick={() => setCommentsModalOpen(false)}>
+                <X size={20} color="white" />
               </button>
             </div>
             
-            <div className="vf-comments-list">
-              {loadingComments ? (
-                <div className="vf-loading">
-                  <span className="vf-loading-text">Загрузка...</span>
-                </div>
-              ) : comments.length === 0 ? (
-                <div className="vf-empty-comments">
-                  <div className="vf-empty-text">Нет комментариев</div>
-                </div>
-              ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="vf-comment-item">
-                    <div className="vf-comment-avatar">
-                      {comment.author.username[0].toUpperCase()}
-                    </div>
-                    <div className="vf-comment-content">
-                      <div className="vf-comment-header">
-                        <span className="vf-comment-username">@{comment.author.username}</span>
-                        <span className="vf-comment-time">{formatTime(comment.createdAt)}</span>
-                      </div>
-                      <div className="vf-comment-text">{comment.text}</div>
-                    </div>
+            <div>
+              {comments.map(comment => (
+                <div key={comment.id} className="vf-comment">
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                    @{comment.author?.username || 'user'}
                   </div>
-                ))
-              )}
+                  <div>{comment.text}</div>
+                </div>
+              ))}
             </div>
             
-            <div className="vf-comment-input-wrapper">
-              <form onSubmit={handleSubmitComment}>
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Напишите комментарий..."
-                  className="vf-comment-input"
-                  rows={2}
-                />
-                <div className="vf-comment-actions">
-                  <button 
-                    type="submit" 
-                    className="vf-btn vf-btn-primary"
-                    disabled={!newComment.trim() || submittingComment}
-                  >
-                    <Send size={14} />
-                    {submittingComment ? 'Отправка...' : 'Отправить'}
-                  </button>
-                </div>
-              </form>
-            </div>
+            <form onSubmit={handleSubmitComment} className="vf-comment-input">
+              <input
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Добавить комментарий..."
+              />
+              <button type="submit" disabled={submittingComment}>
+                <Send size={16} />
+              </button>
+            </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

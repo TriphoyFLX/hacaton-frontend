@@ -30,9 +30,9 @@ ${FONT_IMPORT}
 }
 
 .projects-wrapper {
-  max-width: 760px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 48px 24px 80px;
+  padding: 48px 28px 80px;
 }
 
 /* ── AMBIENT ── */

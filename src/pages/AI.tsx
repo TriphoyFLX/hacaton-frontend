@@ -1,26 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Wand2, Music, Play, Download, Loader2, History, Trash2 } from 'lucide-react';
+import { Wand2, Play, Download, History, Trash2 } from 'lucide-react';
 
-interface GenerationResponse {
-  request_id: number;
-  status: string;
-  input?: any;
-  response_type?: string;
-  output?: any;
-}
 
 interface GenerationResult {
-  request_id: number;
+  id: number;
   status: string;
-  audio_url?: string;
+  audio_urls: string[];
+  images: string[];
   title?: string;
   tags?: string;
   prompt?: string;
   createdAt?: string;
   progress?: number;
+  cost?: number;
+  runtime?: number;
 }
 
 const STORAGE_KEY = 'ai-generated-tracks';
+const GENERATION_KEY = 'ai-generation-state';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -49,9 +46,9 @@ ${FONT_IMPORT}
 }
 
 .ai-wrapper {
-  max-width: 760px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 48px 24px 80px;
+  padding: 48px 28px 80px;
 }
 
 /* ── AMBIENT BACKGROUND ── */
@@ -674,16 +671,41 @@ export default function AI() {
 
   const API_KEY = 'sk-LFuPFOiVOBfSsq3LLStFZZAs6JYqXNqdfWdCKJBcTO1POn6qvSmePXOG3tAL';
 
-  // Загрузка истории из localStorage
+  // Загрузка истории и состояния генерации из localStorage
   useEffect(() => {
     try {
+      // Загрузка истории
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as GenerationResult[];
         setHistory(parsed);
       }
+
+      // Загрузка состояния генерации
+      const generationState = localStorage.getItem(GENERATION_KEY);
+      if (generationState) {
+        const state = JSON.parse(generationState);
+        const { isGenerating, generatedAudio, progress, startTime } = state;
+        
+        if (isGenerating && generatedAudio && generatedAudio.status === 'starting') {
+          // Если генерация была в процессе, проверяем не прошло ли слишком много времени
+          const elapsed = Date.now() - startTime;
+          const maxTime = 8 * 60 * 1000; // 8 минут
+          
+          if (elapsed < maxTime) {
+            setIsGenerating(true);
+            setGeneratedAudio(generatedAudio);
+            setProgress(progress);
+            // Продолжаем опрос результата
+            pollForResult(generatedAudio.id);
+          } else {
+            // Если прошло слишком много времени, очищаем состояние
+            localStorage.removeItem(GENERATION_KEY);
+          }
+        }
+      }
     } catch (error) {
-      console.error('Failed to load history:', error);
+      console.error('Failed to load state:', error);
     }
   }, []);
 
@@ -699,8 +721,8 @@ export default function AI() {
   };
 
   // Удаление трека из истории
-  const deleteFromHistory = (requestId: number) => {
-    const updated = history.filter(t => t.request_id !== requestId);
+  const deleteFromHistory = (id: number) => {
+    const updated = history.filter(t => t.id !== id);
     setHistory(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -749,30 +771,43 @@ export default function AI() {
         throw new Error(`API error: ${response.status} - ${errorText}`);
       }
 
-      const data: GenerationResponse = await response.json();
+      const data = await response.json();
       
-      setGeneratedAudio({
-        request_id: data.request_id,
+      const generationState = {
+        id: data.id,
         status: 'starting',
+        audio_urls: [],
+        images: [],
         title: title,
         tags: tags,
         prompt: prompt,
         createdAt: new Date().toISOString(),
         progress: 0
-      });
+      };
       
-      pollForResult(data.request_id);
+      setGeneratedAudio(generationState);
+      
+      // Сохраняем состояние генерации
+      localStorage.setItem(GENERATION_KEY, JSON.stringify({
+        isGenerating: true,
+        generatedAudio: generationState,
+        progress: 0,
+        startTime: Date.now()
+      }));
+      
+      pollForResult(data.id);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка генерации');
       console.error('Generation error:', err);
       setIsGenerating(false);
       setProgress(0);
+      localStorage.removeItem(GENERATION_KEY);
     }
   };
 
-  const pollForResult = async (requestId: number) => {
-    const maxAttempts = 80;
+  const pollForResult = async (id: number) => {
+    const maxAttempts = 160; // Увеличиваем до 8 минут (160 * 3 сек)
     let attempts = 0;
 
     const poll = async () => {
@@ -791,7 +826,7 @@ export default function AI() {
         setProgress(newProgress);
         setGeneratedAudio(prev => prev ? { ...prev, progress: newProgress } : null);
         
-        const response = await fetch(`https://api.gen-api.ru/api/v1/networks/suno/result/${requestId}`, {
+        const response = await fetch(`https://api.gen-api.ru/api/v1/request/get/${id}`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -802,28 +837,40 @@ export default function AI() {
         if (response.ok) {
           const result = await response.json();
 
-          if (result.status === 'success' && result.output) {
-            const audioUrl = result.output.audio_url || result.output;
+          if (result.status === 'success' && result.result) {
+            // Извлекаем аудио URLs из массива result
+            const audioUrls = result.result.filter((item: any) => typeof item === 'string') as string[];
+            // Извлекаем изображения из массива result
+            const images = result.result
+              .filter((item: any) => typeof item === 'object' && item !== null && 'image' in item)
+              .map((item: any) => item.image);
+            
             const completedTrack: GenerationResult = {
-              request_id: requestId,
+              id: result.id,
               status: 'success',
-              audio_url: audioUrl,
-              title: title,
-              tags: tags,
+              audio_urls: audioUrls,
+              images: images,
+              title: result.parameters?.title || title,
+              tags: result.parameters?.tags || tags,
               prompt: prompt,
               createdAt: new Date().toISOString(),
-              progress: 100
+              progress: 100,
+              cost: result.cost,
+              runtime: result.runtime
             };
             
             setGeneratedAudio(completedTrack);
             setIsGenerating(false);
             setProgress(100);
             saveToHistory(completedTrack);
+            // Очищаем состояние генерации
+            localStorage.removeItem(GENERATION_KEY);
             return;
           } else if (result.status === 'failed' || result.status === 'error') {
             setError('Генерация не удалась. Попробуйте снова.');
             setIsGenerating(false);
             setProgress(0);
+            localStorage.removeItem(GENERATION_KEY);
             return;
           }
         }
@@ -831,9 +878,10 @@ export default function AI() {
         if (attempts < maxAttempts) {
           setTimeout(poll, 3000);
         } else {
-          setError('Время ожидания истекло (4 минуты). Генерация может занять больше времени. Попробуйте позже.');
+          setError('Время ожидания истекло (8 минут). Генерация может занять больше времени. Вы можете вернуться позже - генерация продолжится в фоне.');
           setIsGenerating(false);
           setProgress(0);
+          localStorage.removeItem(GENERATION_KEY);
         }
       } catch (err) {
         console.error('Polling error:', err);
@@ -843,6 +891,7 @@ export default function AI() {
           setError('Не удалось получить результат. Попробуйте позже.');
           setIsGenerating(false);
           setProgress(0);
+          localStorage.removeItem(GENERATION_KEY);
         }
       }
     };
@@ -998,7 +1047,7 @@ export default function AI() {
             <div className="progress-info">
               <div className="progress-spinner" />
               <div>
-                <p className="progress-request-id">Request ID: {generatedAudio.request_id}</p>
+                <p className="progress-request-id">Request ID: {generatedAudio.id}</p>
                 <p className="progress-hint">Это может занять несколько минут</p>
               </div>
             </div>
@@ -1006,27 +1055,68 @@ export default function AI() {
         )}
 
         {/* Result */}
-        {generatedAudio && generatedAudio.status === 'success' && generatedAudio.audio_url && (
+        {generatedAudio && generatedAudio.status === 'success' && generatedAudio.audio_urls && generatedAudio.audio_urls.length > 0 && (
           <div className="result-card">
             <div className="section-heading">Результат</div>
             
             <div className="result-meta">
               <div className="result-title">{generatedAudio.title || 'Сгенерированный трек'}</div>
-              <div className="result-id">Request ID: {generatedAudio.request_id}</div>
+              <div className="result-id">ID: {generatedAudio.id}</div>
+              {generatedAudio.cost && (
+                <div className="result-tags">Стоимость: {generatedAudio.cost} кредитов</div>
+              )}
+              {generatedAudio.runtime && (
+                <div className="result-tags">Длительность: {generatedAudio.runtime.toFixed(1)}с</div>
+              )}
               {generatedAudio.tags && (
                 <div className="result-tags">{generatedAudio.tags}</div>
               )}
             </div>
 
-            <audio controls className="result-audio" autoPlay>
-              <source src={generatedAudio.audio_url} type="audio/mpeg" />
-            </audio>
+            {/* Отображаем все аудио файлы */}
+            {generatedAudio.audio_urls.map((audioUrl, index) => (
+              <div key={index}>
+                <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Вариант {index + 1}
+                </div>
+                <audio controls className="result-audio" autoPlay={index === 0}>
+                  <source src={audioUrl} type="audio/mpeg" />
+                </audio>
+              </div>
+            ))}
 
-            <div className="result-actions">
-              <a href={generatedAudio.audio_url} download className="btn-primary">
-                <Download size={14} />
-                Скачать
-              </a>
+            {/* Отображаем изображения если есть */}
+            {generatedAudio.images && generatedAudio.images.length > 0 && (
+              <div style={{ marginTop: '20px' }}>
+                <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Обложки:
+                </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {generatedAudio.images.map((imageUrl, index) => (
+                    <img 
+                      key={index}
+                      src={imageUrl} 
+                      alt={`Обложка ${index + 1}`}
+                      style={{ 
+                        width: '120px', 
+                        height: '120px', 
+                        objectFit: 'cover', 
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)'
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="result-actions" style={{ marginTop: '20px' }}>
+              {generatedAudio.audio_urls.map((audioUrl, index) => (
+                <a key={index} href={audioUrl} download className="btn-primary" style={{ marginRight: '8px' }}>
+                  <Download size={14} />
+                  Скачать {index + 1}
+                </a>
+              ))}
               <button className="btn-secondary">
                 <Play size={14} />
                 В проект
@@ -1066,35 +1156,49 @@ export default function AI() {
             ) : (
               <div className="history-list">
                 {history.map((track) => (
-                  <div key={track.request_id} className="history-item">
+                  <div key={track.id} className="history-item">
                     <div className="history-item-header">
                       <div>
                         <div className="history-item-title">{track.title || 'Без названия'}</div>
                         <div className="history-item-date">
                           {track.createdAt && new Date(track.createdAt).toLocaleString('ru-RU')}
                         </div>
+                        {track.cost && (
+                          <div className="history-item-tags">Стоимость: {track.cost} кредитов</div>
+                        )}
                         {track.tags && (
                           <div className="history-item-tags">{track.tags}</div>
                         )}
                       </div>
                       <button
-                        onClick={() => deleteFromHistory(track.request_id)}
+                        onClick={() => deleteFromHistory(track.id)}
                         className="btn-delete"
                       >
                         <Trash2 size={13} />
                       </button>
                     </div>
 
-                    {track.audio_url && (
+                    {track.audio_urls && track.audio_urls.length > 0 && (
                       <>
-                        <audio controls className="history-item-audio">
-                          <source src={track.audio_url} type="audio/mpeg" />
-                        </audio>
+                        {track.audio_urls.map((audioUrl, index) => (
+                          <div key={index}>
+                            {track.audio_urls.length > 1 && (
+                              <div style={{ marginBottom: '4px', fontSize: '10px', color: 'var(--text-muted)' }}>
+                                Вариант {index + 1}
+                              </div>
+                            )}
+                            <audio controls className="history-item-audio">
+                              <source src={audioUrl} type="audio/mpeg" />
+                            </audio>
+                          </div>
+                        ))}
                         <div className="history-item-actions">
-                          <a href={track.audio_url} download className="btn-primary" style={{ height: 30, fontSize: 10 }}>
-                            <Download size={12} />
-                            Скачать
-                          </a>
+                          {track.audio_urls.map((audioUrl, index) => (
+                            <a key={index} href={audioUrl} download className="btn-primary" style={{ height: 30, fontSize: 10, marginRight: '6px' }}>
+                              <Download size={12} />
+                              Скачать {index + 1}
+                            </a>
+                          ))}
                           <button className="btn-secondary" style={{ height: 30, fontSize: 10 }}>
                             <Play size={12} />
                             В проект

@@ -179,9 +179,27 @@ ${FONT_IMPORT}
   line-height: 1.5;
 }
 .sb-badge-new {
-  background: #0f1a0f;
-  color: #4a8c4a;
-  border: 1px solid #1e2e1e;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 8px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+.sb-badge-hot {
+  background: linear-gradient(135deg, #ff6b6b, #ff4444);
+  color: white;
+  font-size: 8px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-left: auto;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 .sb-badge-count {
   background: #1a1510;
@@ -445,6 +463,7 @@ const MAIN_NAV = [
 
 const CONTENT_NAV = [
   { path: '/soundtok', label: 'SoundTok',     icon: <IconVideo />,  badge: <span className="sb-badge sb-badge-new">NEW</span> },
+  { path: '/rap-battle', label: 'Rap Battle',  icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-hot">HOT</span> },
   { path: '/chats',    label: 'Чаты',          icon: <IconChat />,   badge: <span className="sb-badge sb-badge-count">3</span> },
 ];
 
