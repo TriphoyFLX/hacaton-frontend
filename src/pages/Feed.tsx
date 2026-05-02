@@ -4,7 +4,7 @@ import { postsApi, Post } from '../api/posts';
 import {
   Image, Video, Music, Heart, MessageCircle, Share2,
   MoreHorizontal, TrendingUp, Clock, Bookmark, Send,
-  Play, Eye, ChevronDown, Bell, Search, Flame, Zap, ChevronRight
+  Play, Eye, ChevronDown, Bell, Search, Flame, Zap, ChevronRight, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -963,7 +963,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
     if (!Array.isArray(mediaList) || mediaList.length === 0) return null;
     const media = mediaList[0];
     if (!media?.url) return null;
-    const fullUrl = `http://localhost:5002${media.url}`;
+    const fullUrl = `http://localhost:5000${media.url}`;
 
     switch (media.type) {
       case 'IMAGE':
@@ -1110,7 +1110,7 @@ export default function Feed() {
     try {
       const data = await postsApi.getPosts();
       setPosts(
-        (data ?? []).map(post => ({
+        (data ?? []).map((post: Post) => ({
           ...post,
           likes: Math.floor(Math.random() * 3200) + 50,
           comments: Math.floor(Math.random() * 480) + 4,
