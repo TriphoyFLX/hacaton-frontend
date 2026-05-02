@@ -9,6 +9,370 @@ interface SearchModalProps {
   onClose: () => void;
 }
 
+// ── Styles ──
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
+
+const css = `
+${FONT_IMPORT}
+
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  z-index: 50;
+}
+
+.search-modal {
+  width: 100%;
+  max-width: 600px;
+  max-height: 70vh;
+  background: #111111;
+  border: 1px solid #232323;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ── SEARCH INPUT ── */
+.search-input-area {
+  padding: 16px 20px;
+  border-bottom: 1px solid #232323;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.search-icon-wrap {
+  color: #3a3a3a;
+  flex-shrink: 0;
+}
+.search-icon-wrap svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
+}
+.search-field {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #f0ede8;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  outline: none;
+}
+.search-field::placeholder {
+  color: #3a3a3a;
+}
+.search-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #232323;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  color: #6b6b6b;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.search-close:hover {
+  border-color: #3d3d3d;
+  background: #181818;
+  color: #f0ede8;
+}
+.search-close svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.5;
+}
+
+/* ── TABS ── */
+.search-tabs {
+  display: flex;
+  border-bottom: 1px solid #232323;
+  flex-shrink: 0;
+}
+.search-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.search-tab:hover {
+  color: #f0ede8;
+  background: rgba(255, 255, 255, 0.02);
+}
+.search-tab.active {
+  color: #f0ede8;
+}
+.search-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: #f0ede8;
+}
+.search-tab svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.5;
+}
+.tab-count {
+  font-size: 9px;
+  color: #3a3a3a;
+}
+
+/* ── RESULTS AREA ── */
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+.search-results::-webkit-scrollbar {
+  width: 3px;
+}
+.search-results::-webkit-scrollbar-track {
+  background: transparent;
+}
+.search-results::-webkit-scrollbar-thumb {
+  background: #2e2e2e;
+  border-radius: 2px;
+}
+
+/* ── RESULT GROUP ── */
+.result-group {
+  margin-bottom: 24px;
+}
+.result-group:last-child {
+  margin-bottom: 0;
+}
+.result-group-heading {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #3a3a3a;
+  margin-bottom: 10px;
+}
+
+/* ── USER ROW ── */
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.user-row:hover {
+  background: #181818;
+  border-color: #232323;
+}
+.user-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #2e2e2e;
+  border-radius: 10px;
+  background: #181818;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #e8e4dc;
+}
+.user-info {
+  flex: 1;
+  min-width: 0;
+}
+.user-username {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0ede8;
+  letter-spacing: -0.01em;
+}
+.user-email {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: #6b6b6b;
+  letter-spacing: 0.02em;
+  margin-top: 1px;
+}
+.user-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #232323;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  color: #6b6b6b;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.user-chat-btn:hover {
+  border-color: #3d3d3d;
+  background: #111111;
+  color: #f0ede8;
+}
+.user-chat-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.5;
+}
+
+/* ── POST ROW ── */
+.post-row {
+  padding: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.post-row:hover {
+  background: #181818;
+  border-color: #232323;
+}
+.post-content {
+  font-size: 13px;
+  color: #c5c0b8;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+.post-author {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: #6b6b6b;
+  letter-spacing: 0.04em;
+}
+
+/* ── SOUNDTOK ROW ── */
+.soundtok-row {
+  padding: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.soundtok-row:hover {
+  background: #181818;
+  border-color: #232323;
+}
+.soundtok-description {
+  font-size: 13px;
+  color: #c5c0b8;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+.soundtok-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.soundtok-author {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: #6b6b6b;
+  letter-spacing: 0.04em;
+}
+.soundtok-likes {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: #6b6b6b;
+  letter-spacing: 0.04em;
+}
+
+/* ── EMPTY STATES ── */
+.search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  text-align: center;
+}
+.empty-icon {
+  color: #3a3a3a;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+.empty-icon svg {
+  width: 40px;
+  height: 40px;
+  stroke-width: 1;
+}
+.empty-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #3a3a3a;
+  margin-bottom: 4px;
+}
+.empty-hint {
+  font-size: 13px;
+  color: #6b6b6b;
+}
+
+.search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+}
+.loading-dots {
+  display: flex;
+  gap: 4px;
+}
+.loading-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #3a3a3a;
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes dotPulse {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+`;
+
 export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
@@ -51,41 +415,55 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     return () => clearTimeout(timeoutId);
   }, [query, activeTab]);
 
+  // Escape key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const getTabCount = (type: 'users' | 'posts' | 'soundToks') => {
     return results ? results[type].length : 0;
   };
 
+  const totalCount = results 
+    ? results.users.length + results.posts.length + results.soundToks.length 
+    : 0;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center pt-20 z-50">
-      <div className="bg-gray-800/95 backdrop-blur-lg rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
-        {/* Search input */}
-        <div className="p-4 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <Search size={20} className="text-gray-400" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск пользователей, постов, видео..."
-              className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none"
-              autoFocus
-            />
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition"
-            >
-              <X size={20} />
-            </button>
-          </div>
+    <div className="search-overlay" onClick={onClose}>
+      <style>{css}</style>
+      
+      <div className="search-modal" onClick={e => e.stopPropagation()}>
+        {/* Search Input */}
+        <div className="search-input-area">
+          <span className="search-icon-wrap">
+            <Search size={18} />
+          </span>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск пользователей, постов, видео..."
+            className="search-field"
+            autoFocus
+          />
+          <button onClick={onClose} className="search-close">
+            <X size={15} />
+          </button>
         </div>
 
         {/* Tabs */}
         {query && (
-          <div className="flex border-b border-gray-700">
+          <div className="search-tabs">
             {[
-              { key: 'all', label: 'Все', count: results ? results.users.length + results.posts.length + results.soundToks.length : 0 },
+              { key: 'all', label: 'Все', count: totalCount, icon: Search },
               { key: 'users', label: 'Пользователи', count: getTabCount('users'), icon: Users },
               { key: 'posts', label: 'Посты', count: getTabCount('posts'), icon: FileText },
               { key: 'soundtoks', label: 'SoundTok', count: getTabCount('soundToks'), icon: Video }
@@ -93,110 +471,110 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
               <button
                 key={key}
                 onClick={() => setActiveTab(key as any)}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm transition ${
-                  activeTab === key
-                    ? 'text-purple-400 border-b-2 border-purple-400'
-                    : 'text-gray-400 hover:text-white'
-                }`}
+                className={`search-tab ${activeTab === key ? 'active' : ''}`}
               >
-                {Icon && <Icon size={16} />}
+                <Icon size={13} />
                 <span>{label}</span>
-                {count > 0 && <span className="text-xs">({count})</span>}
+                {count > 0 && <span className="tab-count">{count}</span>}
               </button>
             ))}
           </div>
         )}
 
         {/* Results */}
-        <div className="overflow-y-auto max-h-[400px] p-4">
+        <div className="search-results">
           {loading ? (
-            <div className="text-center text-gray-400 py-8">Поиск...</div>
-          ) : !query ? (
-            <div className="text-center text-gray-400 py-8">
-              <Search size={48} className="mx-auto mb-4 opacity-50" />
-              <p>Начните вводить для поиска</p>
+            <div className="search-loading">
+              <div className="loading-dots">
+                <div className="loading-dot" />
+                <div className="loading-dot" />
+                <div className="loading-dot" />
+              </div>
             </div>
-          ) : results && (
-            <div className="space-y-4">
+          ) : !query ? (
+            <div className="search-empty">
+              <div className="empty-icon">
+                <Search size={40} />
+              </div>
+              <div className="empty-label">Поиск</div>
+              <div className="empty-hint">Начните вводить для поиска</div>
+            </div>
+          ) : results && totalCount > 0 ? (
+            <div>
               {/* Users */}
               {(activeTab === 'all' || activeTab === 'users') && results.users.length > 0 && (
-                <div>
-                  <h3 className="text-gray-400 text-sm font-medium mb-2">Пользователи</h3>
-                  <div className="space-y-2">
-                    {results.users.map((user) => (
-                      <div 
-                        key={user.id} 
-                        className="flex items-center gap-3 p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition"
-                      >
-                        <div 
-                          className="flex items-center gap-3 flex-1 cursor-pointer"
-                          onClick={() => {
-                            navigate(`/profile/${user.username}`);
-                            onClose();
-                          }}
-                        >
-                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                            {user.username[0].toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-white font-medium">@{user.username}</p>
-                            <p className="text-gray-400 text-sm">{user.email}</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startChat(user.id);
-                          }}
-                          className="p-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white"
-                        >
-                          <MessageCircle size={16} />
-                        </button>
-                      </div>
-                    ))}
+                <div className="result-group">
+                  <div className="result-group-heading">
+                    Пользователи ({results.users.length})
                   </div>
+                  {results.users.map((user) => (
+                    <div key={user.id} className="user-row">
+                      <div 
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}
+                        onClick={() => {
+                          navigate(`/profile/${user.username}`);
+                          onClose();
+                        }}
+                      >
+                        <div className="user-avatar">
+                          {user.username[0].toUpperCase()}
+                        </div>
+                        <div className="user-info">
+                          <div className="user-username">@{user.username}</div>
+                          <div className="user-email">{user.email}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startChat(user.id);
+                        }}
+                        className="user-chat-btn"
+                      >
+                        <MessageCircle size={15} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
               {/* Posts */}
               {(activeTab === 'all' || activeTab === 'posts') && results.posts.length > 0 && (
-                <div>
-                  <h3 className="text-gray-400 text-sm font-medium mb-2">Посты</h3>
-                  <div className="space-y-2">
-                    {results.posts.map((post) => (
-                      <div key={post.id} className="p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition cursor-pointer">
-                        <p className="text-white mb-2">{post.content}</p>
-                        <p className="text-gray-400 text-sm">от @{post.author.username}</p>
-                      </div>
-                    ))}
+                <div className="result-group">
+                  <div className="result-group-heading">
+                    Посты ({results.posts.length})
                   </div>
+                  {results.posts.map((post) => (
+                    <div key={post.id} className="post-row">
+                      <div className="post-content">{post.content}</div>
+                      <div className="post-author">от @{post.author.username}</div>
+                    </div>
+                  ))}
                 </div>
               )}
 
               {/* SoundToks */}
               {(activeTab === 'all' || activeTab === 'soundtoks') && results.soundToks.length > 0 && (
-                <div>
-                  <h3 className="text-gray-400 text-sm font-medium mb-2">SoundTok</h3>
-                  <div className="space-y-2">
-                    {results.soundToks.map((soundTok) => (
-                      <div key={soundTok.id} className="p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition cursor-pointer">
-                        <p className="text-white mb-2">{soundTok.description}</p>
-                        <div className="flex items-center justify-between">
-                          <p className="text-gray-400 text-sm">от @{soundTok.author.username}</p>
-                          <p className="text-gray-400 text-sm">❤️ {soundTok.likes}</p>
-                        </div>
-                      </div>
-                    ))}
+                <div className="result-group">
+                  <div className="result-group-heading">
+                    SoundTok ({results.soundToks.length})
                   </div>
+                  {results.soundToks.map((soundTok) => (
+                    <div key={soundTok.id} className="soundtok-row">
+                      <div className="soundtok-description">{soundTok.description}</div>
+                      <div className="soundtok-footer">
+                        <span className="soundtok-author">от @{soundTok.author.username}</span>
+                        <span className="soundtok-likes">❤ {soundTok.likes}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-
-              {/* No results */}
-              {results.users.length === 0 && results.posts.length === 0 && results.soundToks.length === 0 && (
-                <div className="text-center text-gray-400 py-8">
-                  <p>Ничего не найдено</p>
-                </div>
-              )}
+            </div>
+          ) : (
+            <div className="search-empty">
+              <div className="empty-label">Ничего не найдено</div>
+              <div className="empty-hint">Попробуйте изменить запрос</div>
             </div>
           )}
         </div>
