@@ -3,7 +3,479 @@ import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, C
 import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, judgeBattle, User, Battle, BattleRecording } from '../api/battles';
 import { useAuthStore } from '../store/authStore';
 
-// Интерфейсы для персистентности
+// ─────────────────────────────────────────────────────────
+// DESIGN SYSTEM — matches Sidebar & Profile exactly
+// ─────────────────────────────────────────────────────────
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
+
+const RAP_BATTLE_CSS = `
+${FONT_IMPORT}
+
+.rb {
+  --bg:        #0b0b0b;
+  --surf:      #111111;
+  --elev:      #181818;
+  --hov:       #141414;
+  --b1:        #1a1a1a;
+  --b2:        #232323;
+  --b3:        #2e2e2e;
+  --b4:        #3d3d3d;
+  --t1:        #f0ede8;
+  --t2:        #c5c0b8;
+  --t3:        #5a5a5a;
+  --t4:        #2e2e2e;
+  --purple:    #9b7fd4;
+  --purple-bg: #1e1530;
+  --purple-bd: #2e2050;
+  --green:     #4a8c4a;
+  --green-bg:  #0f1a0f;
+  --green-bd:  #1e2e1e;
+  --red:       #c0392b;
+  --red-bg:    #1a0f0f;
+  --red-bd:    #2e1515;
+  --amber:     #8a6c3a;
+  --amber-bg:  #1a1510;
+  --amber-bd:  #2a2010;
+  font-family: 'Syne', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  color: var(--t1);
+}
+
+/* ── LAYOUT ── */
+.rb-wrap      { max-width: 860px; margin: 0 auto; padding: 48px 28px 100px; }
+
+/* ── TOPBAR ── */
+.rb-topbar    { display:flex; align-items:center; justify-content:space-between;
+                padding-bottom: 20px; border-bottom: 1px solid var(--b1); margin-bottom: 48px; }
+.rb-page-label{ font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.14em;
+                text-transform:uppercase; color:var(--t3); }
+.rb-page-name { font-size:22px; font-weight:700; letter-spacing:-.03em; color:var(--t1); margin-top:3px; }
+.rb-topbar-r  { display:flex; align-items:center; gap:8px; }
+
+/* ── ICON BUTTONS ── */
+.rb-btn-icon {
+  display:flex; align-items:center; justify-content:center;
+  width:32px; height:32px;
+  border:1px solid var(--b1); border-radius:8px;
+  background:transparent; cursor:pointer;
+  transition:border-color .15s, background .15s, color .15s;
+  color:var(--t3);
+}
+.rb-btn-icon:hover { border-color:var(--b3); background:var(--surf); color:var(--t1); }
+.rb-btn-icon.danger:hover { border-color:var(--red); background:var(--red-bg); color:var(--red); }
+.rb-btn-icon svg { width:14px; height:14px; stroke-width:1.5; }
+
+/* ── STATUS BADGES ── */
+.rb-badge {
+  font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.08em;
+  text-transform:uppercase; padding:3px 8px; border-radius:5px; border:1px solid;
+}
+.rb-badge-purple { background:var(--purple-bg); color:var(--purple); border-color:var(--purple-bd); }
+.rb-badge-green  { background:var(--green-bg);  color:var(--green);  border-color:var(--green-bd);  }
+.rb-badge-amber  { background:var(--amber-bg);  color:var(--amber);  border-color:var(--amber-bd);  }
+.rb-badge-red    { background:var(--red-bg);    color:var(--red);    border-color:var(--red-bd);    }
+.rb-badge-muted  { background:var(--elev);      color:var(--t3);     border-color:var(--b2);        }
+
+/* ── CARDS ── */
+.rb-card {
+  background:var(--surf); border:1px solid var(--b1);
+  border-radius:12px; padding:24px; margin-bottom:20px;
+  transition:border-color .15s;
+}
+.rb-card:hover { border-color:var(--b2); }
+.rb-card-hd    { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; }
+.rb-card-title { font-size:15px; font-weight:600; letter-spacing:-.01em; color:var(--t1); }
+.rb-card-sub   { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.08em;
+                 text-transform:uppercase; color:var(--t3); margin-top:3px; }
+
+/* ── SECTION HEADINGS ── */
+.rb-section-label {
+  font-family:'DM Mono',monospace; font-size:9.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--t4); margin-bottom:12px; display:block;
+}
+.rb-divider { border:none; border-top:1px solid var(--b1); margin:24px 0; }
+
+/* ── HERO EMPTY STATES ── */
+.rb-hero {
+  text-align:center; padding:64px 0 48px;
+}
+.rb-hero-icon {
+  width:52px; height:52px; border:1px solid var(--b2); border-radius:12px;
+  background:var(--elev); display:inline-flex; align-items:center; justify-content:center;
+  margin-bottom:24px;
+}
+.rb-hero-icon svg { width:22px; height:22px; color:var(--t3); stroke-width:1.4; }
+.rb-hero-title { font-size:24px; font-weight:700; letter-spacing:-.03em; margin-bottom:8px; color:var(--t1); }
+.rb-hero-desc  { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:.06em;
+                 color:var(--t3); margin-bottom:36px; }
+.rb-hero-actions { display:flex; flex-direction:column; gap:8px; max-width:320px; margin:0 auto; }
+
+/* ── BUTTONS ── */
+.rb-btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:0 18px; height:38px; border-radius:8px;
+  font-family:'Syne',sans-serif; font-size:13px; font-weight:500;
+  letter-spacing:-.01em; cursor:pointer;
+  transition:background .15s, border-color .15s, color .15s;
+  border:1px solid var(--b2); white-space:nowrap;
+}
+.rb-btn-primary {
+  background:var(--t1); color:var(--bg); border-color:var(--t1);
+}
+.rb-btn-primary:hover { background:var(--t2); border-color:var(--t2); }
+.rb-btn-ghost {
+  background:transparent; color:var(--t2);
+}
+.rb-btn-ghost:hover { background:var(--hov); border-color:var(--b3); color:var(--t1); }
+.rb-btn-danger { background:var(--red-bg); color:var(--red); border-color:var(--red-bd); }
+.rb-btn-danger:hover { background:var(--red); color:var(--t1); border-color:var(--red); }
+.rb-btn-purple { background:var(--purple-bg); color:var(--purple); border-color:var(--purple-bd); }
+.rb-btn-purple:hover { border-color:var(--purple); }
+.rb-btn-green  { background:var(--green-bg); color:var(--green); border-color:var(--green-bd); }
+.rb-btn-green:hover { border-color:var(--green); }
+.rb-btn:disabled { opacity:.4; cursor:not-allowed; }
+.rb-btn.full    { width:100%; }
+.rb-btn.tall    { height:44px; font-size:14px; }
+.rb-btn svg     { width:14px; height:14px; stroke-width:1.6; flex-shrink:0; }
+
+/* ── INPUTS ── */
+.rb-input {
+  width:100%; box-sizing:border-box;
+  padding:11px 14px; border:1px solid var(--b2);
+  border-radius:8px; background:var(--elev);
+  color:var(--t1); font-family:'Syne',sans-serif; font-size:13.5px;
+  transition:border-color .15s;
+}
+.rb-input:focus  { outline:none; border-color:var(--b4); }
+.rb-input::placeholder { color:var(--t3); }
+textarea.rb-input { resize:vertical; min-height:80px; line-height:1.6; }
+
+.rb-label {
+  display:block; font-family:'DM Mono',monospace;
+  font-size:9.5px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--t3); margin-bottom:8px;
+}
+.rb-field { margin-bottom:16px; }
+
+/* ── FILE UPLOAD ── */
+.rb-upload-zone {
+  border:1px dashed var(--b3); border-radius:10px;
+  padding:28px 20px; text-align:center; cursor:pointer;
+  transition:border-color .15s, background .15s;
+}
+.rb-upload-zone:hover { border-color:var(--b4); background:var(--hov); }
+.rb-upload-zone svg   { width:20px; height:20px; color:var(--t3); margin:0 auto 10px; stroke-width:1.4; }
+.rb-upload-label      { font-size:13px; color:var(--t2); }
+.rb-upload-hint       { font-family:'DM Mono',monospace; font-size:10px; color:var(--t3);
+                        margin-top:4px; letter-spacing:.04em; }
+.rb-upload-file {
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px; background:var(--elev);
+  border:1px solid var(--b2); border-radius:8px; margin-top:10px;
+}
+.rb-upload-file-name { font-size:13px; color:var(--t2); flex:1; white-space:nowrap;
+                       overflow:hidden; text-overflow:ellipsis; }
+
+/* ── USER LIST ── */
+.rb-user-list    { display:flex; flex-direction:column; gap:4px; max-height:240px;
+                   overflow-y:auto; padding-right:2px; }
+.rb-user-list::-webkit-scrollbar { width:3px; }
+.rb-user-list::-webkit-scrollbar-track { background:transparent; }
+.rb-user-list::-webkit-scrollbar-thumb { background:var(--b2); border-radius:2px; }
+.rb-user-row {
+  display:flex; align-items:center; gap:12px;
+  padding:10px 12px; border:1px solid transparent;
+  border-radius:8px; cursor:pointer;
+  transition:background .12s, border-color .12s;
+  background:transparent;
+}
+.rb-user-row:hover   { background:var(--hov); border-color:var(--b2); }
+.rb-user-row.sel     { background:var(--purple-bg); border-color:var(--purple-bd); }
+.rb-user-avatar {
+  width:34px; height:34px; border-radius:8px;
+  background:var(--elev); border:1px solid var(--b2);
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; color:var(--t2); flex-shrink:0;
+}
+.rb-user-row.sel .rb-user-avatar { background:var(--purple-bg); border-color:var(--purple-bd); color:var(--purple); }
+.rb-user-name  { font-size:13px; font-weight:500; color:var(--t2); flex:1;
+                 text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rb-user-row.sel .rb-user-name { color:var(--purple); }
+.rb-user-meta  { font-family:'DM Mono',monospace; font-size:9.5px; color:var(--t3);
+                 margin-top:1px; }
+.rb-user-check svg { width:13px; height:13px; color:var(--purple); stroke-width:2; }
+
+/* ── BATTLE VS CARD ── */
+.rb-vs-card {
+  background:var(--elev); border:1px solid var(--b2);
+  border-radius:10px; padding:20px 24px;
+}
+.rb-vs-row {
+  display:flex; align-items:center; gap:0; justify-content:center;
+}
+.rb-vs-player  { flex:1; text-align:center; }
+.rb-vs-label   { font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.1em;
+                 text-transform:uppercase; color:var(--t3); margin-bottom:8px; }
+.rb-vs-avatar  {
+  width:44px; height:44px; border-radius:10px;
+  background:var(--surf); border:1px solid var(--b3);
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:17px; font-weight:700; color:var(--t1);
+  margin-bottom:8px;
+}
+.rb-vs-name    { font-size:13px; font-weight:600; color:var(--t1); }
+.rb-vs-sep     { padding:0 20px; }
+.rb-vs-sep-text{
+  font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.1em;
+  color:var(--t4); text-transform:uppercase;
+}
+
+/* ── AUDIO PLAYER ── */
+.rb-player {
+  background:var(--elev); border:1px solid var(--b1);
+  border-radius:10px; padding:18px 20px;
+}
+.rb-player-hd  { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.rb-player-title { font-size:13px; font-weight:600; color:var(--t1); }
+.rb-player-indicators { display:flex; gap:6px; margin-bottom:14px; }
+.rb-player-controls {
+  display:flex; align-items:center; justify-content:center; gap:12px;
+}
+.rb-play-btn {
+  width:40px; height:40px; border-radius:50%;
+  background:var(--surf); border:1px solid var(--b3);
+  color:var(--t1); display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:background .15s, border-color .15s;
+  flex-shrink:0;
+}
+.rb-play-btn:hover:not(:disabled) { background:var(--hov); border-color:var(--b4); }
+.rb-play-btn:disabled { opacity:.4; cursor:not-allowed; }
+.rb-play-btn.playing  { border-color:var(--t3); }
+.rb-play-btn svg  { width:15px; height:15px; }
+.rb-vol-btn {
+  width:32px; height:32px; border-radius:7px;
+  background:transparent; border:1px solid var(--b2);
+  color:var(--t3); display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:all .15s;
+}
+.rb-vol-btn:hover { border-color:var(--b3); color:var(--t2); }
+.rb-vol-btn svg { width:13px; height:13px; stroke-width:1.5; }
+
+/* ── VOLUME PANEL ── */
+.rb-vol-panel {
+  background:var(--surf); border:1px solid var(--b1);
+  border-radius:10px; padding:18px 20px; margin-top:12px;
+}
+.rb-vol-head   { font-family:'DM Mono',monospace; font-size:9.5px; letter-spacing:.12em;
+                 text-transform:uppercase; color:var(--t3); margin-bottom:16px; }
+.rb-vol-row    { margin-bottom:14px; }
+.rb-vol-lbl    { display:flex; justify-content:space-between; margin-bottom:7px; }
+.rb-vol-name   { font-size:12px; color:var(--t2); }
+.rb-vol-val    { font-family:'DM Mono',monospace; font-size:10px; color:var(--t3); }
+.rb-slider {
+  width:100%; height:3px; border-radius:2px;
+  background:var(--b2); outline:none;
+  -webkit-appearance:none; appearance:none; cursor:pointer;
+}
+.rb-slider::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:14px; height:14px; border-radius:50%;
+  background:var(--t1); cursor:pointer; border:2px solid var(--bg);
+}
+.rb-slider::-moz-range-thumb {
+  width:14px; height:14px; border-radius:50%;
+  background:var(--t1); cursor:pointer; border:2px solid var(--bg);
+}
+.rb-vol-presets { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; border-top:1px solid var(--b1); padding-top:14px; }
+
+/* ── RECORDING ── */
+.rb-timer-display {
+  font-size:64px; font-weight:700; letter-spacing:-.05em;
+  color:var(--t1); font-family:'Syne',sans-serif; line-height:1;
+  margin-bottom:6px;
+}
+.rb-timer-display.warn { color:var(--red); }
+.rb-timer-sub {
+  font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--t3); margin-bottom:20px;
+}
+.rb-progress-wrap { width:100%; background:var(--b1); border-radius:2px; height:2px; margin-bottom:28px; }
+.rb-progress-bar  { height:2px; border-radius:2px; background:var(--t1); transition:width 1s linear; }
+.rb-progress-bar.warn { background:var(--red); }
+.rb-progress-bar.mid  { background:var(--amber); }
+
+.rb-viz { display:flex; align-items:center; gap:2px; justify-content:center; height:40px; margin-bottom:24px; }
+.rb-viz-bar {
+  width:3px; border-radius:2px; background:var(--t3);
+  transition:height .1s ease-out, background .1s;
+}
+.rb-viz-bar.active { background:var(--t2); }
+
+.rb-mic-btn {
+  width:72px; height:72px; border-radius:50%;
+  background:var(--surf); border:1px solid var(--b3);
+  color:var(--t2); display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:all .15s; margin:0 auto;
+}
+.rb-mic-btn:hover:not(:disabled) { border-color:var(--b4); background:var(--hov); color:var(--t1); }
+.rb-mic-btn.recording { background:var(--red-bg); border-color:var(--red); color:var(--red); }
+.rb-mic-btn:disabled  { opacity:.3; cursor:not-allowed; }
+.rb-mic-btn svg { width:26px; height:26px; stroke-width:1.5; }
+
+.rb-rec-dot {
+  display:inline-block; width:7px; height:7px;
+  border-radius:50%; background:var(--red);
+  animation:rb-pulse 1.5s infinite;
+}
+@keyframes rb-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── QUALITY SELECTOR ── */
+.rb-quality-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.rb-quality-btn {
+  padding:10px 8px; border:1px solid var(--b2);
+  border-radius:8px; background:transparent;
+  cursor:pointer; text-align:center;
+  transition:background .12s, border-color .12s;
+  color:var(--t3);
+}
+.rb-quality-btn:hover { background:var(--hov); border-color:var(--b3); color:var(--t2); }
+.rb-quality-btn.sel-low    { background:var(--red-bg);    border-color:var(--red-bd);    color:var(--red);    }
+.rb-quality-btn.sel-medium { background:var(--amber-bg);  border-color:var(--amber-bd);  color:var(--amber);  }
+.rb-quality-btn.sel-high   { background:var(--green-bg);  border-color:var(--green-bd);  color:var(--green);  }
+.rb-quality-btn-label  { font-size:12px; font-weight:500; margin-bottom:2px; }
+.rb-quality-btn-sub    { font-family:'DM Mono',monospace; font-size:9.5px; color:var(--t3); }
+
+/* ── BEAT PLAYER ROW ── */
+.rb-beat-row {
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px; background:var(--elev);
+  border:1px solid var(--b2); border-radius:8px;
+}
+.rb-beat-icon { width:30px; height:30px; flex-shrink:0; }
+.rb-beat-icon svg { width:14px; height:14px; color:var(--t3); }
+.rb-beat-name { font-size:13px; color:var(--t2); flex:1;
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rb-beat-actions { display:flex; gap:6px; }
+
+/* ── RECORDING CARD ── */
+.rb-rec-card {
+  background:var(--surf); border:1px solid var(--b1);
+  border-radius:10px; padding:18px 20px; margin-bottom:14px;
+}
+.rb-rec-card-hd {
+  display:flex; align-items:center; gap:12px; margin-bottom:14px;
+}
+.rb-rec-avatar {
+  width:36px; height:36px; border-radius:8px;
+  background:var(--elev); border:1px solid var(--b2);
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-weight:700; color:var(--t1);
+  flex-shrink:0;
+}
+.rb-rec-user  { font-size:13.5px; font-weight:600; color:var(--t1); }
+.rb-rec-meta  { font-family:'DM Mono',monospace; font-size:9.5px; color:var(--t3); margin-top:2px; }
+
+/* ── RATING ── */
+.rb-stars { display:flex; gap:6px; justify-content:center; margin:24px 0; }
+.rb-star-btn {
+  width:42px; height:42px; border:1px solid var(--b2);
+  border-radius:8px; background:var(--surf);
+  font-size:18px; cursor:pointer; transition:all .15s;
+  display:flex; align-items:center; justify-content:center;
+}
+.rb-star-btn:hover { background:var(--hov); border-color:var(--b3); }
+.rb-star-btn.lit  { background:var(--purple-bg); border-color:var(--purple-bd); }
+
+/* ── SCORE RESULT ── */
+.rb-score-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+.rb-score-cell {
+  padding:18px 16px; border:1px solid var(--b2);
+  border-radius:10px; text-align:center;
+  background:var(--surf);
+}
+.rb-score-cell.winner { border-color:var(--green-bd); background:var(--green-bg); }
+.rb-score-num   { font-size:36px; font-weight:700; letter-spacing:-.04em; color:var(--t1); line-height:1; }
+.rb-score-label { font-family:'DM Mono',monospace; font-size:9.5px; letter-spacing:.1em;
+                  text-transform:uppercase; color:var(--t3); margin-top:4px; }
+.rb-score-name  { font-size:13px; font-weight:500; color:var(--t2); margin-top:6px; }
+
+/* ── HISTORY ── */
+.rb-history-row {
+  background:var(--surf); border:1px solid var(--b1);
+  border-radius:10px; padding:18px 20px; margin-bottom:10px;
+}
+.rb-history-top  { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.rb-history-title{ font-size:14px; font-weight:600; color:var(--t1); }
+.rb-history-date { font-family:'DM Mono',monospace; font-size:10px; color:var(--t3); }
+
+/* ── ALERTS ── */
+.rb-alert {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:11px 14px; border-radius:8px; border:1px solid;
+  font-size:13px; margin-bottom:16px;
+}
+.rb-alert-error   { background:var(--red-bg);   color:var(--red);   border-color:var(--red-bd);   }
+.rb-alert-success { background:var(--green-bg); color:var(--green); border-color:var(--green-bd); }
+.rb-alert-close { background:none; border:none; cursor:pointer; color:inherit; font-size:16px; line-height:1; padding:0 0 0 8px; }
+
+/* ── LOADING ── */
+.rb-loading {
+  display:flex; align-items:center; gap:10px; padding:24px;
+  justify-content:center;
+  font-family:'DM Mono',monospace; font-size:10.5px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--t3);
+}
+.rb-spinner {
+  width:14px; height:14px; border:1.5px solid var(--b2);
+  border-top-color:var(--t1); border-radius:50%;
+  animation:rb-spin 1s linear infinite; flex-shrink:0;
+}
+@keyframes rb-spin { to { transform:rotate(360deg); } }
+
+/* ── WAITING PULSE ── */
+.rb-pulse-ring {
+  width:56px; height:56px; border-radius:50%;
+  border:1px solid var(--b2); display:inline-flex;
+  align-items:center; justify-content:center; margin-bottom:20px;
+  animation:rb-ring 2s ease-in-out infinite;
+}
+@keyframes rb-ring { 0%,100%{border-color:var(--b2)} 50%{border-color:var(--b4)} }
+.rb-pulse-ring svg { width:20px; height:20px; color:var(--t3); stroke-width:1.4; }
+
+/* ── MISC ── */
+.rb-turn-indicator {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:6px 12px; border-radius:20px;
+  border:1px solid var(--b2); background:var(--surf);
+  font-family:'DM Mono',monospace; font-size:10px;
+  letter-spacing:.06em; color:var(--t2); margin-bottom:28px;
+}
+.rb-turn-indicator.yours { border-color:var(--green-bd); background:var(--green-bg); color:var(--green); }
+.rb-turn-indicator.wait  { border-color:var(--amber-bd); background:var(--amber-bg); color:var(--amber); }
+.rb-centered { text-align:center; }
+.rb-row  { display:flex; gap:8px; }
+.rb-row.end   { justify-content:flex-end; }
+.rb-row.center{ justify-content:center; }
+.rb-mt8  { margin-top:8px; }
+.rb-mt16 { margin-top:16px; }
+.rb-mt24 { margin-top:24px; }
+.rb-mb0  { margin-bottom:0 !important; }
+.rb-info-row {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 0; border-bottom:1px solid var(--b1);
+  font-size:13px; color:var(--t2);
+}
+.rb-info-row:first-of-type { border-top:1px solid var(--b1); }
+.rb-info-lbl {
+  font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--t3); min-width:100px;
+}
+`;
+
+// ─────────────────────────────────────────────────────────
+// INTERFACES (unchanged)
+// ─────────────────────────────────────────────────────────
 interface BattleState {
   currentBattle: Battle | null;
   currentPhase: string;
@@ -27,7 +499,9 @@ interface BattlePersistence {
   autoSave: () => void;
 }
 
-// Простой компонент для воспроизведения// НОВЫЙ MixedTrackPlayer с ДВУМЯ аудио элементами для реального контроля
+// ─────────────────────────────────────────────────────────
+// MIXED TRACK PLAYER — visual redesign, logic untouched
+// ─────────────────────────────────────────────────────────
 const MixedTrackPlayer = ({ voiceUrl, beatUrl, label, playerKey }: { voiceUrl: string; beatUrl: string; label: string; playerKey?: string }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string>('');
@@ -38,406 +512,159 @@ const MixedTrackPlayer = ({ voiceUrl, beatUrl, label, playerKey }: { voiceUrl: s
   const [voiceVolume, setVoiceVolume] = useState(80);
   const [beatVolume, setBeatVolume] = useState(40);
   const [masterVolume, setMasterVolume] = useState(100);
-  
+
   const voiceAudioRef = useRef<HTMLAudioElement>(null);
-  const beatAudioRef = useRef<HTMLAudioElement>(null);
+  const beatAudioRef  = useRef<HTMLAudioElement>(null);
   const token = useAuthStore(state => state.token);
 
-  // Загрузка голоса
   useEffect(() => {
     const voiceAudio = voiceAudioRef.current;
     if (!voiceAudio || !voiceUrl) return;
-    
-    setLoading(true);
-    setVoiceLoaded(false);
-    
-    const loadVoice = async () => {
+    setLoading(true); setVoiceLoaded(false);
+    const load = async () => {
       try {
-        console.log(`🎵[${playerKey}] Loading voice...`);
-        
         const fullUrl = voiceUrl.startsWith('http') ? voiceUrl : `http://localhost:5002${voiceUrl}`;
-        voiceAudio.src = fullUrl;
-        voiceAudio.crossOrigin = 'anonymous';
-        voiceAudio.load();
-        
-        await new Promise((resolve) => {
-          voiceAudio.oncanplay = () => {
-            console.log(`🎵[${playerKey}] Voice loaded!`);
-            resolve(void 0);
-          };
-          voiceAudio.onerror = () => {
-            console.log(`🎵[${playerKey}] Voice error, trying anyway`);
-            resolve(void 0);
-          };
-        });
-        
+        voiceAudio.src = fullUrl; voiceAudio.crossOrigin = 'anonymous'; voiceAudio.load();
+        await new Promise(res => { voiceAudio.oncanplay = () => res(void 0); voiceAudio.onerror = () => res(void 0); });
         setVoiceLoaded(true);
-        
-      } catch (err) {
-        console.error(`🎵[${playerKey}] Voice load error:`, err);
-        setVoiceLoaded(true);
-      } finally {
-        setLoading(false);
-      }
+      } catch { setVoiceLoaded(true); } finally { setLoading(false); }
     };
-    
-    loadVoice();
+    load();
   }, [voiceUrl, token]);
 
-  // Загрузка бита
   useEffect(() => {
     const beatAudio = beatAudioRef.current;
     if (!beatAudio || !beatUrl) return;
-    
-    setLoading(true);
-    setBeatLoaded(false);
-    
-    const loadBeat = async () => {
+    setLoading(true); setBeatLoaded(false);
+    const load = async () => {
       try {
-        console.log(`🎵[${playerKey}] Loading beat...`);
-        
         const fullUrl = beatUrl.startsWith('http') ? beatUrl : `http://localhost:5002${beatUrl}`;
-        beatAudio.src = fullUrl;
-        beatAudio.crossOrigin = 'anonymous';
-        beatAudio.load();
-        
-        await new Promise((resolve) => {
-          beatAudio.oncanplay = () => {
-            console.log(`🎵[${playerKey}] Beat loaded!`);
-            resolve(void 0);
-          };
-          beatAudio.onerror = () => {
-            console.log(`🎵[${playerKey}] Beat error, trying anyway`);
-            resolve(void 0);
-          };
-        });
-        
+        beatAudio.src = fullUrl; beatAudio.crossOrigin = 'anonymous'; beatAudio.load();
+        await new Promise(res => { beatAudio.oncanplay = () => res(void 0); beatAudio.onerror = () => res(void 0); });
         setBeatLoaded(true);
-        
-      } catch (err) {
-        console.error(`🎵[${playerKey}] Beat load error:`, err);
-        setBeatLoaded(true);
-      } finally {
-        setLoading(false);
-      }
+      } catch { setBeatLoaded(true); } finally { setLoading(false); }
     };
-    
-    loadBeat();
+    load();
   }, [beatUrl, token]);
 
-  // Конвертация AudioBuffer в WAV
-  const audioBufferToWav = (buffer: AudioBuffer): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const length = buffer.length * buffer.numberOfChannels * 2;
-      const arrayBuffer = new ArrayBuffer(44 + length);
-      const view = new DataView(arrayBuffer);
-      const channels = [];
-      let offset = 0;
-      let pos = 0;
-      
-      // WAV заголовок
-      const setUint16 = (data: number) => {
-        view.setUint16(pos, data, true);
-        pos += 2;
-      };
-      const setUint32 = (data: number) => {
-        view.setUint32(pos, data, true);
-        pos += 4;
-      };
-      
-      // RIFF идентификатор
-      setUint32(0x46464952);
-      setUint32(36 + length);
-      setUint32(0x45564157);
-      // fmt sub-chunk
-      setUint32(0x20746d66);
-      setUint32(16);
-      setUint16(1);
-      setUint16(buffer.numberOfChannels);
-      setUint32(buffer.sampleRate);
-      setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels);
-      setUint16(buffer.numberOfChannels * 2);
-      setUint16(16);
-      // data sub-chunk
-      setUint32(0x61746164);
-      setUint32(length);
-      
-      // Записываем сэмплы
-      for (let i = 0; i < buffer.numberOfChannels; i++) {
-        channels.push(buffer.getChannelData(i));
+  const audioBufferToWav = (buffer: AudioBuffer): Promise<Blob> => new Promise(resolve => {
+    const length = buffer.length * buffer.numberOfChannels * 2;
+    const ab = new ArrayBuffer(44 + length); const view = new DataView(ab);
+    const channels: Float32Array[] = []; let offset = 0; let pos = 0;
+    const su16 = (d: number) => { view.setUint16(pos, d, true); pos += 2; };
+    const su32 = (d: number) => { view.setUint32(pos, d, true); pos += 4; };
+    su32(0x46464952); su32(36+length); su32(0x45564157);
+    su32(0x20746d66); su32(16); su16(1); su16(buffer.numberOfChannels);
+    su32(buffer.sampleRate); su32(buffer.sampleRate*2*buffer.numberOfChannels);
+    su16(buffer.numberOfChannels*2); su16(16);
+    su32(0x61746164); su32(length);
+    for (let i=0;i<buffer.numberOfChannels;i++) channels.push(buffer.getChannelData(i));
+    while (pos<44) { view.setUint8(pos,0); pos++; }
+    while (offset<length) {
+      for (let i=0;i<buffer.numberOfChannels;i++) {
+        let s=Math.max(-1,Math.min(1,channels[i][offset]));
+        s=s<0?s*0x8000:s*0x7FFF; view.setInt16(pos,s,true); pos+=2;
       }
-      
-      while (pos < 44) {
-        view.setUint8(pos, 0);
-        pos++;
-      }
-      
-      while (offset < length) {
-        for (let i = 0; i < buffer.numberOfChannels; i++) {
-          let sample = Math.max(-1, Math.min(1, channels[i][offset]));
-          sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-          view.setInt16(pos, sample, true);
-          pos += 2;
-        }
-        offset++;
-      }
-      
-      resolve(new Blob([arrayBuffer], { type: 'audio/wav' }));
-    });
-  };
+      offset++;
+    }
+    resolve(new Blob([ab],{type:'audio/wav'}));
+  });
 
   const playAudio = async () => {
-    const voiceAudio = voiceAudioRef.current;
-    const beatAudio = beatAudioRef.current;
-    
-    if (!voiceAudio || !beatAudio || !voiceLoaded || !beatLoaded) {
-      console.log(`🎵[${playerKey}] Cannot play - audio not ready`);
-      setError('Аудио еще загружается...');
-      return;
-    }
-    
+    const v=voiceAudioRef.current, b=beatAudioRef.current;
+    if (!v||!b||!voiceLoaded||!beatLoaded) { setError('Аудио ещё загружается...'); return; }
     try {
-      console.log(`🎵[${playerKey}] Starting dual playback...`);
-      
-      // Сбрасываем время
-      voiceAudio.currentTime = 0;
-      beatAudio.currentTime = 0;
-      
-      // Устанавливаем громкости
-      voiceAudio.volume = (voiceVolume / 100) * (masterVolume / 100);
-      beatAudio.volume = (beatVolume / 100) * (masterVolume / 100);
-      
-      // Синхронное воспроизведение
-      await Promise.allSettled([
-        voiceAudio.play(),
-        beatAudio.play()
-      ]);
-      
+      v.currentTime=0; b.currentTime=0;
+      v.volume=(voiceVolume/100)*(masterVolume/100);
+      b.volume=(beatVolume/100)*(masterVolume/100);
+      await Promise.allSettled([v.play(), b.play()]);
       setIsPlaying(true);
-      console.log(`🎵[${playerKey}] Playing! Voice: ${voiceVolume}% Beat: ${beatVolume}% Master: ${masterVolume}%`);
-      
-    } catch (err: any) {
-      console.error(`🎵[${playerKey}] Play error:`, err);
-      setError(`Ошибка: ${err.message}`);
-    }
+    } catch(e:any) { setError(`Ошибка: ${e.message}`); }
   };
 
   const stopAudio = () => {
-    const voiceAudio = voiceAudioRef.current;
-    const beatAudio = beatAudioRef.current;
-    
-    if (voiceAudio) {
-      voiceAudio.pause();
-      voiceAudio.currentTime = 0;
-    }
-    if (beatAudio) {
-      beatAudio.pause();
-      beatAudio.currentTime = 0;
-    }
-    
+    const v=voiceAudioRef.current, b=beatAudioRef.current;
+    if(v){v.pause();v.currentTime=0;} if(b){b.pause();b.currentTime=0;}
     setIsPlaying(false);
-    console.log(`🎵[${playerKey}] Stopped`);
   };
 
-  // Обработка окончания воспроизведения
   useEffect(() => {
-    const voiceAudio = voiceAudioRef.current;
-    const beatAudio = beatAudioRef.current;
-    if (!voiceAudio || !beatAudio) return;
-    
-    const handleVoiceEnded = () => {
-      console.log(`🎵[${playerKey}] Voice ended`);
-      // Голос закончился, но бит может продолжать играть
-    };
-    
-    const handleBeatEnded = () => {
-      console.log(`🎵[${playerKey}] Beat ended`);
-      setIsPlaying(false);
-    };
-    
-    voiceAudio.addEventListener('ended', handleVoiceEnded);
-    beatAudio.addEventListener('ended', handleBeatEnded);
-    
-    return () => {
-      voiceAudio.removeEventListener('ended', handleVoiceEnded);
-      beatAudio.removeEventListener('ended', handleBeatEnded);
-    };
+    const v=voiceAudioRef.current, b=beatAudioRef.current;
+    if(!v||!b) return;
+    const onEnd=()=>setIsPlaying(false);
+    b.addEventListener('ended',onEnd);
+    return ()=>b.removeEventListener('ended',onEnd);
   }, []);
 
-  // Применяем громкость голоса в реальном времени
-  useEffect(() => {
-    const voiceAudio = voiceAudioRef.current;
-    if (voiceAudio) {
-      voiceAudio.volume = (voiceVolume / 100) * (masterVolume / 100);
-      console.log(`🎵[${playerKey}] Voice volume updated: ${voiceVolume}% × ${masterVolume}%`);
-    }
-  }, [voiceVolume, masterVolume]);
+  useEffect(()=>{ const v=voiceAudioRef.current; if(v) v.volume=(voiceVolume/100)*(masterVolume/100); },[voiceVolume,masterVolume]);
+  useEffect(()=>{ const b=beatAudioRef.current;  if(b) b.volume=(beatVolume/100)*(masterVolume/100);  },[beatVolume,masterVolume]);
 
-  // Применяем громкость бита в реальном времени
-  useEffect(() => {
-    const beatAudio = beatAudioRef.current;
-    if (beatAudio) {
-      beatAudio.volume = (beatVolume / 100) * (masterVolume / 100);
-      console.log(`🎵[${playerKey}] Beat volume updated: ${beatVolume}% × ${masterVolume}%`);
-    }
-  }, [beatVolume, masterVolume]);
+  const ready = voiceLoaded && beatLoaded;
+  const statusClass = ready ? 'rb-badge-green' : loading ? 'rb-badge-muted' : 'rb-badge-red';
+  const statusText  = ready ? 'Готово' : loading ? 'Загрузка' : 'Ошибка';
 
   return (
-    <div className="bg-white/10 rounded-xl p-6 border border-white/20">
-      <div className="text-center mb-4">
-        <h3 className="text-lg font-semibold text-white mb-2">{label}</h3>
-        
-        {/* Статус */}
-        <div className={`flex justify-center items-center gap-2 px-3 py-1 rounded-lg text-sm mb-4 ${
-          (voiceLoaded && beatLoaded) ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 
-          loading ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
-          'bg-red-500/20 text-red-400 border border-red-500/30'
-        }`}>
-          {(voiceLoaded && beatLoaded) ? '🎵 Голос и бит готовы' : loading ? '⏳ Загрузка...' : '❌ Ошибка загрузки'}
-        </div>
-
-        {/* Индикаторы загрузки */}
-        <div className="flex justify-center items-center gap-4 mb-4">
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm ${
-            voiceLoaded ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-          }`}>
-            🎤 Голос {voiceLoaded ? '✅' : '⏳'}
-          </div>
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm ${
-            beatLoaded ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-          }`}>
-            🥁 Бит {beatLoaded ? '✅' : '⏳'}
-          </div>
-        </div>
-
-        {/* Кнопки управления */}
-        <div className="flex justify-center items-center gap-4 mb-4">
-          <button
-            onClick={isPlaying ? stopAudio : playAudio}
-            disabled={(!voiceLoaded && !beatLoaded) || loading}
-            className="p-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-full transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100"
-          >
-            {isPlaying ? <Pause size={28} /> : <Play size={28} />}
-          </button>
-          
-          <button
-            onClick={() => setShowVolumeControls(!showVolumeControls)}
-            className="p-3 bg-white/20 hover:bg-white/30 rounded-full transition-all transform hover:scale-105"
-          >
-            <Volume2 size={20} />
-          </button>
-        </div>
-
-        {/* Панель регулировки громкости */}
-        {showVolumeControls && (
-          <div className="bg-white/5 rounded-lg p-4 space-y-4 mb-4">
-            <h4 className="text-sm font-semibold text-gray-300 mb-3">🎚️ Звуковые настройки</h4>
-            
-            {/* Голос */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-300">🎤 Голос</span>
-                <span className="text-sm text-purple-400 font-medium">{voiceVolume}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={voiceVolume}
-                onChange={(e) => setVoiceVolume(Number(e.target.value))}
-                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500"
-              />
-            </div>
-
-            {/* Бит */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-300">🥁 Бит</span>
-                <span className="text-sm text-pink-400 font-medium">{beatVolume}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={beatVolume}
-                onChange={(e) => setBeatVolume(Number(e.target.value))}
-                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-pink-500"
-              />
-            </div>
-
-            {/* Общая громкость */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-300">🔊 Общая громкость</span>
-                <span className="text-sm text-green-400 font-medium">{masterVolume}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={masterVolume}
-                onChange={(e) => setMasterVolume(Number(e.target.value))}
-                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-green-500"
-              />
-            </div>
-
-            {/* Кнопки быстрой настройки */}
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => {
-                  setVoiceVolume(80);
-                  setBeatVolume(40);
-                  setMasterVolume(100);
-                }}
-                className="px-3 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-sm transition-colors"
-              >
-                Стандарт
-              </button>
-              <button
-                onClick={() => {
-                  setVoiceVolume(100);
-                  setBeatVolume(20);
-                  setMasterVolume(90);
-                }}
-                className="px-3 py-1 bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 rounded-lg text-sm transition-colors"
-              >
-                Акцент на голос
-              </button>
-              <button
-                onClick={() => {
-                  setVoiceVolume(60);
-                  setBeatVolume(80);
-                  setMasterVolume(100);
-                }}
-                className="px-3 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm transition-colors"
-              >
-                Акцент на бит
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Ошибка */}
-        {error && (
-          <div className="text-center text-red-400 text-sm mb-2">
-            {error}
-          </div>
-        )}
-
-        {/* Debug информация */}
-        <div className="text-xs text-gray-500">
-          {playerKey} | Voice: {voiceLoaded ? '✅' : '❌'} | Beat: {beatLoaded ? '✅' : '❌'} | Playing: {isPlaying ? '🔊' : '🔇'} | V:{voiceVolume}% B:{beatVolume}% M:{masterVolume}%
-        </div>
+    <div className="rb-player">
+      <div className="rb-player-hd">
+        <span className="rb-player-title">{label}</span>
+        <span className={`rb-badge ${statusClass}`}>{statusText}</span>
       </div>
 
-      {/* ДВА аудио элемента */}
-      <audio ref={voiceAudioRef} preload="auto" />
-      <audio ref={beatAudioRef} preload="auto" />
+      <div className="rb-player-indicators">
+        <span className={`rb-badge ${voiceLoaded ? 'rb-badge-green' : 'rb-badge-muted'}`}>
+          Голос {voiceLoaded ? '✓' : '—'}
+        </span>
+        <span className={`rb-badge ${beatLoaded ? 'rb-badge-green' : 'rb-badge-muted'}`}>
+          Бит {beatLoaded ? '✓' : '—'}
+        </span>
+      </div>
+
+      <div className="rb-player-controls">
+        <button onClick={isPlaying ? stopAudio : playAudio}
+          disabled={(!voiceLoaded && !beatLoaded) || loading}
+          className={`rb-play-btn${isPlaying?' playing':''}`}>
+          {isPlaying ? <Pause size={15}/> : <Play size={15}/>}
+        </button>
+        <button onClick={()=>setShowVolumeControls(!showVolumeControls)} className="rb-vol-btn">
+          <Volume2 size={13}/>
+        </button>
+      </div>
+
+      {showVolumeControls && (
+        <div className="rb-vol-panel">
+          <div className="rb-vol-head">Микшер</div>
+          {([['Голос', voiceVolume, setVoiceVolume], ['Бит', beatVolume, setBeatVolume], ['Мастер', masterVolume, setMasterVolume]] as const).map(([name, val, set]) => (
+            <div className="rb-vol-row" key={String(name)}>
+              <div className="rb-vol-lbl">
+                <span className="rb-vol-name">{name as string}</span>
+                <span className="rb-vol-val">{val as number}%</span>
+              </div>
+              <input type="range" min="0" max="100" value={val as number}
+                onChange={e=>(set as (v:number)=>void)(Number(e.target.value))}
+                className="rb-slider"/>
+            </div>
+          ))}
+          <div className="rb-vol-presets">
+            <button className="rb-btn rb-btn-ghost" style={{fontSize:'11px',height:'30px',padding:'0 10px'}}
+              onClick={()=>{setVoiceVolume(80);setBeatVolume(40);setMasterVolume(100);}}>Стандарт</button>
+            <button className="rb-btn rb-btn-ghost" style={{fontSize:'11px',height:'30px',padding:'0 10px'}}
+              onClick={()=>{setVoiceVolume(100);setBeatVolume(20);setMasterVolume(90);}}>Акцент голос</button>
+            <button className="rb-btn rb-btn-ghost" style={{fontSize:'11px',height:'30px',padding:'0 10px'}}
+              onClick={()=>{setVoiceVolume(60);setBeatVolume(80);setMasterVolume(100);}}>Акцент бит</button>
+          </div>
+        </div>
+      )}
+
+      {error && <div className="rb-alert rb-alert-error rb-mt8" style={{fontSize:'12px'}}>{error}</div>}
+      <audio ref={voiceAudioRef} preload="auto"/>
+      <audio ref={beatAudioRef}  preload="auto"/>
     </div>
   );
 };
 
-// Вспомогательная функция для форматирования времени
+// ─────────────────────────────────────────────────────────
+// FORMAT TIME (unchanged)
+// ─────────────────────────────────────────────────────────
 const formatTime = (seconds: number): string => {
   if (!seconds || isNaN(seconds) || seconds === Infinity) return '0:00';
   const mins = Math.floor(seconds / 60);
@@ -445,159 +672,88 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Компонент реальной визуализации громкости микрофона
+// ─────────────────────────────────────────────────────────
+// AUDIO VISUALIZER — logic unchanged, visual restyled
+// ─────────────────────────────────────────────────────────
 const AudioVisualizer = ({ stream, isActive }: { stream?: MediaStream; isActive: boolean }) => {
-  const [volumes, setVolumes] = useState<number[]>(new Array(8).fill(0));
+  const [volumes, setVolumes] = useState<number[]>(new Array(12).fill(4));
   const animationRef = useRef<number>();
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  
+  const analyserRef  = useRef<AnalyserNode | null>(null);
+
   useEffect(() => {
-    if (!stream || !isActive) {
-      setVolumes(new Array(8).fill(0));
-      return;
-    }
-    
-    // Создаем AudioContext и AnalyserNode
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const analyser = audioContext.createAnalyser();
-    const source = audioContext.createMediaStreamSource(stream);
-    
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    
-    source.connect(analyser);
+    if (!stream || !isActive) { setVolumes(new Array(12).fill(4)); return; }
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.8;
+    ctx.createMediaStreamSource(stream).connect(analyser);
     analyserRef.current = analyser;
-    
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    const updateVolumes = () => {
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
       if (!analyserRef.current) return;
-      
-      analyserRef.current.getByteFrequencyData(dataArray);
-      
-      // Группируем частоты в 8 баров
-      const barCount = 8;
-      const barWidth = Math.floor(bufferLength / barCount);
-      const newVolumes: number[] = [];
-      
-      for (let i = 0; i < barCount; i++) {
-        let sum = 0;
-        for (let j = 0; j < barWidth; j++) {
-          sum += dataArray[i * barWidth + j];
-        }
-        const average = sum / barWidth;
-        // Нормализуем значение (0-255) в пиксели (10-40px)
-        const normalizedHeight = Math.max(10, (average / 255) * 40);
-        newVolumes.push(normalizedHeight);
-      }
-      
-      setVolumes(newVolumes);
-      animationRef.current = requestAnimationFrame(updateVolumes);
+      analyserRef.current.getByteFrequencyData(buf);
+      const bars = 12;
+      const w = Math.floor(buf.length / bars);
+      setVolumes(Array.from({length:bars},(_,i)=>Math.max(4,(buf.slice(i*w,(i+1)*w).reduce((s,v)=>s+v,0)/w/255)*36)));
+      animationRef.current = requestAnimationFrame(tick);
     };
-    
-    updateVolumes();
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      source.disconnect();
-      audioContext.close();
-    };
+    tick();
+    return () => { if(animationRef.current)cancelAnimationFrame(animationRef.current); ctx.close(); };
   }, [stream, isActive]);
-  
+
   return (
-    <div className="flex items-center gap-1">
-      {volumes.map((height, i) => (
-        <div
-          key={i}
-          className={`w-1 rounded-full bg-gradient-to-t from-purple-500 to-pink-500 transition-all duration-100 ${
-            isActive ? 'opacity-100' : 'opacity-30'
-          }`}
-          style={{
-            height: `${height}px`,
-            transition: 'height 0.1s ease-out'
-          }}
-        />
+    <div className="rb-viz">
+      {volumes.map((h, i) => (
+        <div key={i} className={`rb-viz-bar${isActive?' active':''}`} style={{height:`${h}px`}}/>
       ))}
     </div>
   );
 };
 
-// ==================== СИСТЕМА ПЕРСИСТЕНТНОСТИ ====================
+// ─────────────────────────────────────────────────────────
+// PERSISTENCE HOOK (unchanged)
+// ─────────────────────────────────────────────────────────
 const useBattlePersistence = (currentUserId: string): BattlePersistence => {
   const STORAGE_KEY = `rapbattle_state_${currentUserId}`;
-  const AUTO_SAVE_INTERVAL = 5000; // 5 секунд
-  
+  const AUTO_SAVE_INTERVAL = 5000;
+
   const saveBattleState = useCallback((state: Partial<BattleState>) => {
     try {
-      const currentState = loadBattleState() || {};
-      const newState = { ...currentState, ...state, lastSaved: Date.now() };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-      console.log('Debug: Battle state saved:', newState);
-    } catch (error) {
-      console.error('Debug: Error saving battle state:', error);
-    }
+      const cur = loadBattleState() || {};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...cur, ...state, lastSaved: Date.now() }));
+    } catch {}
   }, [STORAGE_KEY]);
-  
+
   const loadBattleState = useCallback((): BattleState | null => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const state = JSON.parse(saved);
-        console.log('Debug: Battle state loaded:', state);
-        return state;
-      }
-    } catch (error) {
-      console.error('Debug: Error loading battle state:', error);
-    }
-    return null;
+      const s = localStorage.getItem(STORAGE_KEY);
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
   }, [STORAGE_KEY]);
-  
+
   const clearBattleState = useCallback(() => {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      console.log('Debug: Battle state cleared');
-    } catch (error) {
-      console.error('Debug: Error clearing battle state:', error);
-    }
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
   }, [STORAGE_KEY]);
-  
-  const autoSave = useCallback(() => {
-    // Авто-сохранение будет вызываться из основного компонента
-    console.log('Debug: Auto-save triggered');
-  }, []);
-  
-  // Авто-сохранение каждые 5 секунд
+
+  const autoSave = useCallback(() => {}, []);
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      autoSave();
-    }, AUTO_SAVE_INTERVAL);
-    
-    return () => clearInterval(interval);
+    const i = setInterval(autoSave, AUTO_SAVE_INTERVAL);
+    return () => clearInterval(i);
   }, [autoSave]);
-  
-  return {
-    saveBattleState,
-    loadBattleState,
-    clearBattleState,
-    autoSave
-  };
+
+  return { saveBattleState, loadBattleState, clearBattleState, autoSave };
 };
 
-// ==================== ГЛАВНЫЙ КОМПОНЕНТ ====================
+// ─────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────
 export default function RapBattleNew() {
-  // Auth store
   const { user } = useAuthStore();
-  
-  // Система персистентности
   const { saveBattleState, loadBattleState, clearBattleState } = useBattlePersistence(user?.id || '');
   const [lastSaved, setLastSaved] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Основные состояния
-  const [currentPhase, setCurrentPhase] = useState<'waiting' | 'creating' | 'selecting_beat_creation' | 'selecting_opponent' | 'inviting' | 'waiting_for_opponent' | 'selecting_beat' | 'waiting_for_beat' | 'user1_turn' | 'user2_turn' | 'reviewing_recording' | 'mutual_judging' | 'waiting_for_opponent_rating' | 'finished' | 'history'>('waiting');
+
+  const [currentPhase, setCurrentPhase] = useState<'waiting'|'creating'|'selecting_beat_creation'|'selecting_opponent'|'inviting'|'waiting_for_opponent'|'selecting_beat'|'waiting_for_beat'|'user1_turn'|'user2_turn'|'reviewing_recording'|'mutual_judging'|'waiting_for_opponent_rating'|'finished'|'history'>('waiting');
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedOpponent, setSelectedOpponent] = useState<User | null>(null);
   const [currentBattle, setCurrentBattle] = useState<Battle | null>(null);
@@ -605,311 +761,141 @@ export default function RapBattleNew() {
   const [pendingInvitations, setPendingInvitations] = useState<Battle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  
-  // Форма создания баттла
+
   const [battleTitle, setBattleTitle] = useState('');
   const [battleDescription, setBattleDescription] = useState('');
-  
-  // Аудио состояния
+
   const [beatFile, setBeatFile] = useState<File | null>(null);
   const [beatUrl, setBeatUrl] = useState<string>('');
   const [isRecording, setIsRecording] = useState(false);
   const [isPlayingBeat, setIsPlayingBeat] = useState(false);
   const [recordedVoice, setRecordedVoice] = useState<string>('');
   const [recordingTime, setRecordingTime] = useState(0);
-  const [currentTurn, setCurrentTurn] = useState<'user1' | 'user2'>('user1');
-  const [currentRound, setCurrentRound] = useState<1 | 2>(1); // Текущий раунд (1 или 2)
-  
-  // Записанные треки
+  const [currentTurn, setCurrentTurn] = useState<'user1'|'user2'>('user1');
+  const [currentRound, setCurrentRound] = useState<1|2>(1);
+
   const [user1Recording, setUser1Recording] = useState<BattleRecording | null>(null);
   const [user2Recording, setUser2Recording] = useState<BattleRecording | null>(null);
-  
-  // Взаимная оценка
+
   const [user1Rating, setUser1Rating] = useState<number | null>(null);
   const [user2Rating, setUser2Rating] = useState<number | null>(null);
   const [hasRated, setHasRated] = useState(false);
   const [opponentHasRated, setOpponentHasRated] = useState(false);
   const [isLoadingRecordings, setIsLoadingRecordings] = useState(false);
-  
-  // Настройки качество записи
-  const [recordingQuality, setRecordingQuality] = useState<'low' | 'medium' | 'high'>('high');
+
+  const [recordingQuality, setRecordingQuality] = useState<'low'|'medium'|'high'>('high');
   const [showRecordingSettings, setShowRecordingSettings] = useState(false);
-  
-  // Судейство
+
   const [judgeResult, setJudgeResult] = useState<any>(null);
-  
-  // Рефы
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const beatAudioRef = useRef<HTMLAudioElement | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef   = useRef<Blob[]>([]);
+  const beatAudioRef     = useRef<HTMLAudioElement | null>(null);
+  const timerRef         = useRef<number | null>(null);
+  const streamRef        = useRef<MediaStream | null>(null);
 
-  const RECORDING_TIME_LIMIT = 30; // 30 секунд на раунд
+  const RECORDING_TIME_LIMIT = 30;
 
-  // ==================== ВОССТАНОВЛЕНИЕ И АВТО-СОХРАНЕНИЕ СОСТОЯНИЯ ====================
+  // ── STATE RESTORE ──
   useEffect(() => {
-    // Восстанавливаем состояние при загрузке
-    const savedState = loadBattleState();
-    if (savedState) {
-      console.log('Debug: Restoring battle state from localStorage');
-      
-      // Восстанавливаем основные состояния
-      if (savedState.currentBattle) setCurrentBattle(savedState.currentBattle);
-      if (savedState.currentPhase) setCurrentPhase(savedState.currentPhase as any);
-      if (savedState.user1Recording) setUser1Recording(savedState.user1Recording);
-      if (savedState.user2Recording) setUser2Recording(savedState.user2Recording);
-      if (savedState.beatUrl) setBeatUrl(savedState.beatUrl);
-      if (savedState.recordingTime) setRecordingTime(savedState.recordingTime);
-      if (savedState.recordingQuality) setRecordingQuality(savedState.recordingQuality);
-      if (savedState.isRecording !== undefined) setIsRecording(savedState.isRecording);
-      if (savedState.isPlayingBeat !== undefined) setIsPlayingBeat(savedState.isPlayingBeat);
-      if (savedState.hasRated !== undefined) setHasRated(savedState.hasRated);
-      if (savedState.currentRound) setCurrentRound(savedState.currentRound);
-      if (savedState.error) setError(savedState.error);
-      if (savedState.lastSaved) setLastSaved(savedState.lastSaved);
-      
-      // Если есть сохраненный баттл, проверяем его актуальность с сервером
-      if (savedState.currentBattle) {
-        checkBattleStatus();
-      }
+    const saved = loadBattleState();
+    if (saved) {
+      if (saved.currentBattle)   setCurrentBattle(saved.currentBattle);
+      if (saved.currentPhase)    setCurrentPhase(saved.currentPhase as any);
+      if (saved.user1Recording)  setUser1Recording(saved.user1Recording);
+      if (saved.user2Recording)  setUser2Recording(saved.user2Recording);
+      if (saved.beatUrl)         setBeatUrl(saved.beatUrl);
+      if (saved.recordingTime)   setRecordingTime(saved.recordingTime);
+      if (saved.recordingQuality)setRecordingQuality(saved.recordingQuality);
+      if (saved.isRecording  !== undefined) setIsRecording(saved.isRecording);
+      if (saved.isPlayingBeat!== undefined) setIsPlayingBeat(saved.isPlayingBeat);
+      if (saved.hasRated     !== undefined) setHasRated(saved.hasRated);
+      if (saved.currentRound)    setCurrentRound(saved.currentRound);
+      if (saved.error)           setError(saved.error);
+      if (saved.lastSaved)       setLastSaved(saved.lastSaved);
+      if (saved.currentBattle)   checkBattleStatus();
     }
-    
-    // Загружаем основные данные
     loadAvailableUsers();
     loadUserBattles();
   }, []);
 
-  // Авто-сохранение при изменении важных состояний
   useEffect(() => {
-    if (!currentBattle) return; // Сохраняем только если есть активный баттл
-    
-    const stateToSave = {
-      currentBattle,
-      currentPhase,
-      user1Recording,
-      user2Recording,
-      beatUrl,
-      recordingTime,
-      recordingQuality,
-      isRecording,
-      isPlayingBeat,
-      hasRated,
-      currentRound,
-      error,
-      lastSaved: Date.now()
-    };
-    
+    if (!currentBattle) return;
     setIsSaving(true);
-    saveBattleState(stateToSave);
-    
-    // Показываем индикатор сохранения кратковременно
-    const timeout = setTimeout(() => {
-      setIsSaving(false);
-      setLastSaved(Date.now());
-    }, 500);
-    
-    return () => clearTimeout(timeout);
-  }, [
-    currentBattle, currentPhase, user1Recording, user2Recording,
-    beatUrl, recordingTime, recordingQuality, isRecording,
-    isPlayingBeat, hasRated, currentRound, error
-  ]);
+    saveBattleState({ currentBattle, currentPhase, user1Recording, user2Recording, beatUrl, recordingTime, recordingQuality, isRecording, isPlayingBeat, hasRated, currentRound, error, lastSaved: Date.now() });
+    const t = setTimeout(() => { setIsSaving(false); setLastSaved(Date.now()); }, 500);
+    return () => clearTimeout(t);
+  }, [currentBattle, currentPhase, user1Recording, user2Recording, beatUrl, recordingTime, recordingQuality, isRecording, isPlayingBeat, hasRated, currentRound, error]);
 
-  const loadAvailableUsers = async () => {
-    try {
-      const users = await getAvailableUsers();
-      setAvailableUsers(users);
-    } catch (err) {
-      console.error('Error loading users:', err);
-      setError('Не удалось загрузить список пользователей');
-    }
-  };
-
-  const loadUserBattles = async () => {
-    try {
-      const battles = await getUserBattles();
-      setUserBattles(battles);
-    } catch (err) {
-      console.error('Error loading battles:', err);
-      setError('Не удалось загрузить баттлы');
-    }
-  };
+  const loadAvailableUsers  = async () => { try { setAvailableUsers(await getAvailableUsers()); } catch { setError('Не удалось загрузить пользователей'); } };
+  const loadUserBattles     = async () => { try { setUserBattles(await getUserBattles()); } catch { setError('Не удалось загрузить баттлы'); } };
 
   const loadPendingInvitations = async () => {
     try {
-      // Не проверяем приглашения если есть активный баттл
-      if (currentBattle) {
-        return;
-      }
-      
-      const invitations = await getBattleInvitations();
-      setPendingInvitations(invitations);
-      
-      // Показываем приглашение только если нет активного баттла и есть приглашения
-      // Backend уже фильтрует так, что возвращаются только приглашения где текущий пользователь - оппонент
-      if (invitations.length > 0) {
-        const invitation = invitations[0];
-        setCurrentBattle(invitation);
-        setCurrentPhase('inviting'); // Эта фаза теперь только для оппонентов
-      }
-    } catch (err) {
-      console.error('Error loading invitations:', err);
-      // Не показываем ошибку для приглашений, это не критично
-    }
+      if (currentBattle) return;
+      const invs = await getBattleInvitations();
+      setPendingInvitations(invs);
+      if (invs.length > 0) { setCurrentBattle(invs[0]); setCurrentPhase('inviting'); }
+    } catch {}
   };
 
   const checkBattleStatus = async () => {
     if (!currentBattle) return;
-    
     try {
-      // Получаем актуальный статус баттла
       const battles = await getUserBattles();
-      const updatedBattle = battles.find(b => b.id === currentBattle.id);
-      
-      if (updatedBattle && updatedBattle.status !== currentBattle.status) {
-        console.log('Debug: Battle status changed from', currentBattle.status, 'to', updatedBattle.status);
-        setCurrentBattle(updatedBattle);
-        
-        // Обновляем фазу в зависимости от нового статуса
-        const currentUserId = user?.id;
-        const isCreator = currentUserId && String(updatedBattle.creator.id) === currentUserId;
-        
-        console.log('Debug: currentUserId:', currentUserId, 'type:', typeof currentUserId);
-        console.log('Debug: creator.id:', updatedBattle.creator.id, 'type:', typeof updatedBattle.creator.id);
-        console.log('Debug: IDs equal?', currentUserId === updatedBattle.creator.id);
-        console.log('Debug: User is creator?', isCreator);
-        
-        if (updatedBattle.status === 'USER1_TURN') {
-          setCurrentPhase('user1_turn');
-        } else if (updatedBattle.status === 'USER2_TURN') {
-          setCurrentPhase('user2_turn');
-        } else if (updatedBattle.status === 'JUDGING') {
-          setCurrentPhase('mutual_judging');
-        } else if (updatedBattle.status === 'CANCELLED') {
-          setCurrentPhase('waiting');
-          setCurrentBattle(null);
-        }
+      const upd = battles.find(b => b.id === currentBattle.id);
+      if (upd && upd.status !== currentBattle.status) {
+        setCurrentBattle(upd);
+        if (upd.status === 'USER1_TURN')  setCurrentPhase('user1_turn');
+        else if (upd.status === 'USER2_TURN') setCurrentPhase('user2_turn');
+        else if (upd.status === 'JUDGING')    setCurrentPhase('mutual_judging');
+        else if (upd.status === 'CANCELLED')  { setCurrentPhase('waiting'); setCurrentBattle(null); }
       }
-    } catch (err) {
-      console.error('Error checking battle status:', err);
-    }
+    } catch {}
   };
 
   const getCurrentUserRole = () => {
     if (!currentBattle || !user) return null;
-    
-    const currentUserId = user.id;
-    console.log('Debug: getCurrentUserRole - currentUserId:', currentUserId);
-    console.log('Debug: getCurrentUserRole - user:', user);
-    
-    const isCreator = String(currentBattle.creator.id) === currentUserId;
-    console.log('Debug: isCreator:', isCreator, 'creator.id:', currentBattle.creator.id);
-    
-    if (isCreator) return 'CREATOR';
-    
-    const opponent = currentBattle.participants.find(p => p.role === 'OPPONENT');
-    if (opponent && String(opponent.user.id) === currentUserId) return 'OPPONENT';
-    
-    console.log('Debug: User is neither creator nor opponent');
+    if (String(currentBattle.creator.id) === user.id) return 'CREATOR';
+    const opp = currentBattle.participants.find(p => p.role === 'OPPONENT');
+    if (opp && String(opp.user.id) === user.id) return 'OPPONENT';
     return null;
   };
 
   const canCurrentUserRecord = () => {
-    const userRole = getCurrentUserRole();
-    console.log('Debug: userRole:', userRole);
-    console.log('Debug: currentPhase:', currentPhase);
-    console.log('Debug: currentBattle status:', currentBattle?.status);
-    
-    if (!userRole) return false;
-    
-    // При USER1_TURN всегда записывает создатель
-    // При USER2_TURN всегда записывает оппонент
-    if (currentPhase === 'user1_turn') {
-      const canRecord = userRole === 'CREATOR';
-      console.log('Debug: user1_turn, CREATOR can record:', canRecord);
-      return canRecord;
-    } else if (currentPhase === 'user2_turn') {
-      const canRecord = userRole === 'OPPONENT';
-      console.log('Debug: user2_turn, OPPONENT can record:', canRecord);
-      return canRecord;
-    }
-    
+    const role = getCurrentUserRole();
+    if (!role) return false;
+    if (currentPhase === 'user1_turn') return role === 'CREATOR';
+    if (currentPhase === 'user2_turn') return role === 'OPPONENT';
     return false;
   };
 
-  // ==================== ОБРАБОТЧИКИ ====================
-  
   const createNewBattle = async () => {
-    if (!selectedOpponent || !battleTitle || !beatFile) {
-      setError('Выберите оппонента, введите название баттла и загрузите бит');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    
+    if (!selectedOpponent || !battleTitle || !beatFile) { setError('Выберите оппонента, введите название и загрузите бит'); return; }
+    setLoading(true); setError('');
     try {
-      // Сначала загружаем бит на сервер
-      console.log('Debug: Uploading beat file to server...');
       const { url: serverBeatUrl } = await uploadBeatFile(beatFile);
-      console.log('Debug: Beat uploaded to server:', serverBeatUrl);
-      
-      // Создаем баттл
       const battle = await createBattle(battleTitle, battleDescription, selectedOpponent.id);
       setCurrentBattle(battle);
-      
-      // Сохраняем бит в баттл
       await updateBattleBeat(battle.id, serverBeatUrl, beatFile.name);
-      
-      // Обновляем баттл с битом
-      const updatedBattle = { ...battle, beatUrl: serverBeatUrl, beatName: beatFile.name, status: 'INVITING' as const };
-      setCurrentBattle(updatedBattle);
-      
-      // Для создателя показываем экран ожидания оппонента
+      setCurrentBattle({ ...battle, beatUrl: serverBeatUrl, beatName: beatFile.name, status: 'INVITING' as const });
       setCurrentPhase('waiting_for_opponent');
-    } catch (err: any) {
-      setError(err.message || 'Не удалось создать баттл');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setError(e.message || 'Не удалось создать баттл'); }
+    finally { setLoading(false); }
   };
 
   const handleBattleInvitation = async (accept: boolean) => {
     if (!currentBattle) return;
-    
     setLoading(true);
     try {
       await respondToBattle(currentBattle.id, accept);
       if (accept) {
-        // Бит уже выбран при создании, сразу переходим к записи
-        const updatedBattle = { ...currentBattle, status: 'USER1_TURN' as const };
-        setCurrentBattle(updatedBattle);
-        
-        // Определяем правильную фазу в зависимости от роли пользователя
-        const currentUserId = user?.id;
-        const isCreator = currentUserId && String(updatedBattle.creator.id) === currentUserId;
-        
-        console.log('Debug: currentUserId:', currentUserId, 'type:', typeof currentUserId);
-        console.log('Debug: creator.id:', updatedBattle.creator.id, 'type:', typeof updatedBattle.creator.id);
-        console.log('Debug: IDs equal?', currentUserId === updatedBattle.creator.id);
-        console.log('Debug: isCreator:', isCreator);
-        
-        // Создатель записывает первым, оппонент ждет
-        setCurrentPhase('user1_turn');
-        setCurrentTurn('user1');
-      } else {
-        setCurrentPhase('waiting');
-        setCurrentBattle(null);
-        // Перезагружаем приглашения чтобы убрать обработанное
-        loadPendingInvitations();
-      }
+        const upd = { ...currentBattle, status: 'USER1_TURN' as const };
+        setCurrentBattle(upd); setCurrentPhase('user1_turn'); setCurrentTurn('user1');
+      } else { setCurrentPhase('waiting'); setCurrentBattle(null); loadPendingInvitations(); }
       loadUserBattles();
-    } catch (err: any) {
-      setError(err.message || 'Не удалось ответить на приглашение');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setError(e.message || 'Не удалось ответить на приглашение'); }
+    finally { setLoading(false); }
   };
 
   const handleBeatUpload = async (file: File) => {
@@ -917,1450 +903,734 @@ export default function RapBattleNew() {
       setBeatFile(file);
       const url = URL.createObjectURL(file);
       setBeatUrl(url);
-      
-      if (beatAudioRef.current) {
-        beatAudioRef.current.src = url;
-      }
+      if (beatAudioRef.current) beatAudioRef.current.src = url;
     }
   };
 
   const toggleBeatPlayback = async () => {
-    const currentBeatUrl = beatUrl || currentBattle?.beatUrl;
-    console.log('Debug: toggleBeatPlayback - currentBeatUrl:', currentBeatUrl);
-    console.log('Debug: toggleBeatPlayback - beatUrl:', beatUrl);
-    console.log('Debug: toggleBeatPlayback - currentBattle.beatUrl:', currentBattle?.beatUrl);
-    
-    if (!beatAudioRef.current || !currentBeatUrl) {
-      console.log('Debug: No beat URL or audio element');
-      return;
-    }
-    
+    const url = beatUrl || currentBattle?.beatUrl;
+    if (!beatAudioRef.current || !url) return;
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
-      
-      if (isPlayingBeat) {
-        beatAudioRef.current.pause();
-        setIsPlayingBeat(false);
-      } else {
-        await beatAudioRef.current.play();
-        setIsPlayingBeat(true);
-        
-        beatAudioRef.current.onended = () => {
-          setIsPlayingBeat(false);
-        };
-      }
-    } catch (err) {
-      console.error('Error playing beat:', err);
-    }
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === 'suspended') await ctx.resume();
+      if (isPlayingBeat) { beatAudioRef.current.pause(); setIsPlayingBeat(false); }
+      else { await beatAudioRef.current.play(); setIsPlayingBeat(true); beatAudioRef.current.onended = () => setIsPlayingBeat(false); }
+    } catch {}
   };
 
   const startRecording = async () => {
     try {
-      // Настраиваем аудио ограничения в зависимости от качества
-      const audioConstraints = {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-        sampleRate: recordingQuality === 'high' ? 48000 : recordingQuality === 'medium' ? 44100 : 22050,
-        channelCount: recordingQuality === 'high' ? 2 : 1
+      const constraints = {
+        echoCancellation:false, noiseSuppression:false, autoGainControl:false,
+        sampleRate: recordingQuality==='high'?48000:recordingQuality==='medium'?44100:22050,
+        channelCount: recordingQuality==='high'?2:1
       };
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: audioConstraints
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
       streamRef.current = stream;
-      
-      // Запускаем бит для записи
-      const currentBeatUrl = beatUrl || currentBattle?.beatUrl;
-      if (beatAudioRef.current && currentBeatUrl) {
-        beatAudioRef.current.currentTime = 0;
-        beatAudioRef.current.loop = true;
-        await beatAudioRef.current.play();
-        setIsPlayingBeat(true);
+      const url = beatUrl || currentBattle?.beatUrl;
+      if (beatAudioRef.current && url) { beatAudioRef.current.currentTime=0; beatAudioRef.current.loop=true; await beatAudioRef.current.play(); setIsPlayingBeat(true); }
+      const mime = 'audio/webm;codecs=opus';
+      let actualMime = mime;
+      if (!MediaRecorder.isTypeSupported(mime)) {
+        for (const t of ['audio/webm','audio/ogg','audio/wav','audio/mp4']) { if (MediaRecorder.isTypeSupported(t)) { actualMime=t; break; } }
       }
-      
-      // Используем webm формат - лучше поддерживается HTML5 audio
-      const mimeType = 'audio/webm;codecs=opus';
-      const fileExtension = 'webm';
-      
-      console.log('Debug: Using mimeType:', mimeType);
-      
-      // Проверяем поддержку mimeType и используем fallback если нужно
-      let actualMimeType = mimeType;
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        console.log('Debug: Primary mimeType not supported, trying fallbacks');
-        const fallbackTypes = [
-          'audio/webm',
-          'audio/ogg',
-          'audio/wav',
-          'audio/mp4'
-        ];
-        
-        for (const type of fallbackTypes) {
-          if (MediaRecorder.isTypeSupported(type)) {
-            actualMimeType = type;
-            console.log('Debug: Using fallback mimeType:', type);
-            break;
-          }
-        }
-      }
-      
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: actualMimeType,
-        audioBitsPerSecond: recordingQuality === 'high' ? 128000 : recordingQuality === 'medium' ? 96000 : 64000
-      });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-      
-      // Добавляем обработку ошибок записи
-      mediaRecorder.onerror = (event) => {
-        console.error('Debug: MediaRecorder error:', event);
-        setError(`Ошибка записи: ${event.error?.message || 'Неизвестная ошибка'}`);
-        stopRecording();
-      };
-      
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-          console.log('Debug: Audio chunk received, size:', event.data.size);
-        } else {
-          console.log('Debug: Empty audio chunk received');
-        }
-      };
-      
-      mediaRecorder.onstop = async () => {
-        // Останавливаем бит
-        if (beatAudioRef.current) {
-          beatAudioRef.current.pause();
-          beatAudioRef.current.currentTime = 0;
-          beatAudioRef.current.loop = false;
-          setIsPlayingBeat(false);
-        }
-        
-        // Проверяем, что есть аудио данные
-        if (audioChunksRef.current.length === 0) {
-          console.error('Debug: No audio chunks recorded');
-          setError('Ошибка записи: не удалось записать аудио. Попробуйте еще раз.');
-          return;
-        }
-        
-        const voiceBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
-        
-        // Проверяем размер Blob
-        if (voiceBlob.size === 0) {
-          console.error('Debug: Empty voice blob created');
-          setError('Ошибка записи: пустой файл аудио. Проверьте микрофон и попробуйте еще раз.');
-          return;
-        }
-        
-        console.log('Debug: Voice blob created, size:', voiceBlob.size, 'type:', voiceBlob.type);
-        
-        const voiceUrl = URL.createObjectURL(voiceBlob);
-        
-        setRecordedVoice(voiceUrl);
-        
-        // Сохраняем запись на сервер
+      const mr = new MediaRecorder(stream, { mimeType:actualMime, audioBitsPerSecond:recordingQuality==='high'?128000:recordingQuality==='medium'?96000:64000 });
+      mediaRecorderRef.current = mr; audioChunksRef.current = [];
+      mr.onerror = (e:any) => { setError(`Ошибка записи: ${e.error?.message||''}`); stopRecording(); };
+      mr.ondataavailable = (e) => { if(e.data?.size>0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        if (beatAudioRef.current) { beatAudioRef.current.pause(); beatAudioRef.current.currentTime=0; beatAudioRef.current.loop=false; setIsPlayingBeat(false); }
+        if (audioChunksRef.current.length===0) { setError('Ошибка записи: нет данных. Попробуйте снова.'); return; }
+        const blob = new Blob(audioChunksRef.current, { type:actualMime });
+        if (blob.size===0) { setError('Ошибка записи: пустой файл.'); return; }
+        setRecordedVoice(URL.createObjectURL(blob));
         if (currentBattle) {
           try {
-            // Определяем расширение на основе actualMimeType
-            const getExtensionFromMimeType = (type: string): string => {
-              if (type.includes('webm')) return 'webm';
-              if (type.includes('ogg')) return 'ogg';
-              if (type.includes('wav')) return 'wav';
-              if (type.includes('mp4') || type.includes('m4a')) return 'm4a';
-              return 'webm'; // fallback
-            };
-            
-            const actualExtension = getExtensionFromMimeType(actualMimeType);
-            const voiceFile = new File([voiceBlob], `recording-${Date.now()}.${actualExtension}`, { type: actualMimeType });
-            const recording = await saveBattleRecording(
-              currentBattle.id,
-              voiceFile,
-              currentBattle.beatUrl || '',
-              recordingTime,
-              recordingQuality,
-              currentRound
-            );
-            
-            console.log('Debug: Recording saved:', recording);
-            console.log('Debug: Recording voiceUrl:', recording.voiceUrl);
-            console.log('Debug: Recording beatUrl:', recording.beatUrl);
-            
-            // Определяем чей был ход и переходим к этапу прослушивания
-            const userRole = getCurrentUserRole();
-            console.log('Debug: User role for recording:', userRole);
-            
-            if (userRole === 'CREATOR') {
-              // Создатель записал, сохраняем запись и переходим к прослушиванию
-              setUser1Recording(recording);
-              console.log('Debug: Set user1Recording:', recording);
-              setCurrentPhase('reviewing_recording');
-              
-              // Пока не обновляем статус баттла - ждем подтверждения пользователя
-              
-            } else if (userRole === 'OPPONENT') {
-              // Оппонент записал, переходим к прослушиванию
-              setUser2Recording(recording);
-              console.log('Debug: Set user2Recording:', recording);
-              setCurrentPhase('reviewing_recording');
-              
-              // Обновляем статус баттла на сервере
-              await updateBattleStatus(currentBattle.id, 'JUDGING');
-              
-              // Принудительно обновляем данные баттла для мгновенного обновления
-              setTimeout(() => {
-                checkBattleStatus();
-              }, 500);
-            }
-          } catch (err: any) {
-            setError(err.message || 'Не удалось сохранить запись');
-          }
+            const ext = actualMime.includes('webm')?'webm':actualMime.includes('ogg')?'ogg':actualMime.includes('wav')?'wav':'m4a';
+            const file = new File([blob],`recording-${Date.now()}.${ext}`,{type:actualMime});
+            const rec = await saveBattleRecording(currentBattle.id, file, currentBattle.beatUrl||'', recordingTime, recordingQuality, currentRound);
+            const role = getCurrentUserRole();
+            if (role==='CREATOR') { setUser1Recording(rec); setCurrentPhase('reviewing_recording'); }
+            else if (role==='OPPONENT') { setUser2Recording(rec); setCurrentPhase('reviewing_recording'); await updateBattleStatus(currentBattle.id,'JUDGING'); setTimeout(()=>checkBattleStatus(),500); }
+          } catch(e:any) { setError(e.message||'Не удалось сохранить запись'); }
         }
       };
-      
-      mediaRecorder.start(100); // Собираем данные каждые 100мс
-      setIsRecording(true);
-      setRecordingTime(0);
-      
-      // Таймер записи
-      timerRef.current = setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= RECORDING_TIME_LIMIT) {
-            stopRecording();
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      alert('Не удалось получить доступ к микрофону. Убедитесь, что вы разрешили доступ.');
-    }
+      mr.start(100); setIsRecording(true); setRecordingTime(0);
+      timerRef.current = setInterval(() => { setRecordingTime(p => { if(p>=RECORDING_TIME_LIMIT){stopRecording();return p;} return p+1; }); }, 1000);
+    } catch { alert('Не удалось получить доступ к микрофону.'); }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      console.log('Debug: Stopping recording...');
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Останавливаем таймер
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-        console.log('Debug: Timer stopped');
-      }
-      
-      // Сбрасываем время записи
+      mediaRecorderRef.current.stop(); setIsRecording(false);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current=null; }
       setRecordingTime(0);
-      console.log('Debug: Recording time reset');
-      
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
     }
   };
 
   const loadBattleRecordings = async () => {
     if (!currentBattle) return;
-    
     setIsLoadingRecordings(true);
     try {
-      console.log('Debug: Loading battle recordings...');
-      const recordings = await getBattleRecordings(currentBattle.id);
-      console.log('Debug: Loaded recordings:', recordings);
-      
-      // Определяем какая запись принадлежит какому пользователю
-      recordings.forEach(recording => {
-        if (recording.userId === currentBattle.creator.id) {
-          setUser1Recording(recording);
-          console.log('Debug: Set user1Recording from server:', recording);
-        } else {
-          setUser2Recording(recording);
-          console.log('Debug: Set user2Recording from server:', recording);
-        }
-      });
-    } catch (err: any) {
-      console.error('Debug: Error loading recordings:', err);
-      setError(err.message || 'Не удалось загрузить записи');
-    } finally {
-      setIsLoadingRecordings(false);
-    }
+      const recs = await getBattleRecordings(currentBattle.id);
+      recs.forEach(r => { if(r.userId===currentBattle.creator.id) setUser1Recording(r); else setUser2Recording(r); });
+    } catch(e:any) { setError(e.message||'Не удалось загрузить записи'); }
+    finally { setIsLoadingRecordings(false); }
   };
 
   const handleRatingSubmit = async (rating: number) => {
-    const userRole = getCurrentUserRole();
-    if (!userRole || !currentBattle) return;
-    
+    const role = getCurrentUserRole();
+    if (!role || !currentBattle) return;
     try {
-      console.log('Debug: Submitting rating:', rating, 'for battle:', currentBattle.id, 'user role:', userRole);
-      
-      // Пробуем отправить оценку на сервер
-      try {
-        await submitRating(currentBattle.id, rating);
-        console.log('Debug: Rating saved to server successfully');
-      } catch (serverErr: any) {
-        console.log('Debug: Server rating failed, using localStorage fallback:', serverErr.message);
-        
-        // Сохраняем оценку в localStorage
-        const ratingKey = `battle_rating_${currentBattle.id}_${userRole === 'CREATOR' ? 'user1' : 'user2'}`;
-        localStorage.setItem(ratingKey, rating.toString());
-        console.log('Debug: Rating saved to localStorage:', ratingKey, '=', rating);
-      }
-      
-      // Сохраняем оценку в локальном состоянии
-      if (userRole === 'CREATOR') {
-        setUser1Rating(rating);
-      } else {
-        setUser2Rating(rating);
-      }
-      
+      try { await submitRating(currentBattle.id, rating); }
+      catch { localStorage.setItem(`battle_rating_${currentBattle.id}_${role==='CREATOR'?'user1':'user2'}`, rating.toString()); }
+      if (role==='CREATOR') setUser1Rating(rating); else setUser2Rating(rating);
       setHasRated(true);
-      
-      // Пробуем обновить статус на сервере
-      try {
-        await updateBattleStatus(currentBattle.id, 'WAITING_FOR_OPPONENT_RATING');
-      } catch (statusErr) {
-        console.log('Debug: Status update failed, continuing with local state');
-      }
-      
-      // Переключаемся на ожидание оценки оппонента
+      try { await updateBattleStatus(currentBattle.id,'WAITING_FOR_OPPONENT_RATING'); } catch {}
       setCurrentPhase('waiting_for_opponent_rating');
-      
-      // В реальном приложении здесь будет WebSocket или polling для проверки оценки оппонента
-      // Пока имитируем для демонстрации
-      setTimeout(() => {
-        setOpponentHasRated(true);
-        setCurrentPhase('mutual_judging');
-      }, 3000);
-      
-    } catch (err: any) {
-      console.error('Debug: Error saving rating:', err);
-      setError(err.message || 'Не удалось сохранить оценку');
-    }
+      setTimeout(() => { setOpponentHasRated(true); setCurrentPhase('mutual_judging'); }, 3000);
+    } catch(e:any) { setError(e.message||'Не удалось сохранить оценку'); }
   };
 
   const startNewBattle = () => {
-    setCurrentPhase('waiting');
-    setCurrentBattle(null);
-    setSelectedOpponent(null);
-    setBattleTitle('');
-    setBattleDescription('');
-    setBeatFile(null);
-    setBeatUrl('');
-    setUser1Recording(null);
-    setUser2Recording(null);
-    setRecordedVoice('');
-    setCurrentTurn('user1');
-    setRecordingTime(0);
-    setJudgeResult(null);
-    setError('');
+    setCurrentPhase('waiting'); setCurrentBattle(null); setSelectedOpponent(null);
+    setBattleTitle(''); setBattleDescription(''); setBeatFile(null); setBeatUrl('');
+    setUser1Recording(null); setUser2Recording(null); setRecordedVoice('');
+    setCurrentTurn('user1'); setRecordingTime(0); setJudgeResult(null); setError('');
   };
 
-  // Периодическая проверка приглашений и статуса баттла
   useEffect(() => {
-    if (currentPhase === 'waiting') {
+    if (currentPhase==='waiting') {
       loadPendingInvitations();
-      // Проверяем приглашения каждые 5 секунд
-      const interval = setInterval(() => {
-        loadPendingInvitations();
-      }, 5000);
-      
-      return () => clearInterval(interval);
-    } else if (currentPhase === 'waiting_for_opponent') {
-      // Создатель ждет оппонента - проверяем статус каждые 1.5 секунды
-      const interval = setInterval(() => {
-        checkBattleStatus();
-      }, 1500);
-      
-      return () => clearInterval(interval);
-    } else if (currentPhase === 'user1_turn' || currentPhase === 'user2_turn') {
-      // Во время записи - проверяем статус каждую секунду для мгновенных обновлений
-      const interval = setInterval(() => {
-        checkBattleStatus();
-      }, 1000);
-      
-      return () => clearInterval(interval);
+      const i=setInterval(loadPendingInvitations,5000); return ()=>clearInterval(i);
+    } else if (currentPhase==='waiting_for_opponent') {
+      const i=setInterval(checkBattleStatus,1500); return ()=>clearInterval(i);
+    } else if (currentPhase==='user1_turn'||currentPhase==='user2_turn') {
+      const i=setInterval(checkBattleStatus,1000); return ()=>clearInterval(i);
     }
   }, [currentPhase]);
 
-  // Обновляем audio элемент когда бит меняется
   useEffect(() => {
-    if (beatAudioRef.current) {
-      const currentBeatUrl = beatUrl || currentBattle?.beatUrl;
-      console.log('Debug: Updating audio element with beat URL:', currentBeatUrl);
-      beatAudioRef.current.src = currentBeatUrl || '';
-      beatAudioRef.current.load(); // Перезагружаем элемент
-    }
+    if (beatAudioRef.current) { const u=beatUrl||currentBattle?.beatUrl; beatAudioRef.current.src=u||''; beatAudioRef.current.load(); }
   }, [beatUrl, currentBattle?.beatUrl]);
 
-  // Функция передачи эстафеты оппоненту
   const passTurnToOpponent = useCallback(async () => {
     if (!currentBattle) return;
-    
     try {
-      console.log('Debug: Passing turn to opponent');
-      
-      const userRole = getCurrentUserRole();
-      
-      if (userRole === 'CREATOR') {
-        // Создатель передает ход оппоненту
-        setCurrentPhase('user2_turn');
-        await updateBattleStatus(currentBattle.id, 'USER2_TURN');
-        
-        // Принудительно обновляем данные баттла для мгновенного обновления
-        setTimeout(() => {
-          checkBattleStatus();
-        }, 500);
-        
-      } else if (userRole === 'OPPONENT') {
-        // Оппонент передает ход - переходим к взаимной оценке
-        setCurrentPhase('mutual_judging');
-        await updateBattleStatus(currentBattle.id, 'JUDGING');
-        
-        // Принудительно обновляем данные баттла для мгновенного обновления
-        setTimeout(() => {
-          checkBattleStatus();
-        }, 500);
-      }
-      
-      console.log('Debug: Turn passed successfully');
-      
-    } catch (err) {
-      console.error('Debug: Error passing turn:', err);
-      setError('Ошибка при передаче хода оппоненту');
-    }
+      const role = getCurrentUserRole();
+      if (role==='CREATOR') { setCurrentPhase('user2_turn'); await updateBattleStatus(currentBattle.id,'USER2_TURN'); setTimeout(()=>checkBattleStatus(),500); }
+      else if (role==='OPPONENT') { setCurrentPhase('mutual_judging'); await updateBattleStatus(currentBattle.id,'JUDGING'); setTimeout(()=>checkBattleStatus(),500); }
+    } catch { setError('Ошибка при передаче хода'); }
   }, [currentBattle]);
 
-  // Функция завершения баттла
   const finishBattle = useCallback(() => {
     if (!currentBattle) return;
-    
-    // Подтверждение завершения
-    const confirmFinish = window.confirm(
-      `Вы уверены, что хотите завершить баттл "${currentBattle.title}"?\n\n` +
-      `Все несохраненные данные будут потеряны.`
-    );
-    
-    if (confirmFinish) {
-      console.log('Debug: Finishing battle:', currentBattle.id);
-      
-      // Останавливаем запись если идет
-      if (isRecording) {
-        stopRecording();
-      }
-      
-      // Останавливаем воспроизведение бита
-      if (beatAudioRef.current) {
-        beatAudioRef.current.pause();
-        beatAudioRef.current.currentTime = 0;
-      }
-      
-      // Очищаем состояние
-      clearBattleState();
-      
-      // Сбрасываем все состояния
-      setCurrentBattle(null);
-      setCurrentPhase('waiting');
-      setUser1Recording(null);
-      setUser2Recording(null);
-      setBeatUrl('');
-      setRecordingTime(0);
-      setIsRecording(false);
-      setIsPlayingBeat(false);
-      setHasRated(false);
-      setError('');
-      setSelectedOpponent(null);
-      setBattleTitle('');
-      setBattleDescription('');
-      
-      // Перезагружаем список баттлов
-      loadUserBattles();
-      
-      console.log('Debug: Battle finished and state cleared');
-    }
+    if (!window.confirm(`Завершить баттл "${currentBattle.title}"? Несохранённые данные будут потеряны.`)) return;
+    if (isRecording) stopRecording();
+    if (beatAudioRef.current) { beatAudioRef.current.pause(); beatAudioRef.current.currentTime=0; }
+    clearBattleState();
+    setCurrentBattle(null); setCurrentPhase('waiting'); setUser1Recording(null);
+    setUser2Recording(null); setBeatUrl(''); setRecordingTime(0); setIsRecording(false);
+    setIsPlayingBeat(false); setHasRated(false); setError(''); setSelectedOpponent(null);
+    setBattleTitle(''); setBattleDescription('');
+    loadUserBattles();
   }, [currentBattle, isRecording, clearBattleState]);
 
-  // Очистка состояния при завершении баттла
-  const clearBattleStateOnFinish = useCallback(() => {
-    if (currentPhase === 'finished' || currentPhase === 'history') {
-      clearBattleState();
-      console.log('Debug: Battle state cleared on finish');
-    }
-  }, [currentPhase, clearBattleState]);
-
-  // Следим за изменением фазы для очистки
   useEffect(() => {
-    clearBattleStateOnFinish();
-  }, [clearBattleStateOnFinish]);
+    if (currentPhase==='finished'||currentPhase==='history') clearBattleState();
+  }, [currentPhase]);
 
-  // Очистка
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach(t=>t.stop());
   }, []);
 
-  // ==================== UI РЕНДЕРЫ ====================
-  
+  // ─────────────────────────────────────────────────────
+  // RENDER HELPERS
+  // ─────────────────────────────────────────────────────
+
+  const VsCard = ({ battle }: { battle: Battle }) => {
+    const opp = battle.participants.find(p=>p.role==='OPPONENT')?.user;
+    return (
+      <div className="rb-vs-card rb-mt16">
+        <div className="rb-vs-row">
+          <div className="rb-vs-player">
+            <div className="rb-vs-label">Создатель</div>
+            <div className="rb-vs-avatar">{battle.creator.username[0].toUpperCase()}</div>
+            <div className="rb-vs-name">{battle.creator.username}</div>
+          </div>
+          <div className="rb-vs-sep"><span className="rb-vs-sep-text">VS</span></div>
+          <div className="rb-vs-player">
+            <div className="rb-vs-label">Оппонент</div>
+            <div className="rb-vs-avatar">{opp?.username[0].toUpperCase()}</div>
+            <div className="rb-vs-name">{opp?.username}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── WAITING ──
   const renderWaitingPhase = () => (
-    <div className="text-center py-12">
-      <Users className="w-16 h-16 mx-auto mb-4 text-purple-400" />
-      <h2 className="text-2xl font-bold mb-4">Рэп Баттл</h2>
-      <p className="text-gray-400 mb-8">Создай баттл с реальным пользователем</p>
-      
-      <div className="max-w-md mx-auto">
-        <button
-          onClick={() => setCurrentPhase('creating')}
-          className="w-full p-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg flex items-center justify-center gap-2 text-white font-semibold transition-all"
-        >
-          <Sparkles className="w-5 h-5" />
-          Создать новый баттл
+    <div className="rb-hero">
+      <div className="rb-hero-icon"><Users/></div>
+      <div className="rb-hero-title">Рэп Баттл</div>
+      <div className="rb-hero-desc">Соревнования в реальном времени</div>
+      <div className="rb-hero-actions">
+        <button onClick={()=>setCurrentPhase('creating')} className="rb-btn rb-btn-primary tall full">
+          <Sparkles/> Создать баттл
         </button>
-        
-        <button
-          onClick={() => setCurrentPhase('history')}
-          className="w-full mt-3 p-4 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center gap-2 text-white font-semibold transition-all"
-        >
-          <Trophy className="w-5 h-5" />
-          История баттлов
+        <button onClick={()=>setCurrentPhase('history')} className="rb-btn rb-btn-ghost tall full">
+          <Trophy/> История баттлов
         </button>
       </div>
     </div>
   );
 
+  // ── CREATING ──
   const renderCreatingPhase = () => (
-    <div className="text-center py-12">
-      <Sparkles className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-      <h2 className="text-2xl font-bold mb-4">Создание баттла</h2>
-      <p className="text-gray-400 mb-8">Сначала выбери бит, потом оппонента</p>
-      
-      <div className="max-w-md mx-auto space-y-6">
-        {/* Название баттла */}
+    <div>
+      <div className="rb-card-hd">
         <div>
-          <label className="block text-left text-sm font-medium mb-2">Название баттла</label>
-          <input
-            type="text"
-            value={battleTitle}
-            onChange={(e) => setBattleTitle(e.target.value)}
-            placeholder="Эпичный баттл..."
-            className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-400"
-          />
+          <div className="rb-card-title">Создание баттла</div>
+          <div className="rb-card-sub">Заполните параметры и выберите оппонента</div>
         </div>
-        
-        {/* Описание */}
-        <div>
-          <label className="block text-left text-sm font-medium mb-2">Описание (необязательно)</label>
-          <textarea
-            value={battleDescription}
-            onChange={(e) => setBattleDescription(e.target.value)}
-            placeholder="Опиши условия баттла..."
-            rows={3}
-            className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 resize-none"
-          />
+        <button onClick={()=>setCurrentPhase('waiting')} className="rb-btn rb-btn-ghost">Отмена</button>
+      </div>
+
+      <div className="rb-card">
+        <span className="rb-section-label">Информация</span>
+        <div className="rb-field">
+          <label className="rb-label">Название баттла</label>
+          <input className="rb-input" value={battleTitle} onChange={e=>setBattleTitle(e.target.value)} placeholder="Название..."/>
         </div>
-        
-        {/* Выбор бита */}
-        <div>
-          <label className="block text-left text-sm font-medium mb-2">Выбор бита</label>
-          <label className="block">
-            <div className="border-2 border-dashed border-white/30 rounded-xl p-6 hover:border-purple-400/50 transition-colors cursor-pointer">
-              <Upload className="w-10 h-10 mx-auto mb-3 text-gray-400" />
-              <p className="text-sm text-center">Нажми для загрузки или перетащи файл</p>
-              <p className="text-xs text-gray-500 mt-2 text-center">MP3, WAV до 10MB</p>
-            </div>
-            <input
-              type="file"
-              accept="audio/mp3,audio/wav,audio/mpeg"
-              onChange={(e) => e.target.files?.[0] && handleBeatUpload(e.target.files[0])}
-              className="hidden"
-            />
-          </label>
-          
-          {beatFile && (
-            <div className="mt-3 p-3 bg-white/10 rounded-lg">
-              <p className="font-medium text-sm mb-2">{beatFile.name}</p>
-              <button
-                onClick={toggleBeatPlayback}
-                className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center justify-center gap-2 mb-2 text-sm"
-              >
-                {isPlayingBeat ? <Pause size={14} /> : <Play size={14} />}
-                {isPlayingBeat ? 'Пауза' : 'Прослушать бит'}
+        <div className="rb-field rb-mb0">
+          <label className="rb-label">Описание</label>
+          <textarea className="rb-input" value={battleDescription} onChange={e=>setBattleDescription(e.target.value)} placeholder="Условия и правила..." rows={3}/>
+        </div>
+      </div>
+
+      <div className="rb-card">
+        <span className="rb-section-label">Бит</span>
+        <label>
+          <div className="rb-upload-zone">
+            <Upload/>
+            <div className="rb-upload-label">Нажмите для загрузки</div>
+            <div className="rb-upload-hint">MP3, WAV — до 10 MB</div>
+          </div>
+          <input type="file" accept="audio/mp3,audio/wav,audio/mpeg" className="hidden" onChange={e=>e.target.files?.[0]&&handleBeatUpload(e.target.files[0])}/>
+        </label>
+        {beatFile && (
+          <div className="rb-beat-row rb-mt8">
+            <div className="rb-beat-icon"><Disc style={{width:14,height:14,color:'var(--t3)'}}/></div>
+            <span className="rb-beat-name">{beatFile.name}</span>
+            <div className="rb-beat-actions">
+              <button onClick={toggleBeatPlayback} className="rb-btn-icon">
+                {isPlayingBeat ? <Pause/> : <Play/>}
               </button>
             </div>
-          )}
-        </div>
-        
-        {/* Выбор оппонента */}
-        <div>
-          <label className="block text-left text-sm font-medium mb-2">Выбери оппонента</label>
-          <div className="max-h-60 overflow-y-auto space-y-2">
-            {availableUsers.length === 0 ? (
-              <p className="text-gray-400 text-center py-4">Доступные пользователи загружаются...</p>
-            ) : (
-              availableUsers.map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => setSelectedOpponent(user)}
-                  className={`w-full p-3 rounded-lg flex items-center justify-between transition-all ${
-                    selectedOpponent?.id === user.id
-                      ? 'bg-purple-600/30 border border-purple-500'
-                      : 'bg-white/10 hover:bg-white/20 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-                      <span className="text-white font-bold">
-                        {user.username.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="text-left">
-                      <span className="font-medium">{user.username}</span>
-                      <div className="text-xs text-gray-400">
-                        Баттлов: {user._count.createdBattles + user._count.battleParticipants}
-                      </div>
-                    </div>
-                  </div>
-                  {selectedOpponent?.id === user.id && (
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-        
-        {error && (
-          <div className="p-3 bg-red-600/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
-            {error}
           </div>
         )}
-        
-        {/* Кнопки действий */}
-        <div className="flex gap-3">
-          <button
-            onClick={() => setCurrentPhase('waiting')}
-            className="flex-1 p-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-colors"
-          >
-            Отмена
-          </button>
-          <button
-            onClick={createNewBattle}
-            disabled={!selectedOpponent || !battleTitle || !beatFile || loading}
-            className="flex-1 p-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Создание...' : 'Создать баттл'}
-          </button>
-        </div>
+      </div>
+
+      <div className="rb-card">
+        <span className="rb-section-label">Оппонент</span>
+        {availableUsers.length === 0
+          ? <div className="rb-loading"><div className="rb-spinner"/><span>Загрузка пользователей</span></div>
+          : <div className="rb-user-list">
+              {availableUsers.map(u => (
+                <button key={u.id} onClick={()=>setSelectedOpponent(u)} className={`rb-user-row${selectedOpponent?.id===u.id?' sel':''}`}>
+                  <div className="rb-user-avatar">{u.username[0].toUpperCase()}</div>
+                  <div style={{flex:1,textAlign:'left'}}>
+                    <div className="rb-user-name">@{u.username}</div>
+                    <div className="rb-user-meta">{u._count.createdBattles + u._count.battleParticipants} баттлов</div>
+                  </div>
+                  {selectedOpponent?.id===u.id && <div className="rb-user-check"><CheckCircle/></div>}
+                </button>
+              ))}
+            </div>
+        }
+      </div>
+
+      <div className="rb-row" style={{justifyContent:'flex-end'}}>
+        <button onClick={createNewBattle} disabled={!selectedOpponent||!battleTitle||!beatFile||loading} className="rb-btn rb-btn-primary tall">
+          {loading ? <><div className="rb-spinner" style={{borderTopColor:'var(--bg)'}}/> Создание</> : <><Send/> Создать баттл</>}
+        </button>
       </div>
     </div>
   );
 
+  // ── INVITING (opponent receives) ──
   const renderInvitingPhase = () => {
     if (!currentBattle) return null;
-    
-    const opponent = currentBattle.participants.find(p => p.role === 'OPPONENT')?.user;
-    
-    // Эта функция теперь только для оппонентов - приглашение в баттл
     return (
-      <div className="text-center py-12">
-        <div className="animate-pulse">
-          <Send className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-          <h2 className="text-2xl font-bold mb-4">Приглашение в баттл!</h2>
-          <p className="text-gray-400 mb-8">
-            {currentBattle.creator.username} приглашает тебя на баттл!
-          </p>
+      <div>
+        <div className="rb-hero" style={{paddingTop:40}}>
+          <div className="rb-pulse-ring"><Send style={{width:20,height:20}}/></div>
+          <div className="rb-hero-title">Приглашение в баттл</div>
+          <div className="rb-hero-desc">{currentBattle.creator.username} приглашает вас</div>
         </div>
-      
-        {/* Детали баттла */}
-        <div className="max-w-md mx-auto mb-8 p-6 bg-white/10 rounded-xl border border-white/20">
-          <h3 className="text-xl font-bold mb-2">{currentBattle.title}</h3>
-          {currentBattle.description && (
-            <p className="text-gray-400 mb-4">{currentBattle.description}</p>
-          )}
-          
-          <div className="flex items-center justify-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center">
-                <span className="text-white text-xs font-bold">
-                  {currentBattle.creator.username.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <span>{currentBattle.creator.username}</span>
+
+        <div className="rb-card">
+          <div className="rb-card-hd">
+            <div>
+              <div className="rb-card-title">{currentBattle.title}</div>
+              {currentBattle.description && <div className="rb-card-sub">{currentBattle.description}</div>}
             </div>
-            <span className="text-gray-400">VS</span>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center">
-                <span className="text-white text-xs font-bold">
-                  {opponent?.username.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <span>{opponent?.username}</span>
-            </div>
+            <span className="rb-badge rb-badge-amber">Ожидает ответа</span>
           </div>
+          <VsCard battle={currentBattle}/>
         </div>
-        
-        <div className="flex gap-4 justify-center">
-          <button
-            onClick={() => handleBattleInvitation(false)}
-            disabled={loading}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            <XCircle className="w-4 h-4 inline mr-2" />
-            Отклонить
+
+        <div className="rb-row rb-row center">
+          <button onClick={()=>handleBattleInvitation(false)} disabled={loading} className="rb-btn rb-btn-danger">
+            <XCircle/> Отклонить
           </button>
-          <button
-            onClick={() => handleBattleInvitation(true)}
-            disabled={loading}
-            className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            <CheckCircle className="w-4 h-4 inline mr-2" />
-            Принять
+          <button onClick={()=>handleBattleInvitation(true)} disabled={loading} className="rb-btn rb-btn-green">
+            <CheckCircle/> Принять
           </button>
         </div>
-        
-        {error && (
-          <div className="mt-4 p-3 bg-red-600/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
-            {error}
-          </div>
-        )}
       </div>
     );
   };
 
+  // ── WAITING FOR OPPONENT ──
   const renderWaitingForOpponentPhase = () => {
     if (!currentBattle) return null;
-    
-    const opponent = currentBattle.participants.find(p => p.role === 'OPPONENT')?.user;
-    
-    // Экран для создателя - ожидание оппонента
     return (
-      <div className="text-center py-12">
-        <div className="animate-pulse">
-          <Clock className="w-16 h-16 mx-auto mb-4 text-blue-400" />
-          <h2 className="text-2xl font-bold mb-4">Ожидание оппонента</h2>
-          <p className="text-gray-400 mb-8">
-            Приглашение отправлено {opponent?.username}. Ожидаем ответа...
-          </p>
+      <div>
+        <div className="rb-hero" style={{paddingTop:40}}>
+          <div className="rb-pulse-ring"><Clock/></div>
+          <div className="rb-hero-title">Ожидание оппонента</div>
+          <div className="rb-hero-desc">Приглашение отправлено. Ожидаем ответа...</div>
         </div>
-        
-        {/* Детали баттла */}
-        <div className="max-w-md mx-auto mb-8 p-6 bg-white/10 rounded-xl border border-white/20">
-          <h3 className="text-xl font-bold mb-2">{currentBattle.title}</h3>
-          {currentBattle.description && (
-            <p className="text-gray-400 mb-4">{currentBattle.description}</p>
-          )}
-          
-          <div className="flex items-center justify-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center">
-                <span className="text-white text-xs font-bold">
-                  {currentBattle.creator.username.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <span>{currentBattle.creator.username}</span>
+
+        <div className="rb-card">
+          <div className="rb-card-hd">
+            <div>
+              <div className="rb-card-title">{currentBattle.title}</div>
+              {currentBattle.description && <div className="rb-card-sub">{currentBattle.description}</div>}
             </div>
-            <span className="text-gray-400">VS</span>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center">
-                <span className="text-white text-xs font-bold">
-                  {opponent?.username.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <span>{opponent?.username}</span>
-            </div>
+            <span className="rb-badge rb-badge-amber">Ожидание</span>
           </div>
+          <VsCard battle={currentBattle}/>
         </div>
-        
-        <button
-          onClick={() => {
-            setCurrentBattle(null);
-            setCurrentPhase('waiting');
-            loadPendingInvitations();
-          }}
-          className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-colors"
-        >
-          Отменить приглашение
-        </button>
+
+        <div className="rb-row rb-row center">
+          <button onClick={()=>{ setCurrentBattle(null); setCurrentPhase('waiting'); loadPendingInvitations(); }} className="rb-btn rb-btn-danger">
+            <XCircle/> Отменить
+          </button>
+        </div>
       </div>
     );
   };
 
+  // ── BATTLE PHASE ──
   const renderBattlePhase = () => {
     const canRecord = canCurrentUserRecord();
-    const creator = currentBattle?.creator;
-    const opponent = currentBattle?.participants.find(p => p.role === 'OPPONENT')?.user;
-    
+    const creator  = currentBattle?.creator;
+    const opp      = currentBattle?.participants.find(p=>p.role==='OPPONENT')?.user;
+    const timeLeft = RECORDING_TIME_LIMIT - recordingTime;
+    const pct = (recordingTime / RECORDING_TIME_LIMIT) * 100;
+
     return (
-      <div className="py-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold mb-2">🎤 Баттл начался!</h2>
-          <p className="text-gray-400 text-lg">
-            Ход: <span className="text-purple-400 font-semibold">
-              {currentPhase === 'user1_turn' ? creator?.username : opponent?.username}
-            </span>
-          </p>
-          {canRecord ? (
-            <p className="text-green-400 font-semibold mt-2">🎤 Ваша очередь записывать!</p>
-          ) : (
-            <p className="text-orange-400 font-semibold mt-2">⏳ Ожидайте хода оппонента...</p>
-          )}
+      <div>
+        {/* Turn indicator */}
+        <div className="rb-centered rb-mt24" style={{marginBottom:32}}>
+          <div className={`rb-turn-indicator${canRecord?' yours':' wait'}`}>
+            {canRecord
+              ? <><span className="rb-rec-dot"/> Ваш ход — запись</>
+              : <><Clock style={{width:12,height:12}}/> Ход: {currentPhase==='user1_turn'?creator?.username:opp?.username}</>
+            }
+          </div>
         </div>
 
-      <div className="max-w-2xl mx-auto">
-        {/* Информация о бите */}
+        {/* Beat player */}
         {(beatUrl || currentBattle?.beatUrl) && (
-          <div className="mb-6 p-4 bg-white/10 rounded-xl border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <Disc className={`w-5 h-5 ${isPlayingBeat ? 'text-green-400 animate-spin' : 'text-purple-400'}`} />
-                <span className="font-medium">{beatFile?.name || currentBattle?.beatName || 'Бит'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowRecordingSettings(!showRecordingSettings)}
-                  className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors text-sm"
-                >
-                  ⚙️ Настройки
-                </button>
-                <button
-                  onClick={toggleBeatPlayback}
-                  className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
-                >
-                  {isPlayingBeat ? <Pause size={16} /> : <Play size={16} />}
-                </button>
-              </div>
+          <div className="rb-card">
+            <div className="rb-card-hd rb-mb0" style={{marginBottom:12}}>
+              <span className="rb-section-label" style={{marginBottom:0}}>Бит</span>
+              <button onClick={()=>setShowRecordingSettings(!showRecordingSettings)} className="rb-btn rb-btn-ghost" style={{height:28,padding:'0 10px',fontSize:'11px'}}>
+                Настройки
+              </button>
             </div>
-            
-            {/* Настройки записи */}
+            <div className="rb-beat-row">
+              <Disc style={{width:14,height:14,color:isPlayingBeat?'var(--t1)':'var(--t3)',flexShrink:0}}/>
+              <span className="rb-beat-name">{beatFile?.name||currentBattle?.beatName||'Бит'}</span>
+              <button onClick={toggleBeatPlayback} className="rb-btn-icon">{isPlayingBeat?<Pause/>:<Play/>}</button>
+            </div>
+
             {showRecordingSettings && (
-              <div className="mt-3 p-3 bg-white/5 rounded-lg space-y-3">
-                <h4 className="text-sm font-semibold text-gray-300">Качество записи</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setRecordingQuality('low')}
-                    className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                      recordingQuality === 'low' 
-                        ? 'bg-red-600/50 border border-red-500' 
-                        : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                  >
-                    📱 Низкое
-                    <div className="text-xs text-gray-400">22kHz, 64kbps</div>
-                  </button>
-                  <button
-                    onClick={() => setRecordingQuality('medium')}
-                    className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                      recordingQuality === 'medium' 
-                        ? 'bg-yellow-600/50 border border-yellow-500' 
-                        : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                  >
-                    🎵 Среднее
-                    <div className="text-xs text-gray-400">44kHz, 96kbps</div>
-                  </button>
-                  <button
-                    onClick={() => setRecordingQuality('high')}
-                    className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                      recordingQuality === 'high' 
-                        ? 'bg-green-600/50 border border-green-500' 
-                        : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                  >
-                    🎧 Высокое
-                    <div className="text-xs text-gray-400">48kHz, 128kbps</div>
-                  </button>
-                </div>
-                
-                <div className="text-xs text-gray-400 bg-white/5 p-2 rounded">
-                  💡 Высокое качество использует больше памяти, но обеспечивает лучшее звучание
+              <div style={{marginTop:14}}>
+                <label className="rb-label">Качество записи</label>
+                <div className="rb-quality-grid">
+                  {(['low','medium','high'] as const).map(q => (
+                    <button key={q} onClick={()=>setRecordingQuality(q)}
+                      className={`rb-quality-btn${recordingQuality===q?` sel-${q}`:''}`}>
+                      <div className="rb-quality-btn-label">{q==='low'?'Низкое':q==='medium'?'Среднее':'Высокое'}</div>
+                      <div className="rb-quality-btn-sub">{q==='low'?'22kHz · 64k':q==='medium'?'44kHz · 96k':'48kHz · 128k'}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
-            
-            <audio 
-              ref={beatAudioRef} 
-              src={beatUrl || currentBattle?.beatUrl}
-              preload="auto"
-              className="hidden"
-            />
+            <audio ref={beatAudioRef} src={beatUrl||currentBattle?.beatUrl} preload="auto" className="hidden"/>
           </div>
         )}
 
-        {/* Таймер и визуализация */}
-        <div className="text-center mb-8">
-          <div className="text-6xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            {Math.floor(RECORDING_TIME_LIMIT - recordingTime)}s
-          </div>
-          
-          <div className="w-full bg-white/10 rounded-full h-3 mb-6 overflow-hidden">
-            <div 
-              className={`h-3 rounded-full transition-all duration-1000 ${
-                recordingTime > RECORDING_TIME_LIMIT * 0.7 
-                  ? 'bg-gradient-to-r from-red-500 to-red-600' 
-                  : recordingTime > RECORDING_TIME_LIMIT * 0.4
-                    ? 'bg-gradient-to-r from-yellow-500 to-orange-500'
-                    : 'bg-gradient-to-r from-green-500 to-emerald-500'
-              }`}
-              style={{ width: `${(recordingTime / RECORDING_TIME_LIMIT) * 100}%` }}
-            />
+        {/* Timer + recorder */}
+        <div className="rb-card rb-centered">
+          <div className={`rb-timer-display${timeLeft<=8?' warn':''}`}>{timeLeft}s</div>
+          <div className="rb-timer-sub">{isRecording ? <><span className="rb-rec-dot"/> Запись...</> : 'Готов к записи'}</div>
+
+          <div className="rb-progress-wrap">
+            <div className={`rb-progress-bar${pct>70?' warn':pct>40?' mid':''}`} style={{width:`${pct}%`}}/>
           </div>
 
-          <AudioVisualizer stream={streamRef.current || undefined} isActive={isRecording} />
-        </div>
+          <AudioVisualizer stream={streamRef.current||undefined} isActive={isRecording}/>
 
-        {/* Кнопка записи */}
-        <div className="text-center">
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={(!beatUrl && !currentBattle?.beatUrl) || !canRecord}
-            className={`w-24 h-24 rounded-full flex items-center justify-center transition-all transform hover:scale-105 ${
-              isRecording 
-                ? 'bg-red-600 animate-pulse shadow-lg shadow-red-600/50 scale-110' 
-                : (beatUrl || currentBattle?.beatUrl) && canRecord
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-600/30'
-                  : 'bg-gray-600 cursor-not-allowed'
-            }`}
+            className={`rb-mic-btn rb-mt24${isRecording?' recording':''}`}
           >
-            {isRecording ? (
-              <MicOff size={36} className="animate-bounce" />
-            ) : (
-              <Mic size={36} />
-            )}
+            {isRecording ? <MicOff/> : <Mic/>}
           </button>
 
-          <p className="mt-4 text-gray-400">
-            {isRecording ? (
-              <span className="text-red-400 font-semibold">🎵 Запись под бит...</span>
-            ) : (beatUrl || currentBattle?.beatUrl) && canRecord ? (
-              <span className="text-green-400">Нажми для начала записи</span>
-            ) : (beatUrl || currentBattle?.beatUrl) ? (
-              <span className="text-orange-400">⏳ Ожидайте вашей очереди...</span>
-            ) : (
-              <span className="text-yellow-400">Сначала загрузите бит</span>
-            )}
-          </p>
+          <div style={{marginTop:12,fontFamily:"'DM Mono',monospace",fontSize:'10px',letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t3)'}}>
+            {isRecording ? 'Нажмите для остановки' : canRecord ? 'Нажмите для записи' : 'Ожидайте очереди'}
+          </div>
         </div>
 
-        {/* Записанные треки */}
+        {/* Existing recordings */}
         {(user1Recording || user2Recording) && (
-          <div className="mt-12 space-y-6">
-            <h3 className="text-xl font-bold text-center mb-4">📼 Записанные треки</h3>
-            
+          <div className="rb-mt24">
+            <span className="rb-section-label">Записанные треки</span>
             {user1Recording && (
-              <div className="p-5 bg-white/10 rounded-xl border border-purple-500/20 hover:border-purple-500/40 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center">
-                      🎤
-                    </div>
-                    <div>
-                      <span className="font-bold text-lg">{user1Recording.user.username}</span>
-                      <p className="text-xs text-green-400">Трек с битом</p>
-                    </div>
+              <div className="rb-rec-card">
+                <div className="rb-rec-card-hd">
+                  <div className="rb-rec-avatar">{user1Recording.user.username[0].toUpperCase()}</div>
+                  <div>
+                    <div className="rb-rec-user">{user1Recording.user.username}</div>
+                    <div className="rb-rec-meta">Раунд {user1Recording.round||1}</div>
                   </div>
+                  <span className="rb-badge rb-badge-green" style={{marginLeft:'auto'}}>Сохранено</span>
                 </div>
-                <MixedTrackPlayer 
-                  voiceUrl={user1Recording.voiceUrl} 
-                  beatUrl={user1Recording.beatUrl} 
-                  label={`${user1Recording.user.username} - баттл трек`}
-                  playerKey={`user1-${user1Recording.id}`}
-                />
+                <MixedTrackPlayer voiceUrl={user1Recording.voiceUrl} beatUrl={user1Recording.beatUrl} label={`${user1Recording.user.username} — трек`} playerKey={`u1-${user1Recording.id}`}/>
               </div>
             )}
-            
             {user2Recording && (
-              <div className="p-5 bg-white/10 rounded-xl border border-pink-500/20 hover:border-pink-500/40 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-pink-600 flex items-center justify-center">
-                      🎤
-                    </div>
-                    <div>
-                      <span className="font-bold text-lg">{user2Recording.user.username}</span>
-                      <p className="text-xs text-green-400">Трек с битом</p>
-                    </div>
+              <div className="rb-rec-card">
+                <div className="rb-rec-card-hd">
+                  <div className="rb-rec-avatar">{user2Recording.user.username[0].toUpperCase()}</div>
+                  <div>
+                    <div className="rb-rec-user">{user2Recording.user.username}</div>
+                    <div className="rb-rec-meta">Раунд {user2Recording.round||1}</div>
                   </div>
+                  <span className="rb-badge rb-badge-green" style={{marginLeft:'auto'}}>Сохранено</span>
                 </div>
-                <MixedTrackPlayer 
-                  voiceUrl={user2Recording.voiceUrl} 
-                  beatUrl={user2Recording.beatUrl} 
-                  label={`${user2Recording.user.username} - баттл трек`}
-                  playerKey={`user2-${user2Recording.id}`}
-                />
+                <MixedTrackPlayer voiceUrl={user2Recording.voiceUrl} beatUrl={user2Recording.beatUrl} label={`${user2Recording.user.username} — трек`} playerKey={`u2-${user2Recording.id}`}/>
               </div>
             )}
           </div>
         )}
       </div>
-    </div>
     );
   };
 
+  // ── REVIEWING ──
   const renderReviewingRecordingPhase = () => {
-    const userRole = getCurrentUserRole();
-    const myRecording = userRole === 'CREATOR' ? user1Recording : user2Recording;
-    
-    if (!myRecording) {
-      return (
-        <div className="text-center py-12">
-          <div className="animate-pulse">
-            <FaSpinner className="w-8 h-8 mx-auto mb-4 text-purple-400" />
-            <p className="text-gray-400">Загрузка записи...</p>
-          </div>
-        </div>
-      );
-    }
-    
+    const role = getCurrentUserRole();
+    const rec  = role==='CREATOR' ? user1Recording : user2Recording;
+    if (!rec) return <div className="rb-loading"><div className="rb-spinner"/><span>Загрузка записи...</span></div>;
+
     return (
-      <div className="py-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold mb-2">🎧 Прослушайте вашу запись</h2>
-          <p className="text-gray-400 text-lg mb-4">
-            Убедитесь что всё хорошо, затем передайте эстафету оппоненту
-          </p>
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg">
-            <CheckCircle className="w-4 h-4 text-green-400" />
-            <span className="text-green-400 text-sm">Запись сохранена</span>
+      <div>
+        <div className="rb-card-hd">
+          <div>
+            <div className="rb-card-title">Прослушайте запись</div>
+            <div className="rb-card-sub">Убедитесь в качестве перед передачей хода</div>
+          </div>
+          <span className="rb-badge rb-badge-green"><CheckCircle style={{width:10,height:10,display:'inline',marginRight:4}}/>Сохранено</span>
+        </div>
+
+        <div className="rb-card">
+          <span className="rb-section-label">Ваш трек — Раунд {rec.round||1}</span>
+          <MixedTrackPlayer voiceUrl={rec.voiceUrl} beatUrl={rec.beatUrl} label={`Ваша запись`} playerKey={`review-${rec.id}`}/>
+          <hr className="rb-divider" style={{marginTop:16,marginBottom:16}}/>
+          <div className="rb-info-row">
+            <span className="rb-info-lbl">Длительность</span>
+            <span>{Math.floor(rec.duration/60)}:{(rec.duration%60).toString().padStart(2,'0')}</span>
+          </div>
+          <div className="rb-info-row">
+            <span className="rb-info-lbl">Качество</span>
+            <span>{rec.recordingQuality||'medium'}</span>
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto">
-          {/* Ваша запись */}
-          <div className="bg-white/10 rounded-xl p-6 mb-6">
-            <h3 className="text-lg font-semibold mb-4 text-center">Ваша запись (Раунд {myRecording.round || 1})</h3>
-            <div className="flex justify-center">
-              <MixedTrackPlayer 
-                voiceUrl={myRecording.voiceUrl} 
-                beatUrl={myRecording.beatUrl} 
-                label={`Ваш трек - Раунд ${myRecording.round || 1}`}
-                playerKey={`my-recording-${myRecording.id}`}
-              />
-            </div>
-            
-            {/* Информация о записи */}
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <div className="flex justify-between text-sm text-gray-400">
-                <span>Длительность: {Math.floor(myRecording.duration / 60)}:{(myRecording.duration % 60).toString().padStart(2, '0')}</span>
-                <span>Качество: {myRecording.recordingQuality || 'medium'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Кнопки действий */}
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={passTurnToOpponent}
-              className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-lg transition-all transform hover:scale-105 flex items-center gap-2"
-            >
-              <Send className="w-5 h-5" />
-              Передать эстафету оппоненту
-            </button>
-            
-            <button
-              onClick={() => {
-                // Перезаписать - возвращаемся к фазе записи
-                if (userRole === 'CREATOR') {
-                  setCurrentPhase('user1_turn');
-                  setUser1Recording(null);
-                } else {
-                  setCurrentPhase('user2_turn');
-                  setUser2Recording(null);
-                }
-              }}
-              className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Mic className="w-5 h-5" />
-              Перезаписать
-            </button>
-          </div>
+        <div className="rb-row rb-row center rb-mt16">
+          <button onClick={()=>{ if(role==='CREATOR'){setCurrentPhase('user1_turn');setUser1Recording(null);}else{setCurrentPhase('user2_turn');setUser2Recording(null);} }} className="rb-btn rb-btn-ghost">
+            <Mic/> Перезаписать
+          </button>
+          <button onClick={passTurnToOpponent} className="rb-btn rb-btn-primary tall">
+            <Send/> Передать ход оппоненту
+          </button>
         </div>
       </div>
     );
   };
 
+  // ── JUDGING ──
   const renderMutualJudgingPhase = () => {
-    const userRole = getCurrentUserRole();
-    const opponentRecording = userRole === 'CREATOR' ? user2Recording : user1Recording;
-    const myRecording = userRole === 'CREATOR' ? user1Recording : user2Recording;
-    
-    console.log('Debug: renderMutualJudgingPhase - userRole:', userRole);
-    console.log('Debug: renderMutualJudgingPhase - opponentRecording:', opponentRecording);
-    console.log('Debug: renderMutualJudgingPhase - myRecording:', myRecording);
-    console.log('Debug: renderMutualJudgingPhase - hasRated:', hasRated);
-    console.log('Debug: renderMutualJudgingPhase - user1Recording:', user1Recording);
-    console.log('Debug: renderMutualJudgingPhase - user2Recording:', user2Recording);
-    
-    if (!hasRated && opponentRecording) {
-      // Показываем интерфейс оценки
-      return (
-        <div className="text-center py-12">
-          <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-          <h2 className="text-2xl font-bold mb-4">Оцените трек оппонента</h2>
-          <p className="text-gray-400 mb-8">Прослушайте трек и поставьте оценку</p>
-          
-          {/* Плеер с треком оппонента */}
-          <div className="max-w-md mx-auto mb-8">
-            <div className="bg-white/10 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Трек оппонента</h3>
-              <MixedTrackPlayer 
-                voiceUrl={opponentRecording.voiceUrl} 
-                beatUrl={opponentRecording.beatUrl} 
-                label="Трек оппонента" 
-                playerKey={`opponent-${opponentRecording.id}`}
-              />
-            </div>
+    const role   = getCurrentUserRole();
+    const oppRec = role==='CREATOR' ? user2Recording : user1Recording;
+
+    if (!hasRated && oppRec) return (
+      <div>
+        <div className="rb-card-hd">
+          <div>
+            <div className="rb-card-title">Оцените трек оппонента</div>
+            <div className="rb-card-sub">Прослушайте и поставьте оценку</div>
           </div>
-          
-          {/* Система оценки */}
-          <div className="max-w-md mx-auto">
-            <h3 className="text-lg font-semibold mb-4">Ваша оценка</h3>
-            <div className="flex justify-center gap-2 mb-6">
-              {[1, 2, 3, 4, 5].map((rating) => (
-                <button
-                  key={rating}
-                  onClick={() => handleRatingSubmit(rating)}
-                  className="w-12 h-12 rounded-full bg-white/10 hover:bg-yellow-400/20 transition-colors flex items-center justify-center"
-                >
-                  <span className="text-2xl">⭐</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-sm text-gray-400">Нажмите на звезды для оценки</p>
-          </div>
+          <span className="rb-badge rb-badge-purple">Судейство</span>
         </div>
-      );
-    } else if (hasRated && !opponentHasRated) {
-      // Ждем оценки от оппонента
+        <div className="rb-card">
+          <span className="rb-section-label">Трек оппонента</span>
+          <MixedTrackPlayer voiceUrl={oppRec.voiceUrl} beatUrl={oppRec.beatUrl} label="Трек оппонента" playerKey={`opp-${oppRec.id}`}/>
+        </div>
+        <div className="rb-card rb-centered">
+          <span className="rb-section-label">Ваша оценка</span>
+          <div className="rb-stars">
+            {[1,2,3,4,5].map(r => (
+              <button key={r} onClick={()=>handleRatingSubmit(r)} className="rb-star-btn">⭐</button>
+            ))}
+          </div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:'10px',color:'var(--t3)',letterSpacing:'.06em'}}>Нажмите для оценки</div>
+        </div>
+      </div>
+    );
+
+    if (hasRated && !opponentHasRated) return (
+      <div className="rb-hero" style={{paddingTop:40}}>
+        <div className="rb-pulse-ring"><Clock/></div>
+        <div className="rb-hero-title">Ожидание оценки</div>
+        <div className="rb-hero-desc">Вы оценили трек. Ждём оппонента...</div>
+        <div style={{marginTop:24}}>
+          <div className="rb-stars">
+            {[1,2,3,4,5].map(r=>(
+              <div key={r} className={`rb-star-btn${r<=(role==='CREATOR'?(user1Rating||0):(user2Rating||0))?' lit':''}`} style={{cursor:'default'}}>⭐</div>
+            ))}
+          </div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:'10px',color:'var(--t3)',marginTop:8,letterSpacing:'.06em'}}>ВАША ОЦЕНКА</div>
+        </div>
+      </div>
+    );
+
+    if (hasRated && opponentHasRated) {
+      const myScore  = role==='CREATOR'?(user1Rating||0):(user2Rating||0);
+      const oppScore = role==='CREATOR'?(user2Rating||0):(user1Rating||0);
       return (
-        <div className="text-center py-12">
-          <Clock className="w-16 h-16 mx-auto mb-4 text-orange-400 animate-pulse" />
-          <h2 className="text-2xl font-bold mb-4">Ожидайте оценки оппонента</h2>
-          <p className="text-gray-400 mb-8">Вы оценили трек, теперь ждем оценки от оппонента...</p>
-          
-          <div className="max-w-md mx-auto">
-            <div className="bg-white/10 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Ваша оценка</h3>
-              <div className="flex justify-center">
-                {[1, 2, 3, 4, 5].map((rating) => (
-                  <span key={rating} className="text-2xl">
-                    {rating <= (userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) ? '⭐' : '☆'}
-                  </span>
-                ))}
-              </div>
+        <div>
+          <div className="rb-card-hd">
+            <div className="rb-card-title">Результаты</div>
+            <span className="rb-badge rb-badge-purple">Завершено</span>
+          </div>
+          <div className="rb-score-grid">
+            <div className={`rb-score-cell${myScore>oppScore?' winner':''}`}>
+              <div className="rb-score-num">{myScore}</div>
+              <div className="rb-score-label">Оппонент вам</div>
+              <div className="rb-score-name">Вы</div>
+            </div>
+            <div className={`rb-score-cell${oppScore>myScore?' winner':''}`}>
+              <div className="rb-score-num">{oppScore}</div>
+              <div className="rb-score-label">Вы оппоненту</div>
+              <div className="rb-score-name">Оппонент</div>
             </div>
           </div>
-        </div>
-      );
-    } else if (hasRated && opponentHasRated) {
-      // Показываем результаты
-      return (
-        <div className="text-center py-12">
-          <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-          <h2 className="text-2xl font-bold mb-4">Результаты баттла</h2>
-          <p className="text-gray-400 mb-8">Оба участника оценили треки друг друга</p>
-          
-          <div className="max-w-md mx-auto space-y-4">
-            <div className="bg-white/10 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Оценки</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Ваша оценка оппоненту:</span>
-                  <span>{userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)} ⭐</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Оценка оппонента вам:</span>
-                  <span>{userRole === 'CREATOR' ? (user2Rating || 0) : (user1Rating || 0)} ⭐</span>
-                </div>
-              </div>
+          <div className="rb-card rb-centered">
+            <span className="rb-section-label">Итог</span>
+            <div style={{fontSize:20,fontWeight:700,letterSpacing:'-.02em',marginBottom:20}}>
+              {myScore>oppScore ? 'Вы победили' : myScore<oppScore ? 'Оппонент победил' : 'Ничья'}
             </div>
-            
-            <div className="bg-white/10 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Победитель</h3>
-              <p className="text-xl font-bold">
-                {((userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) > (userRole === 'CREATOR' ? (user2Rating || 0) : (user1Rating || 0))) 
-                  ? 'Вы победили! 🎉' 
-                  : ((userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) < (userRole === 'CREATOR' ? (user2Rating || 0) : (user1Rating || 0)))
-                  ? 'Оппонент победил'
-                  : 'Ничья! 🤝'
-                }
-              </p>
-            </div>
-            
-            <button
-              onClick={() => setCurrentPhase('finished')}
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-medium transition-all"
-            >
-              Завершить баттл
+            <button onClick={()=>setCurrentPhase('finished')} className="rb-btn rb-btn-primary">
+              Завершить
             </button>
           </div>
         </div>
       );
     }
-    
+
     return (
-      <div className="text-center py-12">
-        {isLoadingRecordings ? (
-          <div>
-            <div className="w-16 h-16 mx-auto border-4 border-purple-400 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-400 mb-2">Загрузка записей...</p>
-            <div className="w-48 mx-auto bg-white/10 rounded-full h-2">
-              <div className="bg-purple-400 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">60%</p>
-          </div>
-        ) : (
-          <div>
-            <p className="text-gray-400">Загрузка...</p>
-            <button 
-              onClick={loadBattleRecordings}
-              className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm"
-            >
-              Загрузить записи
-            </button>
-          </div>
-        )}
+      <div className="rb-loading">
+        {isLoadingRecordings
+          ? <><div className="rb-spinner"/><span>Загрузка записей...</span></>
+          : <><button onClick={loadBattleRecordings} className="rb-btn rb-btn-ghost">Загрузить записи</button></>
+        }
       </div>
     );
   };
 
+  // ── WAITING FOR OPPONENT RATING ──
   const renderWaitingForOpponentRatingPhase = () => {
-    const userRole = getCurrentUserRole();
-    
+    const role = getCurrentUserRole();
     return (
-      <div className="text-center py-12">
-        <Clock className="w-16 h-16 mx-auto mb-4 text-orange-400 animate-pulse" />
-        <h2 className="text-2xl font-bold mb-4">Ожидайте оценки оппонента</h2>
-        <p className="text-gray-400 mb-8">Вы оценили трек, теперь ждем оценки от оппонента...</p>
-        
-        <div className="max-w-md mx-auto">
-          <div className="bg-white/10 rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4">Ваша оценка</h3>
-            <div className="flex justify-center">
-              {[1, 2, 3, 4, 5].map((rating) => (
-                <span key={rating} className="text-2xl">
-                  {rating <= (userRole === 'CREATOR' ? (user1Rating || 0) : (user2Rating || 0)) ? '⭐' : '☆'}
-                </span>
-              ))}
-            </div>
+      <div className="rb-hero" style={{paddingTop:40}}>
+        <div className="rb-pulse-ring"><Clock/></div>
+        <div className="rb-hero-title">Ожидание оценки</div>
+        <div className="rb-hero-desc">Вы оценили трек. Ждём оппонента...</div>
+        <div style={{marginTop:24}}>
+          <div className="rb-stars">
+            {[1,2,3,4,5].map(r=>(
+              <div key={r} className={`rb-star-btn${r<=(role==='CREATOR'?(user1Rating||0):(user2Rating||0))?' lit':''}`} style={{cursor:'default'}}>⭐</div>
+            ))}
           </div>
         </div>
       </div>
     );
   };
 
+  // ── FINISHED ──
   const renderFinishedPhase = () => {
     if (!judgeResult || !currentBattle) return null;
-
     const { winner, user1Total, user2Total } = judgeResult;
-    const user1 = currentBattle.participants.find(p => p.role === 'CREATOR')?.user;
-    const user2 = currentBattle.participants.find(p => p.role === 'OPPONENT')?.user;
-
+    const u1 = currentBattle.participants.find(p=>p.role==='CREATOR')?.user;
+    const u2 = currentBattle.participants.find(p=>p.role==='OPPONENT')?.user;
     return (
-      <div className="text-center py-12">
-        <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-        <h2 className="text-3xl font-bold mb-4">Баттл окончен!</h2>
-        
-        <div className="max-w-md mx-auto mb-8">
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className={`p-4 rounded-lg ${winner === 'USER1' ? 'bg-green-600/30' : 'bg-white/10'}`}>
-              <h3 className="font-bold">{user1?.username}</h3>
-              <p className="text-2xl font-bold">{user1Total}</p>
-              <p className="text-sm text-gray-400">очков</p>
-            </div>
-            <div className={`p-4 rounded-lg ${winner === 'USER2' ? 'bg-green-600/30' : 'bg-white/10'}`}>
-              <h3 className="font-bold">{user2?.username}</h3>
-              <p className="text-2xl font-bold">{user2Total}</p>
-              <p className="text-sm text-gray-400">очков</p>
-            </div>
-          </div>
-          
-          <div className="text-2xl font-bold mb-4">
-            {winner === 'DRAW' ? 'Ничья!' : 
-             winner === 'USER1' ? `${user1?.username} победил!` : 
-             `${user2?.username} победил!`}
-          </div>
-          
-          {judgeResult.judge?.feedback && (
-            <div className="p-4 bg-white/5 rounded-lg text-left">
-              <h4 className="font-semibold mb-2">🤖 AI Анализ:</h4>
-              <p className="text-sm text-gray-300">{judgeResult.judge.feedback}</p>
-              <div className="mt-2 text-xs text-gray-400">
-                Уверенность: {Math.round((judgeResult.judge.confidence || 0) * 100)}%
-              </div>
-            </div>
-          )}
+      <div>
+        <div className="rb-card-hd">
+          <div className="rb-card-title">Баттл завершён</div>
+          <span className="rb-badge rb-badge-muted">Финал</span>
         </div>
-
-        <button
-          onClick={startNewBattle}
-          className="px-8 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
-        >
-          Новый баттл
-        </button>
+        <div className="rb-score-grid">
+          <div className={`rb-score-cell${winner==='USER1'?' winner':''}`}>
+            <div className="rb-score-num">{user1Total}</div>
+            <div className="rb-score-name">{u1?.username}</div>
+          </div>
+          <div className={`rb-score-cell${winner==='USER2'?' winner':''}`}>
+            <div className="rb-score-num">{user2Total}</div>
+            <div className="rb-score-name">{u2?.username}</div>
+          </div>
+        </div>
+        {judgeResult.judge?.feedback && (
+          <div className="rb-card">
+            <span className="rb-section-label">AI Анализ</span>
+            <p style={{fontSize:13,color:'var(--t2)',lineHeight:1.65}}>{judgeResult.judge.feedback}</p>
+            <div style={{marginTop:10,fontFamily:"'DM Mono',monospace",fontSize:'9.5px',color:'var(--t3)'}}>
+              Уверенность: {Math.round((judgeResult.judge.confidence||0)*100)}%
+            </div>
+          </div>
+        )}
+        <div className="rb-row rb-row center rb-mt16">
+          <button onClick={startNewBattle} className="rb-btn rb-btn-primary tall"><Sparkles/> Новый баттл</button>
+        </div>
       </div>
     );
   };
 
+  // ── HISTORY ──
   const renderHistory = () => (
-    <div className="py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">История баттлов</h2>
-        <button
-          onClick={() => setCurrentPhase('waiting')}
-          className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm"
-        >
-          Назад
-        </button>
-      </div>
-      
-      {userBattles.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <Trophy className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <p>Пока нет завершенных баттлов</p>
+    <div>
+      <div className="rb-card-hd">
+        <div>
+          <div className="rb-card-title">История баттлов</div>
+          <div className="rb-card-sub">{userBattles.length} записей</div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {userBattles.map(battle => {
-            const user1 = battle.participants.find(p => p.role === 'CREATOR')?.user;
-            const user2 = battle.participants.find(p => p.role === 'OPPONENT')?.user;
-            
+        <button onClick={()=>setCurrentPhase('waiting')} className="rb-btn rb-btn-ghost">Назад</button>
+      </div>
+
+      {userBattles.length===0
+        ? <div className="rb-hero" style={{paddingTop:32}}>
+            <div className="rb-hero-icon"><Trophy/></div>
+            <div className="rb-hero-title">Пусто</div>
+            <div className="rb-hero-desc">Завершённых баттлов пока нет</div>
+          </div>
+        : userBattles.map(b => {
+            const u1=b.participants.find(p=>p.role==='CREATOR')?.user;
+            const u2=b.participants.find(p=>p.role==='OPPONENT')?.user;
+            const statusMap: Record<string,{cls:string;label:string}> = {
+              FINISHED:  {cls:'rb-badge-green',  label:'Завершён'},
+              JUDGING:   {cls:'rb-badge-purple', label:'Судейство'},
+              USER1_TURN:{cls:'rb-badge-amber',  label:'В процессе'},
+              USER2_TURN:{cls:'rb-badge-amber',  label:'В процессе'},
+            };
+            const st = statusMap[b.status] || {cls:'rb-badge-muted', label:b.status};
             return (
-              <div key={battle.id} className="bg-white/10 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <span className="font-semibold">{user1?.username}</span>
-                    <span className="text-gray-400">vs</span>
-                    <span className="font-semibold">{user2?.username}</span>
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    {new Date(battle.createdAt).toLocaleDateString()}
+              <div key={b.id} className="rb-history-row">
+                <div className="rb-history-top">
+                  <div className="rb-history-title">{b.title}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <span className={`rb-badge ${st.cls}`}>{st.label}</span>
+                    <span className="rb-history-date">{new Date(b.createdAt).toLocaleDateString('ru-RU')}</span>
                   </div>
                 </div>
-                
-                <div className="text-center mb-4">
-                  <span className="text-lg font-bold">{battle.title}</span>
-                  <div className="text-sm text-gray-400">
-                    Статус: {battle.status === 'FINISHED' ? 'Завершен' : battle.status === 'JUDGING' ? 'На судействе' : 'В процессе'}
-                  </div>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,fontFamily:"'DM Mono',monospace",fontSize:'11px',color:'var(--t3)'}}>
+                  <span>{u1?.username}</span>
+                  <span style={{color:'var(--t4)'}}>VS</span>
+                  <span>{u2?.username}</span>
+                  {b.winner && <><span style={{color:'var(--t4)'}}>·</span><span style={{color:'var(--t2)'}}>Победитель: {b.winner==='DRAW'?'Ничья':b.winner==='USER1'?u1?.username:u2?.username}</span></>}
                 </div>
-                
-                {battle.winner && (
-                  <div className="text-center font-semibold mb-4">
-                    {battle.winner === 'DRAW' ? 'Ничья' : 
-                     battle.winner === 'USER1' ? user1?.username : user2?.username} победил
-                  </div>
-                )}
-                
-                {battle.recordings.length > 0 && (
-                  <div className="flex gap-2 justify-center">
-                    {battle.recordings.map(recording => (
-                      <MixedTrackPlayer 
-                        key={recording.id}
-                        voiceUrl={recording.voiceUrl} 
-                        beatUrl={recording.beatUrl} 
-                        label={recording.user.username}
-                      />
-                    ))}
-                  </div>
-                )}
+                {b.recordings.length>0 && b.recordings.map(r=>(
+                  <MixedTrackPlayer key={r.id} voiceUrl={r.voiceUrl} beatUrl={r.beatUrl} label={r.user.username}/>
+                ))}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+      }
     </div>
   );
 
+  // ─────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────
   return (
-    <div className="h-screen bg-gradient-to-br from-[#0a0a1a] to-[#1a1a3e] text-white flex flex-col">
-      {/* Хедер */}
-      <div className="bg-black/40 backdrop-blur-sm border-b border-white/10 px-6 py-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            🎤 Рэп Баттл
-          </h1>
-          <div className="flex items-center gap-2">
+    <div className="rb">
+      <style>{RAP_BATTLE_CSS}</style>
+
+      <div className="rb-wrap">
+        {/* Top bar */}
+        <div className="rb-topbar">
+          <div>
+            <div className="rb-page-label">Соревнования</div>
+            <div className="rb-page-name">Рэп Баттл</div>
+          </div>
+          <div className="rb-topbar-r">
             {currentBattle && (
-              <div className="px-3 py-1 bg-white/10 rounded-lg text-sm">
-                {currentBattle.title}
-              </div>
-            )}
-            {/* Кнопка завершения баттла и индикатор сохранения */}
-            {currentBattle && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={finishBattle}
-                  className="flex items-center gap-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-xs text-red-400 hover:text-red-300 transition-colors"
-                  title="Завершить баттл"
-                >
-                  <XCircle className="w-3 h-3" />
-                  <span>Завершить</span>
+              <>
+                <span className="rb-badge rb-badge-purple">{currentBattle.title}</span>
+                <button onClick={finishBattle} className="rb-btn-icon danger" title="Завершить баттл">
+                  <XCircle/>
                 </button>
-                
-                <div className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-xs">
-                  {isSaving ? (
-                    <>
-                      <Save className="w-3 h-3 text-green-400 animate-pulse" />
-                      <span className="text-green-400">Сохранение...</span>
-                    </>
-                  ) : lastSaved > 0 ? (
-                    <>
-                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                      <span className="text-gray-400">
-                        {new Date(lastSaved).toLocaleTimeString('ru-RU', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
+                {isSaving
+                  ? <div className="rb-btn-icon" title="Сохранение..."><Save style={{animation:'rb-spin 1.5s linear infinite'}}/></div>
+                  : lastSaved>0
+                    ? <div className="rb-btn-icon" title={`Сохранено в ${new Date(lastSaved).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`}><CheckCircle/></div>
+                    : null
+                }
+              </>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Основной контент */}
-      <div className="flex-1 overflow-auto">
+        {/* Error */}
         {error && (
-          <div className="m-4 p-3 bg-red-600/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
-            <div className="flex items-center justify-between">
-              <span>{error}</span>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded text-xs transition-colors"
-              >
-                Обновить страницу
-              </button>
-            </div>
+          <div className="rb-alert rb-alert-error">
+            <span>{error}</span>
+            <button className="rb-alert-close" onClick={()=>setError('')}>×</button>
           </div>
         )}
-        
-        {currentPhase === 'waiting' && renderWaitingPhase()}
-        {currentPhase === 'creating' && renderCreatingPhase()}
-        {currentPhase === 'inviting' && renderInvitingPhase()}
-        {currentPhase === 'waiting_for_opponent' && renderWaitingForOpponentPhase()}
-        
-        {/* Отладочная информация */}
-        <div className="fixed bottom-4 right-4 bg-black/80 text-white p-2 text-xs">
-          Debug: currentPhase = {currentPhase}
-        </div>
-        {(currentPhase === 'user1_turn' || currentPhase === 'user2_turn') && renderBattlePhase()}
-        {currentPhase === 'reviewing_recording' && renderReviewingRecordingPhase()}
-        {currentPhase === 'mutual_judging' && renderMutualJudgingPhase()}
-        {currentPhase === 'waiting_for_opponent_rating' && renderWaitingForOpponentRatingPhase()}
-        {currentPhase === 'finished' && renderFinishedPhase()}
-        {currentPhase === 'history' && renderHistory()}
+
+        {/* Phase content */}
+        {currentPhase==='waiting'                  && renderWaitingPhase()}
+        {currentPhase==='creating'                 && renderCreatingPhase()}
+        {currentPhase==='inviting'                 && renderInvitingPhase()}
+        {currentPhase==='waiting_for_opponent'     && renderWaitingForOpponentPhase()}
+        {(currentPhase==='user1_turn'||currentPhase==='user2_turn') && renderBattlePhase()}
+        {currentPhase==='reviewing_recording'      && renderReviewingRecordingPhase()}
+        {currentPhase==='mutual_judging'           && renderMutualJudgingPhase()}
+        {currentPhase==='waiting_for_opponent_rating' && renderWaitingForOpponentRatingPhase()}
+        {currentPhase==='finished'                 && renderFinishedPhase()}
+        {currentPhase==='history'                  && renderHistory()}
       </div>
     </div>
   );
