@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStudioStore } from '../store/useStudioStore';
 import { Volume2, Headphones, Zap, Settings } from 'lucide-react';
+import { FL_COLORS, FL_SHADOWS } from '../styles/flStudioColors';
 
 export function Mixer() {
   const { channels, updateChannel } = useStudioStore();
@@ -29,69 +30,100 @@ export function Mixer() {
   };
 
   return (
-    <div className="fixed bottom-20 left-0 right-0 bg-gray-900 border-t border-gray-700 z-30 transition-all duration-200">
+    <div className="flex flex-col h-full" style={{ backgroundColor: FL_COLORS.MIXER_BG }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700">
+      <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: FL_COLORS.BORDER_DARK, backgroundColor: FL_COLORS.PANEL_BG }}>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-gradient-to-r from-orange-600/20 to-red-600/20 px-3 py-1.5 rounded-lg border border-orange-500/30">
-            <Volume2 className="w-4 h-4 text-orange-400" />
-            <span className="text-sm font-bold text-white tracking-wide">MIXER</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border" style={{ 
+            backgroundColor: FL_COLORS.ACCENT_ORANGE + '20',
+            borderColor: FL_COLORS.ACCENT_ORANGE + '50'
+          }}>
+            <Volume2 className="w-4 h-4" style={{ color: FL_COLORS.ACCENT_ORANGE }} />
+            <span className="text-sm font-bold tracking-wide" style={{ color: FL_COLORS.TEXT_PRIMARY }}>MIXER</span>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
-          <button className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 transition-colors">
+          <button 
+            className="p-2 rounded transition-colors"
+            style={{ 
+              backgroundColor: FL_COLORS.BUTTON_BG,
+              color: FL_COLORS.TEXT_SECONDARY
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_HOVER;
+              e.currentTarget.style.color = FL_COLORS.TEXT_PRIMARY;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_BG;
+              e.currentTarget.style.color = FL_COLORS.TEXT_SECONDARY;
+            }}
+          >
             <Settings className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* Channel Strips */}
-      <div className="flex gap-2 p-4 overflow-x-auto bg-gray-900">
+      <div className="flex gap-2 p-4 overflow-x-auto" style={{ backgroundColor: FL_COLORS.MIXER_BG }}>
         {/* Channel Strips */}
         {channels.map((channel) => (
           <div
             key={channel.id}
-            className={`flex flex-col items-center w-20 bg-gray-800 rounded-lg border-2 transition-all duration-150 ${
+            className={`flex flex-col items-center w-20 rounded-lg border-2 transition-all duration-150 ${
               selectedChannel === channel.id
-                ? 'border-blue-500 shadow-lg shadow-blue-500/20'
-                : 'border-gray-700 hover:border-gray-600'
+                ? ''
+                : ''
             }`}
+            style={{
+              backgroundColor: FL_COLORS.CHANNEL_BG,
+              borderColor: selectedChannel === channel.id ? FL_COLORS.ACCENT_BLUE : FL_COLORS.BORDER_DARK,
+              boxShadow: selectedChannel === channel.id ? FL_SHADOWS.GLOW : 'none'
+            }}
             onClick={() => setSelectedChannel(channel.id)}
           >
             {/* Channel Name */}
-            <div className="text-xs text-gray-400 truncate w-full text-center px-1 py-2 border-b border-gray-700">
+            <div className="text-xs truncate w-full text-center px-1 py-2 border-b" style={{ 
+              color: FL_COLORS.TEXT_MUTED,
+              borderColor: FL_COLORS.BORDER_DARK
+            }}>
               {channel.name}
             </div>
 
             {/* Peak Meter */}
             <div className="flex-1 relative w-full py-2">
-              <div className="absolute inset-x-0 top-0 bottom-0 bg-gray-700 rounded">
+              <div className="absolute inset-x-0 top-0 bottom-0 rounded" style={{ backgroundColor: FL_COLORS.METER_BG }}>
                 <div 
-                  className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-green-500 via-yellow-500 to-red-500 rounded transition-all duration-100"
-                  style={{ height: `${channel.volume * 100}%` }}
+                  className="absolute bottom-0 left-0 right-0 rounded transition-all duration-100"
+                  style={{ 
+                    height: `${channel.volume * 100}%`,
+                    background: `linear-gradient(to top, ${FL_COLORS.METER_GREEN}, ${FL_COLORS.METER_YELLOW}, ${FL_COLORS.METER_RED})`
+                  }}
                 />
               </div>
             </div>
 
             {/* Volume Fader */}
             <div className="w-full px-2 py-2">
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={channel.volume}
-                onChange={(e) => handleVolumeChange(channel.id, parseFloat(e.target.value))}
-                className="w-full h-1 bg-gray-700 accent-blue-500 transform -rotate-90 origin-center"
-                style={{
-                  width: '60px',
-                  marginLeft: '-20px',
-                  marginTop: '30px',
-                  marginBottom: '30px'
-                }}
-              />
-              <div className="text-xs text-center text-gray-400">
+              <div className="relative" style={{ height: '80px' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={channel.volume}
+                  onChange={(e) => handleVolumeChange(channel.id, parseFloat(e.target.value))}
+                  className="absolute w-16 h-1"
+                  style={{
+                    transform: 'rotate(-90deg)',
+                    transformOrigin: 'center',
+                    left: '-8px',
+                    top: '40px',
+                    accentColor: FL_COLORS.FADER_HANDLE
+                  }}
+                />
+              </div>
+              <div className="text-xs text-center" style={{ color: FL_COLORS.TEXT_MUTED }}>
                 {Math.round(channel.volume * 100)}
               </div>
             </div>
@@ -105,9 +137,10 @@ export function Mixer() {
                 step="0.1"
                 value={channel.pan}
                 onChange={(e) => handlePanChange(channel.id, parseFloat(e.target.value))}
-                className="w-full h-1 bg-gray-700 accent-green-500"
+                className="w-full h-1"
+                style={{ accentColor: FL_COLORS.ACCENT_GREEN }}
               />
-              <div className="text-xs text-center text-gray-400">
+              <div className="text-xs text-center" style={{ color: FL_COLORS.TEXT_MUTED }}>
                 {channel.pan > 0 ? `R${Math.abs(Math.round(channel.pan * 10))}` : 
                  channel.pan < 0 ? `L${Math.abs(Math.round(channel.pan * 10))}` : 'C'}
               </div>
@@ -120,11 +153,23 @@ export function Mixer() {
                   e.stopPropagation();
                   handleMuteToggle(channel.id);
                 }}
-                className={`flex-1 px-1 py-1 text-xs rounded transition-colors ${
-                  channel.muted
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className="flex-1 px-1 py-1 text-xs rounded transition-colors"
+                style={{
+                  backgroundColor: channel.muted ? FL_COLORS.CHANNEL_MUTE : FL_COLORS.BUTTON_BG,
+                  color: channel.muted ? FL_COLORS.TEXT_PRIMARY : FL_COLORS.TEXT_SECONDARY
+                }}
+                onMouseEnter={(e) => {
+                  if (!channel.muted) {
+                    e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_HOVER;
+                    e.currentTarget.style.color = FL_COLORS.TEXT_PRIMARY;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!channel.muted) {
+                    e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_BG;
+                    e.currentTarget.style.color = FL_COLORS.TEXT_SECONDARY;
+                  }
+                }}
               >
                 M
               </button>
@@ -133,11 +178,23 @@ export function Mixer() {
                   e.stopPropagation();
                   handleSoloToggle(channel.id);
                 }}
-                className={`flex-1 px-1 py-1 text-xs rounded transition-colors ${
-                  channel.solo
-                    ? 'bg-yellow-600 text-black'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className="flex-1 px-1 py-1 text-xs rounded transition-colors"
+                style={{
+                  backgroundColor: channel.solo ? FL_COLORS.CHANNEL_SOLO : FL_COLORS.BUTTON_BG,
+                  color: channel.solo ? FL_COLORS.TEXT_PRIMARY : FL_COLORS.TEXT_SECONDARY
+                }}
+                onMouseEnter={(e) => {
+                  if (!channel.solo) {
+                    e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_HOVER;
+                    e.currentTarget.style.color = FL_COLORS.TEXT_PRIMARY;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!channel.solo) {
+                    e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_BG;
+                    e.currentTarget.style.color = FL_COLORS.TEXT_SECONDARY;
+                  }
+                }}
               >
                 S
               </button>
@@ -145,7 +202,21 @@ export function Mixer() {
 
             {/* FX Slot */}
             <div className="w-full px-1 pb-2">
-              <button className="w-full py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300 transition-colors flex items-center justify-center gap-1">
+              <button 
+                className="w-full py-1 rounded text-xs transition-colors flex items-center justify-center gap-1"
+                style={{
+                  backgroundColor: FL_COLORS.BUTTON_BG,
+                  color: FL_COLORS.TEXT_SECONDARY
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_HOVER;
+                  e.currentTarget.style.color = FL_COLORS.TEXT_PRIMARY;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_BG;
+                  e.currentTarget.style.color = FL_COLORS.TEXT_SECONDARY;
+                }}
+              >
                 <Zap className="w-3 h-3" />
                 FX
               </button>
@@ -154,40 +225,71 @@ export function Mixer() {
         ))}
 
         {/* Master Channel */}
-        <div className="flex flex-col items-center w-20 bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg border-2 border-orange-500 shadow-lg shadow-orange-500/20">
-          <div className="text-xs text-orange-400 truncate w-full text-center px-1 py-2 border-b border-orange-600 font-bold">
+        <div 
+          className="flex flex-col items-center w-20 rounded-lg border-2"
+          style={{
+            background: `linear-gradient(to bottom, ${FL_COLORS.CHANNEL_BG}, ${FL_COLORS.PANEL_BG})`,
+            borderColor: FL_COLORS.ACCENT_ORANGE,
+            boxShadow: FL_SHADOWS.GLOW
+          }}
+        >
+          <div className="text-xs truncate w-full text-center px-1 py-2 border-b font-bold" style={{ 
+            color: FL_COLORS.ACCENT_ORANGE,
+            borderColor: FL_COLORS.ACCENT_ORANGE + '50'
+          }}>
             MASTER
           </div>
 
           {/* Master Peak Meter */}
           <div className="flex-1 relative w-full py-2">
-            <div className="absolute inset-x-0 top-0 bottom-0 bg-gray-700 rounded">
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-orange-500 via-yellow-500 to-red-500 rounded" style={{ height: '80%' }} />
+            <div className="absolute inset-x-0 top-0 bottom-0 rounded" style={{ backgroundColor: FL_COLORS.METER_BG }}>
+              <div 
+                className="absolute bottom-0 left-0 right-0 rounded" 
+                style={{ 
+                  height: '80%',
+                  background: `linear-gradient(to top, ${FL_COLORS.ACCENT_ORANGE}, ${FL_COLORS.METER_YELLOW}, ${FL_COLORS.METER_RED})`
+                }} 
+              />
             </div>
           </div>
 
           {/* Master Volume */}
           <div className="w-full px-2 py-2">
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              defaultValue="0.8"
-              className="w-full h-1 bg-gray-700 accent-orange-500 transform -rotate-90 origin-center"
-              style={{
-                width: '60px',
-                marginLeft: '-20px',
-                marginTop: '30px',
-                marginBottom: '30px'
-              }}
-            />
-            <div className="text-xs text-center text-orange-400 font-bold">80</div>
+            <div className="relative" style={{ height: '80px' }}>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                defaultValue="0.8"
+                className="absolute w-16 h-1"
+                style={{
+                  transform: 'rotate(-90deg)',
+                  transformOrigin: 'center',
+                  left: '-8px',
+                  top: '40px',
+                  accentColor: FL_COLORS.ACCENT_ORANGE
+                }}
+              />
+            </div>
+            <div className="text-xs text-center font-bold" style={{ color: FL_COLORS.ACCENT_ORANGE }}>80</div>
           </div>
 
           {/* Master Controls */}
           <div className="w-full px-1 pb-2">
-            <button className="w-full py-1 bg-orange-600 hover:bg-orange-500 rounded text-xs text-black font-bold transition-colors flex items-center justify-center gap-1">
+            <button 
+              className="w-full py-1 rounded text-xs font-bold transition-colors flex items-center justify-center gap-1"
+              style={{
+                backgroundColor: FL_COLORS.ACCENT_ORANGE,
+                color: FL_COLORS.TEXT_PRIMARY
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = FL_COLORS.ACCENT_ORANGE + 'DD';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = FL_COLORS.ACCENT_ORANGE;
+              }}
+            >
               <Headphones className="w-3 h-3" />
               OUT
             </button>

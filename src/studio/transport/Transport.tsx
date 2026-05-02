@@ -3,6 +3,7 @@ import { Play, Pause, Square, Repeat, Settings2, Volume2 } from "lucide-react";
 import { useTransport } from "../engine/useTransport";
 import { useStudioStore } from "../store/useStudioStore";
 import { globalScheduler } from "../engine/scheduler";
+import { FL_COLORS, FL_GRADIENTS, FL_SHADOWS, FL_BORDER_RADIUS } from "../styles/flStudioColors";
 
 // Maximum timeline length in beats (8 bars * 4 beats)
 const MAX_BEATS = 32;
@@ -83,18 +84,36 @@ export function Transport() {
   const seekProgress = Math.min((seekValue / MAX_BEATS) * 100, 100);
 
   return (
-    <div className="flex flex-col bg-gray-900 border-b border-gray-800">
+    <div className="flex flex-col rounded-lg" style={{ backgroundColor: FL_COLORS.TRANSPORT_BG, boxShadow: FL_SHADOWS.PANEL, border: `1px solid ${FL_COLORS.BORDER_DARK}` }}>
       {/* Main Controls Row */}
-      <div className="flex items-center gap-6 px-6 py-3">
+      <div className="flex items-center gap-4 px-4 py-3">
         {/* Transport Controls */}
         <div className="flex items-center gap-2">
           <button
             onClick={togglePlay}
-            className={`p-2.5 rounded-lg transition-colors ${
+            className={`p-3 rounded-lg transition-all duration-150 ${
               isPlaying
-                ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
-                : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                ? ""
+                : ""
             }`}
+            style={{
+              backgroundColor: isPlaying ? FL_COLORS.PLAY_BUTTON : FL_COLORS.BUTTON_BG,
+              color: FL_COLORS.TEXT_PRIMARY,
+              border: `1px solid ${isPlaying ? FL_COLORS.PLAY_BUTTON : FL_COLORS.BORDER_DARK}`,
+              boxShadow: isPlaying ? FL_SHADOWS.GLOW : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (!isPlaying) {
+                e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_HOVER;
+                e.currentTarget.style.borderColor = FL_COLORS.ACCENT_BLUE;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isPlaying) {
+                e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_BG;
+                e.currentTarget.style.borderColor = FL_COLORS.BORDER_DARK;
+              }
+            }}
             title={isPlaying ? "Pause (Space)" : "Play (Space)"}
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
@@ -102,7 +121,18 @@ export function Transport() {
 
           <button
             onClick={stop}
-            className="p-2.5 bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-3 rounded-lg transition-all duration-150"
+            style={{
+              backgroundColor: FL_COLORS.STOP_BUTTON,
+              color: FL_COLORS.TEXT_PRIMARY,
+              border: `1px solid ${FL_COLORS.STOP_BUTTON}`,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = FL_COLORS.STOP_BUTTON + 'DD';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = FL_COLORS.STOP_BUTTON;
+            }}
             title="Stop (Esc)"
           >
             <Square className="w-5 h-5" />
@@ -110,11 +140,28 @@ export function Transport() {
 
           <button
             onClick={toggleLoop}
-            className={`p-2.5 rounded-lg transition-colors ${
+            className={`p-3 rounded-lg transition-all duration-150 ${
               loopEnabled
-                ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
-                : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+                ? ""
+                : ""
             }`}
+            style={{
+              backgroundColor: loopEnabled ? FL_COLORS.ACCENT_BLUE : FL_COLORS.BUTTON_BG,
+              color: FL_COLORS.TEXT_PRIMARY,
+              border: `1px solid ${loopEnabled ? FL_COLORS.ACCENT_BLUE : FL_COLORS.BORDER_DARK}`,
+            }}
+            onMouseEnter={(e) => {
+              if (!loopEnabled) {
+                e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_HOVER;
+                e.currentTarget.style.borderColor = FL_COLORS.ACCENT_BLUE;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loopEnabled) {
+                e.currentTarget.style.backgroundColor = FL_COLORS.BUTTON_BG;
+                e.currentTarget.style.borderColor = FL_COLORS.BORDER_DARK;
+              }
+            }}
             title="Toggle Loop"
           >
             <Repeat className="w-5 h-5" />
@@ -122,49 +169,82 @@ export function Transport() {
         </div>
 
         {/* Time Display */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center bg-gray-950 px-4 py-2 rounded-lg border border-gray-800">
-            <span className="text-2xl font-mono font-bold text-white tabular-nums">
+        <div className="flex items-center gap-3">
+          <div 
+            className="flex items-center px-4 py-2 rounded-lg font-mono" 
+            style={{ 
+              backgroundColor: FL_COLORS.DARK_BG,
+              border: `1px solid ${FL_COLORS.BORDER_DARK}`,
+              color: FL_COLORS.TEXT_PRIMARY
+            }}
+          >
+            <span className="text-xl font-bold tabular-nums">
               {bars.toString().padStart(2, "0")}
             </span>
-            <span className="text-xl text-gray-500 mx-1">:</span>
-            <span className="text-2xl font-mono font-bold text-white tabular-nums">
+            <span className="text-lg mx-1" style={{ color: FL_COLORS.TEXT_MUTED }}>:</span>
+            <span className="text-xl font-bold tabular-nums">
               {beats.toString().padStart(2, "0")}
             </span>
-            <span className="text-xl text-gray-500 mx-1">:</span>
-            <span className="text-2xl font-mono font-bold text-amber-400 tabular-nums">
+            <span className="text-lg mx-1" style={{ color: FL_COLORS.TEXT_MUTED }}>:</span>
+            <span className="text-xl font-bold tabular-nums" style={{ color: FL_COLORS.TEXT_HIGHLIGHT }}>
               {ticks.toString().padStart(2, "0")}
             </span>
           </div>
 
           {/* Beat counter */}
-          <div className="text-sm text-gray-500 font-mono">
+          <div className="text-sm font-mono" style={{ color: FL_COLORS.TEXT_MUTED }}>
             {currentTime.toFixed(2)} beats
           </div>
         </div>
 
         {/* BPM Control */}
         <div className="flex items-center gap-3 ml-auto">
-          <Settings2 className="w-4 h-4 text-gray-500" />
+          <Settings2 className="w-4 h-4" style={{ color: FL_COLORS.TEXT_MUTED }} />
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">BPM</span>
+            <span className="text-sm font-medium" style={{ color: FL_COLORS.TEXT_SECONDARY }}>BPM</span>
             <input
               type="number"
               value={bpm}
               onChange={(e) => setBpm(parseInt(e.target.value) || 120)}
               min={20}
               max={300}
-              className="w-16 px-2 py-1 bg-gray-950 border border-gray-800 rounded text-white font-mono text-center focus:border-blue-500 focus:outline-none"
+              className="w-16 px-2 py-1 font-mono text-center rounded outline-none transition-colors"
+              style={{
+                backgroundColor: FL_COLORS.DARK_BG,
+                border: `1px solid ${FL_COLORS.BORDER_DARK}`,
+                color: FL_COLORS.TEXT_PRIMARY,
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = FL_COLORS.ACCENT_BLUE;
+                e.target.style.boxShadow = FL_SHADOWS.FOCUS;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = FL_COLORS.BORDER_DARK;
+                e.target.style.boxShadow = 'none';
+              }}
             />
           </div>
 
           {/* Snap strength */}
-          <div className="flex items-center gap-2 border-l border-gray-700 pl-3">
-            <span className="text-sm text-gray-400">Snap</span>
+          <div className="flex items-center gap-2" style={{ borderLeft: `1px solid ${FL_COLORS.BORDER_DARK}`, paddingLeft: '12px' }}>
+            <span className="text-sm font-medium" style={{ color: FL_COLORS.TEXT_SECONDARY }}>Snap</span>
             <select
               value={useStudioStore((state) => state.ui.snapStrength)}
               onChange={(e) => useStudioStore.getState().setSnapStrength(parseFloat(e.target.value))}
-              className="px-2 py-1 bg-gray-950 border border-gray-800 rounded text-white text-sm focus:border-blue-500 focus:outline-none"
+              className="px-2 py-1 rounded outline-none transition-colors"
+              style={{
+                backgroundColor: FL_COLORS.DARK_BG,
+                border: `1px solid ${FL_COLORS.BORDER_DARK}`,
+                color: FL_COLORS.TEXT_PRIMARY,
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = FL_COLORS.ACCENT_BLUE;
+                e.target.style.boxShadow = FL_SHADOWS.FOCUS;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = FL_COLORS.BORDER_DARK;
+                e.target.style.boxShadow = 'none';
+              }}
             >
               <option value={1}>Bar</option>
               <option value={0.5}>1/2</option>
@@ -177,43 +257,58 @@ export function Transport() {
       </div>
 
       {/* Seek Bar Row - RED with custom drag handling */}
-      <div className="flex items-center gap-4 px-6 py-2 bg-gray-950 border-t border-gray-800 select-none">
-        <span className="text-xs text-gray-500 font-mono">0</span>
+      <div className="flex items-center gap-3 px-4 py-2 select-none" style={{ backgroundColor: FL_COLORS.DARK_BG, borderTop: `1px solid ${FL_COLORS.BORDER_DARK}` }}>
+        <span className="text-xs font-mono" style={{ color: FL_COLORS.TEXT_MUTED }}>0</span>
         <div
           ref={seekBarRef}
-          className={`flex-1 h-3 bg-gray-800 rounded-full cursor-pointer relative overflow-hidden ${
-            isDraggingSeek ? "ring-2 ring-red-500/50" : ""
+          className={`flex-1 h-3 rounded-full cursor-pointer relative overflow-hidden ${
+            isDraggingSeek ? "" : ""
           }`}
+          style={{
+            backgroundColor: FL_COLORS.BUTTON_BG,
+            border: `1px solid ${FL_COLORS.BORDER_DARK}`,
+          }}
           onMouseDown={handleSeekMouseDown}
         >
           {/* Progress fill - RED */}
           <div
-            className="absolute top-0 left-0 h-full bg-red-500 rounded-full transition-all duration-75"
-            style={{ width: `${seekProgress}%` }}
+            className="absolute top-0 left-0 h-full rounded-full transition-all duration-75"
+            style={{ 
+              width: `${seekProgress}%`,
+              backgroundColor: FL_COLORS.PLAYHEAD
+            }}
           />
           {/* Drag handle */}
           <div
-            className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg border-2 border-red-500 transition-transform ${
+            className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full shadow-lg border-2 transition-transform ${
               isDraggingSeek ? "scale-125" : "scale-100 hover:scale-110"
             }`}
-            style={{ left: `calc(${seekProgress}% - 8px)` }}
+            style={{ 
+              left: `calc(${seekProgress}% - 8px)`,
+              backgroundColor: FL_COLORS.TEXT_PRIMARY,
+              borderColor: FL_COLORS.PLAYHEAD
+            }}
           />
         </div>
-        <span className="text-xs text-gray-500 font-mono">{MAX_BEATS}</span>
+        <span className="text-xs font-mono" style={{ color: FL_COLORS.TEXT_MUTED }}>{MAX_BEATS}</span>
       </div>
 
       {/* Volume Control Row */}
-      <div className="flex items-center gap-4 px-6 py-2 bg-gray-900 border-t border-gray-800">
-        <Volume2 className="w-4 h-4 text-gray-500" />
+      <div className="flex items-center gap-3 px-4 py-2" style={{ backgroundColor: FL_COLORS.PANEL_BG, borderTop: `1px solid ${FL_COLORS.BORDER_DARK}` }}>
+        <Volume2 className="w-4 h-4" style={{ color: FL_COLORS.TEXT_MUTED }} />
         <input
           type="range"
           min={0}
           max={100}
           value={Math.round(masterVolume * 100)}
           onChange={handleVolumeChange}
-          className="w-32 h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-green-500 hover:accent-green-400"
+          className="w-32 h-2 rounded-lg appearance-none cursor-pointer transition-colors"
+          style={{
+            backgroundColor: FL_COLORS.BUTTON_BG,
+            accentColor: FL_COLORS.ACCENT_GREEN,
+          }}
         />
-        <span className="text-sm text-gray-400 font-mono w-12">
+        <span className="text-sm font-mono" style={{ color: FL_COLORS.TEXT_MUTED, width: '32px' }}>
           {Math.round(masterVolume * 100)}%
         </span>
       </div>

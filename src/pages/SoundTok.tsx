@@ -330,12 +330,37 @@ export default function SoundTok() {
     fetchSoundToks();
   }, []);
 
-  const handleLike = (id: string) => {
+  const handleLike = async (id: string) => {
+    // Find the SoundTok to check if already liked
+    const soundTok = soundToks.find(tok => tok.id === id);
+    if (soundTok?.isLiked) {
+      return; // Already liked, do nothing
+    }
+
+    // Optimistic update
     setSoundToks(prev =>
-      prev.map(tok =>
-        tok.id === id ? { ...tok, likes: tok.likes + 1 } : tok
-      )
+      prev.map(tok => {
+        if (tok.id === id) {
+          return { ...tok, likes: tok.likes + 1, isLiked: true };
+        }
+        return tok;
+      })
     );
+
+    try {
+      await soundTokApi.likeSoundTok(id);
+    } catch (error) {
+      // Revert optimistic update on error
+      setSoundToks(prev =>
+        prev.map(tok => {
+          if (tok.id === id) {
+            return { ...tok, likes: tok.likes - 1, isLiked: false };
+          }
+          return tok;
+        })
+      );
+      console.error('Failed to like:', error);
+    }
   };
 
   const handleUpload = async (e: React.FormEvent) => {

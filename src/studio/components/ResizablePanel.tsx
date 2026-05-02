@@ -11,6 +11,7 @@ interface ResizablePanelProps {
   onResize?: (width: number, height?: number) => void;
   resizeDirection?: "horizontal" | "vertical" | "both";
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export function ResizablePanel({
@@ -24,6 +25,7 @@ export function ResizablePanel({
   onResize,
   resizeDirection = "horizontal",
   className = "",
+  style = {},
 }: ResizablePanelProps) {
   const [isResizing, setIsResizing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -71,7 +73,7 @@ export function ResizablePanel({
     <div
       ref={panelRef}
       className={`relative ${className}`}
-      style={{ width, height }}
+      style={{ width, height, ...style }}
     >
       {children}
       
