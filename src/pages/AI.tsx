@@ -29,7 +29,7 @@ export default function AI() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
+  const [isPolling, setIsPolling] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [history, setHistory] = useState<GenerationResult[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [progress, setProgress] = useState(0);

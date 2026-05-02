@@ -8,6 +8,7 @@ interface User {
   username: string;
   birthDate: string;
   createdAt: string;
+  role?: string;
 }
 
 interface AuthState {

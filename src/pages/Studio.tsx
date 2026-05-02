@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, Square, Plus, Trash2, Music, Upload, Scissors, Copy, GripHorizontal, Clock } from 'lucide-react';
 
@@ -784,3 +785,10 @@ export default function Studio() {
     </div>
   );
 }
+=======
+import { StudioLayout } from "../studio/StudioLayout";
+
+export default function Studio() {
+  return <StudioLayout />;
+}
+>>>>>>> a0ec5f9 (DFERG)
