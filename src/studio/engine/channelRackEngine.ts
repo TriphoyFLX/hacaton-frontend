@@ -146,8 +146,18 @@ export class ChannelRackEngine {
     // Apply params
     this.updateChannelParams(channel.id, channel.volume, channel.pan);
 
-    // Check for professional drum sound first
-    const drumBuffer = this.sampleBuffers.get(channel.name);
+    // Check for custom sample in channel FIRST (uploaded samples)
+    if (channel.type === 'sample' && channel.audioBuffer) {
+      const source = this.audioContext.createBufferSource();
+      source.buffer = channel.audioBuffer;
+      source.connect(nodes.panner);
+      source.start(time);
+      this.log(`🔊 Sample: ${channel.name} @ ${time.toFixed(3)}s`);
+      return;
+    }
+
+    // Check for professional drum sound by channel ID (uploaded samples via loadChannelSample)
+    const drumBuffer = this.sampleBuffers.get(channel.id);
     if (drumBuffer) {
       const source = this.audioContext.createBufferSource();
       source.buffer = drumBuffer;
@@ -157,17 +167,19 @@ export class ChannelRackEngine {
       return;
     }
 
-    // Check for custom sample in channel
-    if (channel.type === 'sample' && channel.audioBuffer) {
+    // Check for professional drum sound by name (built-in drums)
+    const namedDrumBuffer = this.sampleBuffers.get(channel.name);
+    if (namedDrumBuffer) {
       const source = this.audioContext.createBufferSource();
-      source.buffer = channel.audioBuffer;
+      source.buffer = namedDrumBuffer;
       source.connect(nodes.panner);
       source.start(time);
-      this.log(`🔊 Sample: ${channel.name} @ ${time.toFixed(3)}s`);
-    } else {
-      // Professional synth fallback
-      this.playSynthSound(channel, nodes.panner, time);
+      this.log(`🥁 ${channel.name} @ ${time.toFixed(3)}s`);
+      return;
     }
+
+    // Professional synth fallback
+    this.playSynthSound(channel, nodes.panner, time);
   }
 
   private playSynthSound(channel: Channel, destination: AudioNode, time: number) {
@@ -292,7 +304,18 @@ export class ChannelRackEngine {
     const clips = store.clips;
     const activePatternId = store.ui.activePatternId;
     
-    // ABSOLUTE SILENCE: Only play if there are clips with this exact pattern on timeline
+    // Check if we have any sample channels (uploaded audio) - they can play without timeline clips
+    const pattern = store.patterns.find(p => p.id === activePatternId);
+    const patternChannels = store.channels.filter(c => pattern?.channelIds.includes(c.id));
+    const hasSampleChannels = patternChannels.some(c => c.type === 'sample' && c.audioBuffer);
+    
+    // If we have sample channels, allow playback for them (user wants to hear uploaded samples)
+    if (hasSampleChannels) {
+      return true;
+    }
+    
+    // STRICT PATTERN PLAYBACK: Only play if there are clips with this exact pattern on timeline
+    // This prevents built-in patterns from playing without timeline clips (fixes prompt music mixing)
     const hasClipAtBeat = clips.some(clip => {
       // MUST have this pattern ID and be at this beat
       return clip.patternId === activePatternId && 

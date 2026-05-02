@@ -323,6 +323,14 @@ export function Timeline() {
                         setSelectedClips(prev => prev.filter(id => id !== clip.id));
                       }
                     }}
+                    onDuplicate={(clipId) => {
+                      const duplicateClip = useStudioStore.getState().duplicateClip;
+                      duplicateClip(clipId);
+                    }}
+                    onLock={(clipId, locked) => {
+                      const lockClip = useStudioStore.getState().lockClip;
+                      lockClip(clipId, locked);
+                    }}
                   />
                 </div>
               ))}

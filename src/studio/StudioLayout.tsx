@@ -6,6 +6,8 @@ import { ToolBar } from "./transport/ToolBar";
 import { Timeline } from "./timeline/Timeline";
 import { PianoRoll } from "./piano-roll/PianoRoll";
 import { ChannelRack } from "./channel-rack/ChannelRack";
+import { ProfessionalMixer } from "./mixer/ProfessionalMixer";
+import { SampleBrowser } from "./browser/SampleBrowser";
 import { useStudioStore } from "./store/useStudioStore";
 import { ResizablePanel } from "./components/ResizablePanel";
 import { useStudioHotkeys } from "./hooks/useStudioHotkeys";
@@ -222,6 +224,19 @@ export function StudioLayout() {
         */}
         <PianoRoll />
         <ChannelRack />
+        
+        {/* 
+          HIERARCHY LAYER 5: ADDITIONAL PANELS
+          - Mixer (bottom)
+          - Sample Browser (left)
+        */}
+        <div className="fixed bottom-0 left-0 right-0 z-30">
+          <ProfessionalMixer />
+        </div>
+        
+        <div className="fixed top-20 left-0 bottom-20 z-20">
+          <SampleBrowser />
+        </div>
       </div>
     </DndContext>
   );

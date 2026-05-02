@@ -47,6 +47,10 @@ export function AudioSampleLoader() {
           // Store audio buffer in channel for playback
           store.updateChannel(channel.id, { audioBuffer });
           
+          // Also load to channel rack engine for proper playback
+          const { globalChannelRackEngine } = await import('../engine/channelRackEngine');
+          globalChannelRackEngine.loadChannelSample(channel.id, audioBuffer);
+          
           console.log(`✅ Loaded sample: ${file.name} to channel ${channel.name}`);
         }
 

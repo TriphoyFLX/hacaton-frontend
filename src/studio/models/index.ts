@@ -6,6 +6,7 @@ export interface Track {
   muted: boolean;
   solo: boolean;
   volume: number;
+  pan?: number; // -1 to 1 for stereo panning
 }
 
 export interface Clip {
@@ -17,6 +18,7 @@ export interface Clip {
   name: string;
   color: string;
   patternId?: string; // Link to pattern for pattern clips
+  locked?: boolean; // Whether clip can be edited
 }
 
 export interface Note {

@@ -32,3 +32,6 @@ export { ToolBar } from "./transport/ToolBar";
 
 // Channel Rack
 export { ChannelRack, ChannelStrip } from "./channel-rack";
+
+// Mixer
+export { ProfessionalMixer } from "./mixer/ProfessionalMixer";

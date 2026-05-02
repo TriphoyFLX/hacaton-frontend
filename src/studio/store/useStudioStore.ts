@@ -32,6 +32,8 @@ interface StudioActions {
   selectClip: (id: string) => void;
   updateClipPattern: (clipId: string, patternId: string) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
+  duplicateClip: (id: string) => void;
+  lockClip: (id: string, locked: boolean) => void;
   openPianoRoll: (clipId: string) => void;
   closePianoRoll: () => void;
   
@@ -195,6 +197,30 @@ export const useStudioStore = create<StudioState & StudioActions>()(
       updateClip: (id, updates) => {
         set((state) => ({
           clips: state.clips.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+        }));
+      },
+
+      duplicateClip: (id) => {
+        set((state) => {
+          const clip = state.clips.find((c) => c.id === id);
+          if (!clip) return state;
+          
+          const newClip: Clip = {
+            ...clip,
+            id: generateId(),
+            name: `${clip.name} Copy`,
+            start: clip.start + clip.duration, // Place right after original
+          };
+          
+          return { clips: [...state.clips, newClip] };
+        });
+      },
+
+      lockClip: (id, locked) => {
+        set((state) => ({
+          clips: state.clips.map((c) => 
+            c.id === id ? { ...c, locked } : c
+          ),
         }));
       },
 
