@@ -22,6 +22,645 @@ interface GenerationResult {
 
 const STORAGE_KEY = 'ai-generated-tracks';
 
+// ── Styles ──
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
+
+const css = `
+${FONT_IMPORT}
+
+.ai-root {
+  --bg: #0b0b0b;
+  --bg-surface: #111111;
+  --bg-elevated: #181818;
+  --border: #232323;
+  --border-mid: #2e2e2e;
+  --border-hover: #3d3d3d;
+  --text-primary: #f0ede8;
+  --text-secondary: #6b6b6b;
+  --text-muted: #3a3a3a;
+  --accent: #e8e4dc;
+  --accent-dim: #c5c0b8;
+  --red: #c0392b;
+  --red-dim: #1a0f0f;
+  font-family: 'Syne', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  color: var(--text-primary);
+}
+
+.ai-wrapper {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+/* ── AMBIENT BACKGROUND ── */
+.ai-ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.12;
+  animation: orb-float 24s ease-in-out infinite;
+}
+.ambient-orb-1 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.2) 0%, transparent 70%);
+  top: -200px;
+  right: -100px;
+  animation-delay: 0s;
+}
+.ambient-orb-2 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+  bottom: -150px;
+  left: -100px;
+  animation-delay: -8s;
+}
+@keyframes orb-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-30px, -40px) scale(1.08); }
+  66% { transform: translate(20px, 30px) scale(0.95); }
+}
+.ai-noise {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+}
+.ai-grid-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.012;
+  background-image: 
+    linear-gradient(rgba(232, 228, 220, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 228, 220, 0.2) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* ── TOP BAR ── */
+.ai-topbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 48px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bg);
+}
+.brand-mark svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
+}
+.brand-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+}
+.topbar-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  color: var(--text-secondary);
+  position: relative;
+}
+.btn-icon:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+.btn-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
+}
+.history-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--text-primary);
+  color: var(--bg);
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: 2px solid var(--bg);
+}
+
+/* ── DESCRIPTION ── */
+.ai-desc {
+  position: relative;
+  z-index: 10;
+  margin-bottom: 32px;
+}
+.desc-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── FORM CARD ── */
+.form-card {
+  position: relative;
+  z-index: 10;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.form-card:hover {
+  border-color: var(--border-mid);
+}
+.section-heading {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+.form-group {
+  margin-bottom: 20px;
+}
+.form-group:last-child {
+  margin-bottom: 0;
+}
+.form-label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.form-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus {
+  border-color: var(--border-hover);
+}
+.form-input::placeholder {
+  color: var(--text-muted);
+}
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.6;
+}
+
+/* ── PRESETS ── */
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.preset-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.preset-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+/* ── SUBMIT BUTTON ── */
+.submit-btn {
+  width: 100%;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  border-radius: 10px;
+  color: var(--bg);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 24px;
+}
+.submit-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+}
+.submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.submit-btn:disabled:hover {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+/* ── PROGRESS ── */
+.progress-card {
+  position: relative;
+  z-index: 10;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.progress-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.progress-percent {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--text-primary);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+.progress-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.progress-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-mid);
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.progress-request-id {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.progress-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── RESULT CARD ── */
+.result-card {
+  position: relative;
+  z-index: 10;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.result-meta {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.result-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+.result-id {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.result-tags {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.result-audio {
+  width: 100%;
+  height: 40px;
+  margin-bottom: 20px;
+}
+.result-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 18px;
+  background: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  border-radius: 8px;
+  color: var(--bg);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.btn-primary:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+}
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 18px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-secondary:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+/* ── ERROR CARD ── */
+.error-card {
+  position: relative;
+  z-index: 10;
+  background: var(--red-dim);
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.error-heading {
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--red);
+  margin-bottom: 8px;
+}
+.error-text {
+  font-size: 13px;
+  color: var(--accent-dim);
+  line-height: 1.6;
+}
+
+/* ── HISTORY ── */
+.history-card {
+  position: relative;
+  z-index: 10;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.btn-danger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  border-radius: 6px;
+  color: var(--red);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-danger:hover {
+  background: var(--red-dim);
+  border-color: var(--red);
+}
+.history-empty {
+  text-align: center;
+  padding: 40px 20px;
+}
+.history-empty-icon {
+  font-size: 36px;
+  opacity: 0.3;
+  margin-bottom: 12px;
+}
+.history-empty-text {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 500px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.history-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.history-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.history-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.history-item-date {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.history-item-tags {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.btn-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.btn-delete:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-dim);
+}
+.btn-delete svg {
+  width: 13px;
+  height: 13px;
+}
+.history-item-audio {
+  width: 100%;
+  height: 32px;
+  margin-bottom: 10px;
+}
+.history-item-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── INFO CARD ── */
+.info-card {
+  position: relative;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+}
+.info-heading {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.info-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+`;
+
 export default function AI() {
   const [title, setTitle] = useState('Свобода');
   const [tags, setTags] = useState('Винтажный джаз-лаундж, классические стандарты, плавные соло на трубе, контрабас и знойный женский вокал');
@@ -29,7 +668,6 @@ export default function AI() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [history, setHistory] = useState<GenerationResult[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -113,9 +751,6 @@ export default function AI() {
 
       const data: GenerationResponse = await response.json();
       
-      console.log('Generation response:', data);
-
-      // Начинаем polling для проверки статуса
       setGeneratedAudio({
         request_id: data.request_id,
         status: 'starting',
@@ -126,7 +761,6 @@ export default function AI() {
         progress: 0
       });
       
-      // Запускаем polling с эмуляцией прогресса
       pollForResult(data.request_id);
       
     } catch (err) {
@@ -138,18 +772,13 @@ export default function AI() {
   };
 
   const pollForResult = async (requestId: number) => {
-    setIsPolling(true);
-    const maxAttempts = 80; // Максимум 80 попыток (4 минуты при 3 сек)
+    const maxAttempts = 80;
     let attempts = 0;
 
     const poll = async () => {
       try {
         attempts++;
         
-        // Более реалистичная эмуляция прогресса
-        // Первые 20 попыток: быстрый рост 0-30%
-        // Следующие 30: средний рост 30-70%
-        // Последние: медленный рост 70-95%
         let newProgress;
         if (attempts <= 20) {
           newProgress = Math.min(30, Math.floor((attempts / 20) * 30));
@@ -162,7 +791,6 @@ export default function AI() {
         setProgress(newProgress);
         setGeneratedAudio(prev => prev ? { ...prev, progress: newProgress } : null);
         
-        // Пытаемся получить результат через API
         const response = await fetch(`https://api.gen-api.ru/api/v1/networks/suno/result/${requestId}`, {
           method: 'GET',
           headers: {
@@ -173,10 +801,8 @@ export default function AI() {
 
         if (response.ok) {
           const result = await response.json();
-          console.log('Polling result:', result);
 
           if (result.status === 'success' && result.output) {
-            // Генерация завершена успешно
             const audioUrl = result.output.audio_url || result.output;
             const completedTrack: GenerationResult = {
               request_id: requestId,
@@ -191,41 +817,31 @@ export default function AI() {
             
             setGeneratedAudio(completedTrack);
             setIsGenerating(false);
-            setIsPolling(false);
             setProgress(100);
-            
-            // Сохраняем в историю
             saveToHistory(completedTrack);
-            
             return;
           } else if (result.status === 'failed' || result.status === 'error') {
-            // Ошибка генерации
             setError('Генерация не удалась. Попробуйте снова.');
             setIsGenerating(false);
-            setIsPolling(false);
             setProgress(0);
             return;
           }
         }
 
-        // Если ещё не готово и не превышен лимит попыток, продолжаем polling
         if (attempts < maxAttempts) {
-          setTimeout(poll, 3000); // Проверяем каждые 3 секунды (быстрее)
+          setTimeout(poll, 3000);
         } else {
           setError('Время ожидания истекло (4 минуты). Генерация может занять больше времени. Попробуйте позже.');
           setIsGenerating(false);
-          setIsPolling(false);
           setProgress(0);
         }
       } catch (err) {
         console.error('Polling error:', err);
-        // Продолжаем polling даже при ошибках
         if (attempts < maxAttempts) {
           setTimeout(poll, 3000);
         } else {
           setError('Не удалось получить результат. Попробуйте позже.');
           setIsGenerating(false);
-          setIsPolling(false);
           setProgress(0);
         }
       }
@@ -247,273 +863,259 @@ export default function AI() {
     setTags(tags);
   };
 
+  // ── SVG Icons ──
+  const IconWand = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M15 4V2m0 2v2m0-2h2m-2 0h-2"/>
+      <path d="M10.5 21l-7-7 11-11 7 7-11 11z"/>
+      <path d="M8 19l-3 3"/>
+      <path d="M21 6l-3-3"/>
+    </svg>
+  );
+
   return (
-    <div className="h-full flex flex-col bg-gray-900 overflow-y-auto">
-      {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <Wand2 size={32} className="text-purple-400" />
-              AI Генерация музыки
-            </h1>
-            <p className="text-gray-400 mt-2">
-              Генерируйте уникальные музыкальные композиции с помощью Suno AI
-            </p>
+    <div className="ai-root">
+      <style>{css}</style>
+
+      {/* Ambient Background */}
+      <div className="ai-ambient">
+        <div className="ambient-orb ambient-orb-1" />
+        <div className="ambient-orb ambient-orb-2" />
+      </div>
+      <div className="ai-noise" />
+      <div className="ai-grid-bg" />
+
+      <div className="ai-wrapper">
+        {/* Top Bar */}
+        <div className="ai-topbar">
+          <div className="topbar-brand">
+            <div className="brand-mark">
+              <IconWand />
+            </div>
+            <span className="brand-text">AI Генерация</span>
           </div>
-          <button
+          <button 
+            className="btn-icon" 
             onClick={() => setShowHistory(!showHistory)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition"
+            style={{ width: 'auto', padding: '0 12px', gap: '8px' }}
           >
-            <History size={20} />
-            История ({history.length})
+            <History size={16} />
+            {history.length > 0 && (
+              <span className="history-badge">{history.length}</span>
+            )}
           </button>
         </div>
-      </div>
 
-      <div className="flex-1 p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Параметры генерации */}
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <Music size={20} />
-              Параметры генерации
-            </h2>
+        {/* Description */}
+        <div className="ai-desc">
+          <p className="desc-text">
+            Генерируйте уникальные музыкальные композиции с помощью Suno AI. 
+            Опишите стиль и добавьте текст песни при необходимости.
+          </p>
+        </div>
 
-            {/* Название */}
-            <div className="mb-4">
-              <label className="block text-gray-300 mb-2 font-medium">Название трека</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
-                placeholder="Введите название трека"
-              />
-            </div>
+        {/* Form */}
+        <div className="form-card">
+          <div className="section-heading">Параметры</div>
 
-            {/* Стили музыки */}
-            <div className="mb-4">
-              <label className="block text-gray-300 mb-2 font-medium">Музыкальные стили</label>
-              <textarea
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none resize-none"
-                rows={3}
-                placeholder="Опишите желаемый музыкальный стиль"
-              />
-            </div>
-
-            {/* Пресеты стилей */}
-            <div className="mb-4">
-              <label className="block text-gray-300 mb-2 font-medium">Быстрые пресеты</label>
-              <div className="flex flex-wrap gap-2">
-                {presetStyles.map((preset) => (
-                  <button
-                    key={preset.name}
-                    onClick={() => applyPreset(preset.tags)}
-                    className="px-3 py-2 bg-gray-700 hover:bg-purple-600 rounded-lg text-white text-sm transition"
-                  >
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Текст песни (опционально) */}
-            <div className="mb-6">
-              <label className="block text-gray-300 mb-2 font-medium">Текст песни (опционально)</label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none resize-none"
-                rows={6}
-                placeholder="Введите текст песни, если хотите добавить вокал"
-              />
-            </div>
-
-            {/* Кнопка генерации */}
-            <button
-              onClick={generateMusic}
-              disabled={isGenerating}
-              className="w-full px-6 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Генерация...
-                </>
-              ) : (
-                <>
-                  <Wand2 size={20} />
-                  Сгенерировать музыку
-                </>
-              )}
-            </button>
+          <div className="form-group">
+            <label className="form-label">Название трека</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="form-input"
+              placeholder="Введите название"
+            />
           </div>
 
-          {/* Результат */}
-          {generatedAudio && (
-            <div className="bg-gray-800 border border-purple-600 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Music size={20} className="text-purple-400" />
-                Результат генерации
-              </h3>
-              
-              {generatedAudio.status === 'starting' && (
-                <div>
-                  {/* Прогресс бар */}
-                  <div className="mb-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300 font-medium">Генерация музыки...</span>
-                      <span className="text-purple-400 font-bold">{progress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-purple-600 to-purple-400 h-full transition-all duration-500"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 text-gray-300">
-                    <Loader2 size={24} className="animate-spin text-purple-400" />
-                    <div>
-                      <p className="text-sm text-gray-400">Request ID: {generatedAudio.request_id}</p>
-                      <p className="text-sm text-gray-400">Это может занять несколько минут</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+          <div className="form-group">
+            <label className="form-label">Музыкальные стили</label>
+            <textarea
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              className="form-input form-textarea"
+              placeholder="Опишите желаемый музыкальный стиль"
+              rows={3}
+            />
+          </div>
 
-              {generatedAudio.status === 'success' && generatedAudio.audio_url && (
-                <div>
-                  <div className="mb-4 p-4 bg-gray-700/50 rounded-lg">
-                    <p className="text-white font-medium mb-1">{generatedAudio.title || 'Сгенерированный трек'}</p>
-                    <p className="text-gray-400 text-sm mb-1">Request ID: {generatedAudio.request_id}</p>
-                    {generatedAudio.tags && (
-                      <p className="text-gray-500 text-xs">Стиль: {generatedAudio.tags}</p>
+          <div className="form-group">
+            <label className="form-label">Быстрые пресеты</label>
+            <div className="presets">
+              {presetStyles.map((preset) => (
+                <button
+                  key={preset.name}
+                  onClick={() => applyPreset(preset.tags)}
+                  className="preset-btn"
+                >
+                  {preset.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Текст песни (опционально)</label>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className="form-input form-textarea"
+              placeholder="Введите текст песни, если хотите добавить вокал"
+              rows={6}
+            />
+          </div>
+
+          <button
+            onClick={generateMusic}
+            disabled={isGenerating}
+            className="submit-btn"
+          >
+            {isGenerating ? (
+              <>
+                <div className="progress-spinner" />
+                Генерация...
+              </>
+            ) : (
+              <>
+                <Wand2 size={16} />
+                Сгенерировать музыку
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Progress */}
+        {generatedAudio && generatedAudio.status === 'starting' && (
+          <div className="progress-card">
+            <div className="progress-header">
+              <span className="progress-label">Генерация музыки</span>
+              <span className="progress-percent">{progress}%</span>
+            </div>
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="progress-info">
+              <div className="progress-spinner" />
+              <div>
+                <p className="progress-request-id">Request ID: {generatedAudio.request_id}</p>
+                <p className="progress-hint">Это может занять несколько минут</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Result */}
+        {generatedAudio && generatedAudio.status === 'success' && generatedAudio.audio_url && (
+          <div className="result-card">
+            <div className="section-heading">Результат</div>
+            
+            <div className="result-meta">
+              <div className="result-title">{generatedAudio.title || 'Сгенерированный трек'}</div>
+              <div className="result-id">Request ID: {generatedAudio.request_id}</div>
+              {generatedAudio.tags && (
+                <div className="result-tags">{generatedAudio.tags}</div>
+              )}
+            </div>
+
+            <audio controls className="result-audio" autoPlay>
+              <source src={generatedAudio.audio_url} type="audio/mpeg" />
+            </audio>
+
+            <div className="result-actions">
+              <a href={generatedAudio.audio_url} download className="btn-primary">
+                <Download size={14} />
+                Скачать
+              </a>
+              <button className="btn-secondary">
+                <Play size={14} />
+                В проект
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="error-card">
+            <div className="error-heading">Ошибка</div>
+            <p className="error-text">{error}</p>
+          </div>
+        )}
+
+        {/* History */}
+        {showHistory && (
+          <div className="history-card">
+            <div className="history-header">
+              <span className="section-heading" style={{ marginBottom: 0 }}>История генераций</span>
+              {history.length > 0 && (
+                <button onClick={clearHistory} className="btn-danger">
+                  <Trash2 size={12} />
+                  Очистить
+                </button>
+              )}
+            </div>
+
+            {history.length === 0 ? (
+              <div className="history-empty">
+                <div className="history-empty-icon">
+                  <History size={36} />
+                </div>
+                <div className="history-empty-text">История пуста</div>
+              </div>
+            ) : (
+              <div className="history-list">
+                {history.map((track) => (
+                  <div key={track.request_id} className="history-item">
+                    <div className="history-item-header">
+                      <div>
+                        <div className="history-item-title">{track.title || 'Без названия'}</div>
+                        <div className="history-item-date">
+                          {track.createdAt && new Date(track.createdAt).toLocaleString('ru-RU')}
+                        </div>
+                        {track.tags && (
+                          <div className="history-item-tags">{track.tags}</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => deleteFromHistory(track.request_id)}
+                        className="btn-delete"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+
+                    {track.audio_url && (
+                      <>
+                        <audio controls className="history-item-audio">
+                          <source src={track.audio_url} type="audio/mpeg" />
+                        </audio>
+                        <div className="history-item-actions">
+                          <a href={track.audio_url} download className="btn-primary" style={{ height: 30, fontSize: 10 }}>
+                            <Download size={12} />
+                            Скачать
+                          </a>
+                          <button className="btn-secondary" style={{ height: 30, fontSize: 10 }}>
+                            <Play size={12} />
+                            В проект
+                          </button>
+                        </div>
+                      </>
                     )}
                   </div>
-                  
-                  <audio controls className="w-full mb-4" autoPlay>
-                    <source src={generatedAudio.audio_url} type="audio/mpeg" />
-                    Ваш браузер не поддерживает аудио
-                  </audio>
-
-                  <div className="flex gap-2">
-                    <a 
-                      href={generatedAudio.audio_url}
-                      download
-                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white transition"
-                    >
-                      <Download size={16} />
-                      Скачать
-                    </a>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition">
-                      <Play size={16} />
-                      Добавить в проект
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-gray-800 border border-red-600 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-red-400 mb-2">Ошибка</h3>
-              <p className="text-gray-300">{error}</p>
-            </div>
-          )}
-
-          {/* История генераций */}
-          {showHistory && (
-            <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <History size={20} className="text-purple-400" />
-                  История генераций
-                </h3>
-                {history.length > 0 && (
-                  <button
-                    onClick={clearHistory}
-                    className="flex items-center gap-2 px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg text-sm transition"
-                  >
-                    <Trash2 size={14} />
-                    Очистить историю
-                  </button>
-                )}
+                ))}
               </div>
-              
-              {history.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  <History size={48} className="mx-auto mb-4 text-gray-600" />
-                  <p>История генераций пуста</p>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {history.map((track) => (
-                    <div
-                      key={track.request_id}
-                      className="bg-gray-700/50 border border-gray-600 rounded-lg p-4"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <p className="text-white font-medium">{track.title || 'Без названия'}</p>
-                          <p className="text-gray-400 text-sm">
-                            {track.createdAt && new Date(track.createdAt).toLocaleString('ru-RU')}
-                          </p>
-                          {track.tags && (
-                            <p className="text-gray-500 text-xs mt-1">{track.tags}</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => deleteFromHistory(track.request_id)}
-                          className="ml-2 p-1 text-gray-400 hover:text-red-400 transition"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                      
-                      {track.audio_url && (
-                        <div>
-                          <audio controls className="w-full mb-2">
-                            <source src={track.audio_url} type="audio/mpeg" />
-                            Ваш браузер не поддерживает аудио
-                          </audio>
-                          <div className="flex gap-2">
-                            <a
-                              href={track.audio_url}
-                              download
-                              className="flex items-center gap-2 px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-sm transition"
-                            >
-                              <Download size={14} />
-                              Скачать
-                            </a>
-                            <button className="flex items-center gap-2 px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-white text-sm transition">
-                              <Play size={14} />
-                              В проект
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Информация */}
-          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-3">О Suno AI</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              Suno AI - это мощная нейросеть для генерации музыки. Она может создавать треки в различных стилях,
-              от классической музыки до современного попа и электронной музыки. Просто опишите желаемый стиль
-              и, при необходимости, добавьте текст песни для генерации вокала.
-            </p>
+            )}
           </div>
+        )}
+
+        {/* Info */}
+        <div className="info-card">
+          <div className="info-heading">О Suno AI</div>
+          <p className="info-text">
+            Suno AI — мощная нейросеть для генерации музыки. Создаёт треки в различных стилях: 
+            от классики до электроники. Опишите желаемый стиль и добавьте текст песни для генерации вокала.
+          </p>
         </div>
       </div>
     </div>
