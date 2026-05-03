@@ -3,7 +3,7 @@ import { Wand2, Play, Download, History, Trash2 } from 'lucide-react';
 
 
 interface GenerationResult {
-  id: number;
+  id: number | string;
   status: string;
   audio_urls: string[];
   images: string[];
@@ -14,6 +14,11 @@ interface GenerationResult {
   progress?: number;
   cost?: number;
   runtime?: number;
+  response_type?: string;
+  full_response?: any;
+  timestamp?: number;
+  model?: string;
+  request_id?: number | string;
 }
 
 const STORAGE_KEY = 'ai-generated-tracks';
@@ -656,6 +661,95 @@ ${FONT_IMPORT}
   color: var(--text-secondary);
   line-height: 1.7;
 }
+
+/* ── API RESPONSE CARD ── */
+.api-response-card {
+  position: relative;
+  z-index: 10;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.api-response-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.api-response-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.api-response-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.api-response-toggle:hover {
+  border-color: var(--border-hover);
+  color: var(--text-secondary);
+}
+.api-response-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  max-height: 400px;
+  overflow-y: auto;
+}
+.api-response-json {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.api-response-field {
+  margin-bottom: 12px;
+}
+.api-response-field:last-child {
+  margin-bottom: 0;
+}
+.api-response-label {
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.api-response-value {
+  color: var(--accent);
+}
+.api-response-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+.status-processing {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+.status-success {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+.status-error {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
 `;
 
 export default function AI() {
@@ -668,8 +762,10 @@ export default function AI() {
   const [history, setHistory] = useState<GenerationResult[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [apiResponse, setApiResponse] = useState<any>(null);
+  const [showApiResponse, setShowApiResponse] = useState(false);
 
-  const API_KEY = 'sk-LFuPFOiVOBfSsq3LLStFZZAs6JYqXNqdfWdCKJBcTO1POn6qvSmePXOG3tAL';
+  // API ключ в backend для безопасности
 
   // Загрузка истории и состояния генерации из localStorage
   useEffect(() => {
@@ -756,12 +852,10 @@ export default function AI() {
         model: 'v5.5'
       };
 
-      const response = await fetch('https://api.gen-api.ru/api/v1/networks/suno', {
+      const response = await fetch('/api/generate-music', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       });
@@ -772,9 +866,17 @@ export default function AI() {
       }
 
       const data = await response.json();
+      console.log("GENERATION RESPONSE FROM BACKEND:", data);
+      
+      // Сохраняем полный ответ API для отображения
+      setApiResponse(data);
+      setShowApiResponse(true);
+      
+      const requestId = data.request_id || data.id;
+      console.log("USING REQUEST ID:", requestId);
       
       const generationState = {
-        id: data.id,
+        id: requestId,
         status: 'starting',
         audio_urls: [],
         images: [],
@@ -795,7 +897,7 @@ export default function AI() {
         startTime: Date.now()
       }));
       
-      pollForResult(data.id);
+      pollForResult(requestId);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка генерации');
@@ -807,12 +909,22 @@ export default function AI() {
   };
 
   const pollForResult = async (id: number) => {
+    console.log("STARTING POLLING FOR ID:", id);
+    
+    if (!id) {
+      console.error("ERROR: No ID provided for polling");
+      setError("Ошибка: отсутствует ID генерации");
+      setIsGenerating(false);
+      return;
+    }
+    
     const maxAttempts = 160; // Увеличиваем до 8 минут (160 * 3 сек)
     let attempts = 0;
 
     const poll = async () => {
       try {
         attempts++;
+        console.log("POLLING ID:", id, "ATTEMPT:", attempts);
         
         let newProgress;
         if (attempts <= 20) {
@@ -826,16 +938,18 @@ export default function AI() {
         setProgress(newProgress);
         setGeneratedAudio(prev => prev ? { ...prev, progress: newProgress } : null);
         
-        const response = await fetch(`https://api.gen-api.ru/api/v1/request/get/${id}`, {
+        const response = await fetch(`/api/check-generation/${id}`, {
           method: 'GET',
           headers: {
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${API_KEY}`
+            'Accept': 'application/json'
           }
         });
 
         if (response.ok) {
           const result = await response.json();
+          
+          // Обновляем API ответ для отображения актуального статуса
+          setApiResponse(result);
 
           if (result.status === 'success' && result.result) {
             // Извлекаем аудио URLs из массива result
@@ -1034,6 +1148,72 @@ export default function AI() {
           </button>
         </div>
 
+        {/* API Response */}
+        {apiResponse && showApiResponse && (
+          <div className="api-response-card">
+            <div className="api-response-header">
+              <span className="api-response-title">Ответ API GenAPI</span>
+              <button 
+                className="api-response-toggle"
+                onClick={() => setShowApiResponse(!showApiResponse)}
+              >
+                {showApiResponse ? 'Скрыть' : 'Показать'}
+              </button>
+            </div>
+            
+            <div className="api-response-content">
+              <div className="api-response-field">
+                <div className="api-response-label">Статус:</div>
+                <span className={`api-response-status status-${apiResponse.status || 'processing'}`}>
+                  {apiResponse.status || 'processing'}
+                </span>
+              </div>
+              
+              {apiResponse.request_id && (
+                <div className="api-response-field">
+                  <div className="api-response-label">Request ID:</div>
+                  <div className="api-response-value">{apiResponse.request_id}</div>
+                </div>
+              )}
+              
+              {apiResponse.model && (
+                <div className="api-response-field">
+                  <div className="api-response-label">Модель:</div>
+                  <div className="api-response-value">{apiResponse.model}</div>
+                </div>
+              )}
+              
+              {apiResponse.cost !== undefined && (
+                <div className="api-response-field">
+                  <div className="api-response-label">Стоимость:</div>
+                  <div className="api-response-value">{apiResponse.cost} кредитов</div>
+                </div>
+              )}
+              
+              {apiResponse.progress !== undefined && (
+                <div className="api-response-field">
+                  <div className="api-response-label">Прогресс:</div>
+                  <div className="api-response-value">{apiResponse.progress}%</div>
+                </div>
+              )}
+              
+              {apiResponse.timestamp && (
+                <div className="api-response-field">
+                  <div className="api-response-label">Время:</div>
+                  <div className="api-response-value">{new Date(apiResponse.timestamp * 1000).toLocaleString('ru-RU')}</div>
+                </div>
+              )}
+              
+              <div className="api-response-field">
+                <div className="api-response-label">Полный ответ:</div>
+                <div className="api-response-json">
+                  {JSON.stringify(apiResponse, null, 2)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Progress */}
         {generatedAudio && generatedAudio.status === 'starting' && (
           <div className="progress-card">
@@ -1117,7 +1297,32 @@ export default function AI() {
                   Скачать {index + 1}
                 </a>
               ))}
-              <button className="btn-secondary">
+              <button 
+                className="btn-secondary"
+                onClick={() => {
+                  // Сохраняем все варианты трека в localStorage
+                  const projectTracks = generatedAudio.audio_urls.map((audioUrl, index) => ({
+                    id: `${generatedAudio.id}-${index}`,
+                    originalId: generatedAudio.id,
+                    title: `${generatedAudio.title || 'Сгенерированный трек'} ${index + 1}`,
+                    audioUrl: audioUrl,
+                    tags: generatedAudio.tags,
+                    createdAt: generatedAudio.createdAt,
+                    images: generatedAudio.images || [],
+                    variantIndex: index
+                  }));
+                  
+                  // Получаем текущие треки и добавляем новые
+                  const existingTracks = JSON.parse(localStorage.getItem('project-tracks') || '[]');
+                  const updatedTracks = [...projectTracks, ...existingTracks];
+                  localStorage.setItem('project-tracks', JSON.stringify(updatedTracks));
+                  
+                  // Триггерим обновление для других вкладок/страниц
+                  window.dispatchEvent(new Event('localStorageUpdated'));
+                  
+                  alert(`Добавлено ${projectTracks.length} треков в проект! Перейдите в студию для работы с ними.`);
+                }}
+              >
                 <Play size={14} />
                 В проект
               </button>
@@ -1192,6 +1397,32 @@ export default function AI() {
                             </audio>
                           </div>
                         ))}
+                        
+                        {/* Отображаем изображения если есть */}
+                        {track.images && track.images.length > 0 && (
+                          <div style={{ marginTop: '12px' }}>
+                            <div style={{ marginBottom: '8px', fontSize: '10px', color: 'var(--text-muted)' }}>
+                              Обложки:
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {track.images.map((imageUrl, index) => (
+                                <img 
+                                  key={index}
+                                  src={imageUrl} 
+                                  alt={`Обложка ${index + 1}`}
+                                  style={{ 
+                                    width: '80px', 
+                                    height: '80px', 
+                                    objectFit: 'cover', 
+                                    borderRadius: '6px',
+                                    border: '1px solid var(--border)'
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="history-item-actions">
                           {track.audio_urls.map((audioUrl, index) => (
                             <a key={index} href={audioUrl} download className="btn-primary" style={{ height: 30, fontSize: 10, marginRight: '6px' }}>
@@ -1199,7 +1430,33 @@ export default function AI() {
                               Скачать {index + 1}
                             </a>
                           ))}
-                          <button className="btn-secondary" style={{ height: 30, fontSize: 10 }}>
+                          <button 
+                            className="btn-secondary" 
+                            style={{ height: 30, fontSize: 10 }}
+                            onClick={() => {
+                              // Сохраняем все варианты трека в localStorage
+                              const projectTracks = track.audio_urls.map((audioUrl, index) => ({
+                                id: `${track.id}-${index}`,
+                                originalId: track.id,
+                                title: `${track.title || 'Сгенерированный трек'} ${index + 1}`,
+                                audioUrl: audioUrl,
+                                tags: track.tags,
+                                createdAt: track.createdAt,
+                                images: track.images || [],
+                                variantIndex: index
+                              }));
+                              
+                              // Получаем текущие треки и добавляем новые
+                              const existingTracks = JSON.parse(localStorage.getItem('project-tracks') || '[]');
+                              const updatedTracks = [...projectTracks, ...existingTracks];
+                              localStorage.setItem('project-tracks', JSON.stringify(updatedTracks));
+                              
+                              // Триггерим обновление для других вкладок/страниц
+                              window.dispatchEvent(new Event('localStorageUpdated'));
+                              
+                              alert(`Добавлено ${projectTracks.length} треков в проект! Перейдите в студию для работы с ними.`);
+                            }}
+                          >
                             <Play size={12} />
                             В проект
                           </button>

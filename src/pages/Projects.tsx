@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Folder, Plus, Music, Film, Image, MoreHorizontal, Play, Clock, Users } from 'lucide-react';
+import { Folder, Plus, Music, Film, Image, Play, Clock, Users, Headphones } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Styles ──
@@ -155,7 +155,7 @@ ${FONT_IMPORT}
   text-transform: uppercase;
   cursor: pointer;
   transition: all 0.15s;
-  margin-bottom: 28px;
+  margin-bottom: 16px;
 }
 .create-btn:hover {
   border-color: var(--border-hover);
@@ -166,6 +166,45 @@ ${FONT_IMPORT}
   width: 16px;
   height: 16px;
   stroke-width: 1.5;
+}
+
+/* ── LOOPERA BUTTON ── */
+.loopera-btn {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  border: none;
+  border-radius: 14px;
+  color: #ffffff;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 28px;
+  text-decoration: none;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+}
+.loopera-btn:hover {
+  background: linear-gradient(135deg, #FF8E53, #FF6B6B);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+.loopera-btn:active {
+  transform: translateY(0);
+}
+.loopera-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
 }
 
 /* ── TABS ── */
@@ -364,6 +403,17 @@ ${FONT_IMPORT}
 `;
 
 // ── Types ──
+interface GeneratedTrack {
+  id: string | number;
+  title: string;
+  audioUrl: string;
+  tags?: string;
+  createdAt?: string;
+  images?: string[];
+  originalId?: string | number;
+  variantIndex?: number;
+}
+
 interface Project {
   id: string;
   title: string;
@@ -445,8 +495,9 @@ const IconFolder = () => (
 );
 
 // ── Project Card ──
-function ProjectCard({ project, index }: { project: Project; index: number }) {
+function ProjectCard({ project, index }: { project: Project & { audioUrl?: string; tags?: string; images?: string[]; originalId?: string | number; variantIndex?: number }; index: number }) {
   const navigate = useNavigate();
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -475,31 +526,135 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
     }
   };
 
+  const handlePlayClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (project.audioUrl) {
+      if (isPlaying) {
+        // Останавливаем воспроизведение
+        const audio = document.querySelector(`#audio-${project.id}`) as HTMLAudioElement;
+        if (audio) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+        setIsPlaying(false);
+      } else {
+        // Останавливаем все другие аудио
+        document.querySelectorAll('audio').forEach(audio => {
+          const el = audio as HTMLAudioElement;
+          el.pause();
+          el.currentTime = 0;
+        });
+        
+        // Воспроизводим текущий трек
+        const audio = document.querySelector(`#audio-${project.id}`) as HTMLAudioElement;
+        if (audio) {
+          audio.play();
+          setIsPlaying(true);
+          
+          audio.onended = () => setIsPlaying(false);
+        }
+      }
+    } else {
+      navigate(`/projects/${project.id}`);
+    }
+  };
+
+  const isGeneratedTrack = project.id.toString().startsWith('generated-');
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
       className="project-card"
-      onClick={() => navigate(`/projects/${project.id}`)}
+      onClick={() => !project.audioUrl && navigate(`/projects/${project.id}`)}
     >
       <div className="project-card-preview">
-        <div className="project-card-icon">
-          {getTypeIcon(project.type)}
-        </div>
+        {isGeneratedTrack && project.images && project.images.length > 0 ? (
+          <>
+            <img 
+              src={project.images[0]} 
+              alt={project.title}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                opacity: 0.7
+              }}
+            />
+            <div className="project-card-icon" style={{ position: 'relative', zIndex: 1 }}>
+              {getTypeIcon(project.type)}
+            </div>
+          </>
+        ) : (
+          <div className="project-card-icon">
+            {getTypeIcon(project.type)}
+          </div>
+        )}
         <div className="project-card-overlay">
-          <div className="play-btn">
-            <Play size={18} />
+          <div className="play-btn" onClick={handlePlayClick}>
+            {isPlaying && project.audioUrl ? (
+              <span style={{ marginLeft: '2px', fontSize: '12px', fontWeight: 'bold' }}>❚❚</span>
+            ) : (
+              <Play size={18} />
+            )}
           </div>
         </div>
       </div>
       <div className="project-card-body">
-        <div className="project-card-title">{project.title}</div>
+        <div className="project-card-title">
+          {project.title}
+          {isGeneratedTrack && (
+            <>
+              <span style={{ 
+                marginLeft: '8px', 
+                fontSize: '10px', 
+                color: 'var(--accent)', 
+                background: 'var(--accent-dim)', 
+                padding: '2px 6px', 
+                borderRadius: '4px' 
+              }}>
+                AI
+              </span>
+              {project.variantIndex !== undefined && (
+                <span style={{ 
+                  marginLeft: '4px', 
+                  fontSize: '9px', 
+                  color: '#ffffff', 
+                  background: '#FF6B6B', 
+                  padding: '2px 5px', 
+                  borderRadius: '3px',
+                  fontWeight: 'bold'
+                }}>
+                  {project.variantIndex + 1}
+                </span>
+              )}
+            </>
+          )}
+        </div>
         <div className="project-card-meta">
           <span className="project-card-type">{getTypeLabel(project.type)}</span>
           <span style={{ color: 'var(--border-mid)' }}>·</span>
           <span className="project-card-date">{timeAgo(project.updatedAt)}</span>
         </div>
+        {project.tags && (
+          <div style={{ 
+            fontSize: '11px', 
+            color: 'var(--text-secondary)', 
+            margin: '6px 0', 
+            lineHeight: '1.3',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}>
+            {project.tags}
+          </div>
+        )}
         <div className="project-card-stats">
           <span className="project-stat">
             <Clock size={12} />
@@ -513,6 +668,14 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
           )}
         </div>
       </div>
+      {/* Скрытый аудио элемент для воспроизведения */}
+      {project.audioUrl && (
+        <audio 
+          id={`audio-${project.id}`} 
+          src={project.audioUrl} 
+          preload="none"
+        />
+      )}
     </motion.div>
   );
 }
@@ -521,10 +684,104 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
 export default function Projects() {
   const [activeTab, setActiveTab] = useState<'all' | 'music' | 'video' | 'image'>('all');
   const [projects] = useState<Project[]>(MOCK_PROJECTS);
+  const [generatedTracks, setGeneratedTracks] = useState<GeneratedTrack[]>([]);
+
+  // Загрузка сгенерированных треков из localStorage
+  useEffect(() => {
+    const loadGeneratedTracks = () => {
+      try {
+        const allTracks: any[] = [];
+        
+        // Загружаем все треки из project-tracks (новый формат)
+        const projectTracks = localStorage.getItem('project-tracks');
+        if (projectTracks) {
+          const tracks = JSON.parse(projectTracks);
+          allTracks.push(...tracks);
+        }
+
+        // Загружаем старый формат для обратной совместимости
+        const projectTrack = localStorage.getItem('project-track');
+        if (projectTrack) {
+          const track = JSON.parse(projectTrack);
+          allTracks.push(track);
+        }
+
+        // Загружаем всю историю генераций
+        const history = localStorage.getItem('ai-generated-tracks');
+        if (history) {
+          const historyTracks = JSON.parse(history);
+          // Добавляем все варианты из истории
+          historyTracks.forEach((item: any) => {
+            if (item.audio_urls && item.audio_urls.length > 0) {
+              item.audio_urls.forEach((audioUrl: string, index: number) => {
+                allTracks.push({
+                  id: `${item.id}-${index}`,
+                  originalId: item.id,
+                  title: `${item.title || 'Сгенерированный трек'} ${index + 1}`,
+                  audioUrl: audioUrl,
+                  tags: item.tags,
+                  createdAt: item.createdAt,
+                  images: item.images || [],
+                  variantIndex: index
+                });
+              });
+            }
+          });
+        }
+        
+        // Убираем дубликаты и устанавливаем состояние
+        const unique = allTracks.filter((track, index, self) => 
+          index === self.findIndex(t => t.id === track.id)
+        );
+        
+        setGeneratedTracks(unique);
+      } catch (error) {
+        console.error('Failed to load generated tracks:', error);
+      }
+    };
+
+    loadGeneratedTracks();
+
+    // Слушаем изменения в localStorage
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'project-track' || e.key === 'project-tracks' || e.key === 'ai-generated-tracks') {
+        loadGeneratedTracks();
+      }
+    };
+
+    // Также слушаем изменения в том же окне (для обновлений внутри той же вкладки)
+    const handleLocalStorageUpdate = () => {
+      loadGeneratedTracks();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('localStorageUpdated', handleLocalStorageUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('localStorageUpdated', handleLocalStorageUpdate);
+    };
+  }, []);
+
+  // Создаем проекты из сгенерированных треков
+  const musicProjects = generatedTracks.map((track) => ({
+    id: `generated-${track.id}`,
+    title: track.title,
+    type: 'music' as const,
+    tracksCount: 1,
+    updatedAt: track.createdAt || new Date().toISOString(),
+    audioUrl: track.audioUrl,
+    tags: track.tags,
+    images: track.images || [],
+    originalId: track.originalId,
+    variantIndex: track.variantIndex
+  }));
+
+  const allProjects = [...projects, ...musicProjects];
 
   const filteredProjects = activeTab === 'all' 
-    ? projects 
-    : projects.filter(p => p.type === activeTab);
+    ? allProjects 
+    : allProjects.filter(p => p.type === activeTab);
 
   return (
     <div className="projects-root">
@@ -557,6 +814,17 @@ export default function Projects() {
           <Plus size={16} />
           <span>Создать новый проект</span>
         </button>
+
+        {/* Loopera Button */}
+        <a 
+          href="https://loopera-lpr.vercel.app/auth" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="loopera-btn"
+        >
+          <Headphones size={18} />
+          <span>Loopera</span>
+        </a>
 
         {/* Tabs */}
         <div className="projects-tabs">
