@@ -457,7 +457,6 @@ const IconChevron = () => (
 
 const MAIN_NAV = [
   { path: '/feed',     label: 'Лента',     icon: <IconHome /> },
-  { path: '/studio',   label: 'Студия',    icon: <IconMusic /> },
   { path: '/projects', label: 'Проекты',   icon: <IconVideo /> },
 ];
 
