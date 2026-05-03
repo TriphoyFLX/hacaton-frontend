@@ -838,15 +838,8 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
     
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append('content', content);
-      files.forEach(file => {
-        formData.append('media', file);
-      });
-      
-      // Безопасный вызов API
-      const createPostFn = postsApi.createPost as (...args: any[]) => Promise<any>;
-      await createPostFn(formData);
+      // Передаём content и files отдельно
+      await postsApi.createPost(content, files);
       
       setContent('');
       setFiles([]);
