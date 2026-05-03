@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Folder, Plus, Music, Film, Image, Play, Clock, Users, Headphones } from 'lucide-react';
+import { Folder, Plus, Music, Film, Image, Play, Clock, Users, Headphones, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Styles ──
@@ -495,7 +495,10 @@ const IconFolder = () => (
 );
 
 // ── Project Card ──
-function ProjectCard({ project, index }: { project: Project & { audioUrl?: string; tags?: string; images?: string[]; originalId?: string | number; variantIndex?: number }; index: number }) {
+const ProjectCard = forwardRef<HTMLDivElement, { 
+  project: Project & { audioUrl?: string; tags?: string; images?: string[]; originalId?: string | number; variantIndex?: number }; 
+  index: number 
+}>(({ project, index }, ref) => {
   const navigate = useNavigate();
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -529,41 +532,15 @@ function ProjectCard({ project, index }: { project: Project & { audioUrl?: strin
   const handlePlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (project.audioUrl) {
-      if (isPlaying) {
-        // Останавливаем воспроизведение
-        const audio = document.querySelector(`#audio-${project.id}`) as HTMLAudioElement;
-        if (audio) {
-          audio.pause();
-          audio.currentTime = 0;
-        }
-        setIsPlaying(false);
-      } else {
-        // Останавливаем все другие аудио
-        document.querySelectorAll('audio').forEach(audio => {
-          const el = audio as HTMLAudioElement;
-          el.pause();
-          el.currentTime = 0;
-        });
-        
-        // Воспроизводим текущий трек
-        const audio = document.querySelector(`#audio-${project.id}`) as HTMLAudioElement;
-        if (audio) {
-          audio.play();
-          setIsPlaying(true);
-          
-          audio.onended = () => setIsPlaying(false);
-        }
-      }
-    } else {
-      navigate(`/projects/${project.id}`);
-    }
+    // Просто переключаем состояние play/pause
+    setIsPlaying(!isPlaying);
   };
 
   const isGeneratedTrack = project.id.toString().startsWith('generated-');
 
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
@@ -596,13 +573,24 @@ function ProjectCard({ project, index }: { project: Project & { audioUrl?: strin
           </div>
         )}
         <div className="project-card-overlay">
-          <div className="play-btn" onClick={handlePlayClick}>
-            {isPlaying && project.audioUrl ? (
-              <span style={{ marginLeft: '2px', fontSize: '12px', fontWeight: 'bold' }}>❚❚</span>
-            ) : (
+          {project.audioUrl ? (
+            <div style={{ 
+              position: 'absolute', 
+              bottom: '10px', 
+              right: '10px', 
+              background: 'rgba(0,0,0,0.7)', 
+              padding: '4px 8px', 
+              borderRadius: '4px',
+              fontSize: '10px',
+              color: 'white'
+            }}>
+              🎵
+            </div>
+          ) : (
+            <div className="play-btn" onClick={handlePlayClick}>
               <Play size={18} />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
       <div className="project-card-body">
@@ -655,6 +643,51 @@ function ProjectCard({ project, index }: { project: Project & { audioUrl?: strin
             {project.tags}
           </div>
         )}
+        {project.audioUrl && (
+          <div style={{ marginTop: '8px' }}>
+            {/* HTML Audio элемент как в AI странице */}
+            <audio 
+              controls 
+              style={{ 
+                width: '100%', 
+                height: '32px', 
+                marginBottom: '8px',
+                borderRadius: '4px'
+              }}
+            >
+              <source src={project.audioUrl} type="audio/mpeg" />
+            </audio>
+            
+            <a 
+              href={project.audioUrl} 
+              download 
+              style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '6px', 
+                fontSize: '11px', 
+                color: 'var(--accent)', 
+                textDecoration: 'none',
+                padding: '4px 8px',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                backgroundColor: 'var(--bg-surface)',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--bg-elevated)';
+                e.currentTarget.style.borderColor = 'var(--border-hover)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
+                e.currentTarget.style.borderColor = 'var(--border)';
+              }}
+            >
+              <Download size={12} />
+              Скачать трек
+            </a>
+          </div>
+        )}
         <div className="project-card-stats">
           <span className="project-stat">
             <Clock size={12} />
@@ -668,17 +701,9 @@ function ProjectCard({ project, index }: { project: Project & { audioUrl?: strin
           )}
         </div>
       </div>
-      {/* Скрытый аудио элемент для воспроизведения */}
-      {project.audioUrl && (
-        <audio 
-          id={`audio-${project.id}`} 
-          src={project.audioUrl} 
-          preload="none"
-        />
-      )}
     </motion.div>
   );
-}
+});
 
 // ── Main ──
 export default function Projects() {
