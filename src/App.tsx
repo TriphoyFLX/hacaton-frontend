@@ -15,6 +15,7 @@ import ChatPage from './pages/ChatPage';
 import AdminPanel from './pages/AdminPanel';
 import AI from './pages/AI';
 import RapBattle from './pages/RapBattleNew';
+import MIDI from './pages/MIDI';
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
           <Route path="admin" element={<AdminPanel />} />
           <Route path="ai" element={<AI />} />
           <Route path="rap-battle" element={<RapBattle />} />
+          <Route path="midi" element={<MIDI />} />
         </Route>
       </Routes>
     </BrowserRouter>

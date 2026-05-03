@@ -464,6 +464,7 @@ const MAIN_NAV = [
 const CONTENT_NAV = [
   { path: '/soundtok', label: 'SoundTok',     icon: <IconVideo />,  badge: <span className="sb-badge sb-badge-new">NEW</span> },
   { path: '/rap-battle', label: 'Rap Battle',  icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-hot">HOT</span> },
+  { path: '/midi',      label: 'MIDI',         icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-beta">β</span> },
   { path: '/chats',    label: 'Чаты',          icon: <IconChat />,   badge: <span className="sb-badge sb-badge-count">3</span> },
 ];
 
