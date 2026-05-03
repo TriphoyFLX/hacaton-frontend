@@ -427,54 +427,7 @@ interface Project {
 
 // ── Mock Data ──
 const MOCK_PROJECTS: Project[] = [
-  {
-    id: '1',
-    title: 'Альбом "Рассвет"',
-    type: 'music',
-    tracksCount: 12,
-    collaboratorsCount: 3,
-    updatedAt: '2026-05-01T10:00:00Z',
-  },
-  {
-    id: '2',
-    title: 'Клип "Город огней"',
-    type: 'video',
-    clipsCount: 3,
-    collaboratorsCount: 5,
-    updatedAt: '2026-04-28T15:30:00Z',
-  },
-  {
-    id: '3',
-    title: 'Обложки альбомов',
-    type: 'image',
-    imagesCount: 8,
-    collaboratorsCount: 2,
-    updatedAt: '2026-04-25T09:00:00Z',
-  },
-  {
-    id: '4',
-    title: 'Подкаст "Звуки"',
-    type: 'music',
-    tracksCount: 24,
-    collaboratorsCount: 4,
-    updatedAt: '2026-04-20T12:00:00Z',
-  },
-  {
-    id: '5',
-    title: 'Видео-арт проект',
-    type: 'video',
-    clipsCount: 6,
-    collaboratorsCount: 7,
-    updatedAt: '2026-04-15T18:00:00Z',
-  },
-  {
-    id: '6',
-    title: 'Фотосессия',
-    type: 'image',
-    imagesCount: 45,
-    collaboratorsCount: 1,
-    updatedAt: '2026-04-10T14:00:00Z',
-  },
+  
 ];
 
 // ── Utils ──
