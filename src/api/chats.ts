@@ -27,6 +27,8 @@ export interface Chat {
     user: {
       id: string;
       username: string;
+      displayName?: string | null;
+      avatar?: string | null;
     };
   }>;
   messages: Array<{
@@ -35,10 +37,15 @@ export interface Chat {
     senderId: string;
     receiverId: string;
     chatId: string;
+    clientMessageId?: string | null;
+    status: 'SENT' | 'DELIVERED' | 'READ';
+    readAt?: string | null;
     createdAt: string;
     sender: {
       id: string;
       username: string;
+      displayName?: string | null;
+      avatar?: string | null;
     };
   }>;
 }
@@ -49,10 +56,15 @@ export interface Message {
   senderId: string;
   receiverId: string;
   chatId: string;
+  clientMessageId?: string | null;
+  status: 'SENT' | 'DELIVERED' | 'READ';
+  readAt?: string | null;
   createdAt: string;
   sender: {
     id: string;
     username: string;
+    displayName?: string | null;
+    avatar?: string | null;
   };
 }
 
@@ -72,8 +84,22 @@ export const chatsApi = {
     return response.data;
   },
   
-  sendMessage: async (chatId: string, content: string) => {
-    const response = await api.post(`/chats/${chatId}/messages`, { content });
+  sendMessage: async (chatId: string, content: string, receiverId?: string, clientMessageId?: string) => {
+    const response = await api.post(`/chats/${chatId}/messages`, { 
+      content, 
+      receiverId, 
+      clientMessageId 
+    });
+    return response.data;
+  },
+
+  markAsRead: async (chatId: string, messageIds: string[]) => {
+    const response = await api.post(`/chats/${chatId}/read`, { messageIds });
+    return response.data;
+  },
+
+  searchUsers: async (query: string) => {
+    const response = await api.get(`/chats/users/search?q=${encodeURIComponent(query)}`);
     return response.data;
   },
 };

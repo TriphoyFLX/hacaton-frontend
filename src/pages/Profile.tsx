@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { profileApi, UserProfile, ValidationError } from '../api/profile';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
 
@@ -20,6 +21,7 @@ ${FONT_IMPORT}
   --accent-dim: #c5c0b8;
   --red: #c0392b;
   --red-dim: #1a0f0f;
+  --success: #27ae60;
   font-family: 'Syne', sans-serif;
   background: var(--bg);
   min-height: 100vh;
@@ -88,8 +90,11 @@ ${FONT_IMPORT}
   gap: 28px;
   margin-bottom: 40px;
 }
-.avatar {
+.avatar-wrapper {
+  position: relative;
   flex-shrink: 0;
+}
+.avatar {
   width: 80px;
   height: 80px;
   border: 1px solid var(--border-mid);
@@ -103,6 +108,41 @@ ${FONT_IMPORT}
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.01em;
+  overflow: hidden;
+  position: relative;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-edit-btn {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+.avatar-edit-btn:hover {
+  background: var(--text-primary);
+  color: var(--bg);
+  border-color: var(--text-primary);
+}
+.avatar-edit-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.avatar-input {
+  display: none;
 }
 .hero-info {
   flex: 1;
@@ -139,6 +179,65 @@ ${FONT_IMPORT}
   color: var(--accent-dim);
   line-height: 1.65;
   font-weight: 400;
+}
+.bio-empty {
+  font-size: 15px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── EDIT FORM ── */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 40px;
+  padding: 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.form-input,
+.form-textarea {
+  background: var(--bg);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus,
+.form-textarea:focus {
+  border-color: var(--border-hover);
+}
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--text-muted);
+}
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+.form-error {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--red);
+  letter-spacing: 0.02em;
 }
 .bio-edit-wrap {
   display: flex;
@@ -299,6 +398,40 @@ ${FONT_IMPORT}
   text-transform: uppercase;
 }
 
+/* ── SAVE STATUS ── */
+.save-status {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  animation: slideIn 0.3s ease-out;
+  z-index: 100;
+}
+.save-status.success {
+  background: rgba(39, 174, 96, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+}
+.save-status.error {
+  background: rgba(192, 57, 43, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(192, 57, 43, 0.3);
+}
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ── MOBILE ── */
 @media (max-width: 768px) {
   .profile-wrapper {
@@ -352,6 +485,12 @@ const IconEdit = () => (
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
   </svg>
 );
+const IconCamera = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+    <circle cx="12" cy="13" r="4"/>
+  </svg>
+);
 const IconLogout = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -389,14 +528,127 @@ const IconLink = () => (
 export default function Profile() {
   const { user, logout } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
-  const [bio, setBio] = useState('Музыкант и творец');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
+  const [errors, setErrors] = useState<ValidationError[]>([]);
+  
+  // Form state
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load profile
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const data = await profileApi.getMyProfile();
+        setProfile(data);
+        setDisplayName(data.displayName || '');
+        setBio(data.bio || '');
+        setAvatar(data.avatar || null);
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  // Clear save status after 3 seconds
+  useEffect(() => {
+    if (saveStatus) {
+      const timeout = setTimeout(() => setSaveStatus(null), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [saveStatus]);
 
   const handleLogout = () => {
     logout();
     window.location.href = '/login';
   };
 
-  if (!user) {
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      setErrors([{ field: 'avatar', message: 'Файл слишком большой (макс. 5MB)' }]);
+      setSaveStatus('error');
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setErrors([{ field: 'avatar', message: 'Неподдерживаемый формат (JPEG, PNG, GIF, WEBP)' }]);
+      setSaveStatus('error');
+      return;
+    }
+
+    try {
+      const result = await profileApi.uploadAvatar(file);
+      setAvatar(result.avatar);
+      setSaveStatus('success');
+      setErrors([]);
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      setErrors([{ field: 'avatar', message: 'Ошибка загрузки аватара' }]);
+      setSaveStatus('error');
+    }
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setErrors([]);
+
+    try {
+      const result = await profileApi.updateProfile({
+        displayName: displayName.trim() || undefined,
+        bio: bio.trim() || undefined,
+      });
+
+      if (result.success && result.user) {
+        setProfile(result.user);
+        setSaveStatus('success');
+        setIsEditing(false);
+      } else {
+        setErrors(result.errors || []);
+        setSaveStatus('error');
+      }
+    } catch (error) {
+      console.error('Failed to save profile:', error);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setErrors([]);
+    // Reset to current values
+    if (profile) {
+      setDisplayName(profile.displayName || '');
+      setBio(profile.bio || '');
+    }
+  };
+
+  const getFieldError = (field: string) => {
+    return errors.find(e => e.field === field)?.message;
+  };
+
+  if (loading) {
     return (
       <div className="profile-root">
         <style>{css}</style>
@@ -409,8 +661,21 @@ export default function Profile() {
     );
   }
 
-  const joinDate = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  if (!profile || !user) {
+    return (
+      <div className="profile-root">
+        <style>{css}</style>
+        <div className="profile-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', color: 'var(--text-secondary)', letterSpacing: '0.08em' }}>
+            Не удалось загрузить профиль
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  const joinDate = profile.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
     : '—';
 
   return (
@@ -422,7 +687,11 @@ export default function Profile() {
         <div className="profile-topbar">
           <span className="topbar-label">Профиль</span>
           <div className="topbar-actions">
-            <button className="btn-icon" onClick={() => setIsEditing(!isEditing)} title="Редактировать">
+            <button 
+              className={`btn-icon ${isEditing ? 'active' : ''}`} 
+              onClick={() => isEditing ? handleCancel() : setIsEditing(true)} 
+              title={isEditing ? 'Отмена' : 'Редактировать'}
+            >
               <IconEdit />
             </button>
             <button className="btn-icon danger" onClick={handleLogout} title="Выйти">
@@ -433,35 +702,86 @@ export default function Profile() {
 
         {/* Hero */}
         <div className="profile-hero">
-          <div className="avatar">{user.username[0].toUpperCase()}</div>
+          <div className="avatar-wrapper">
+            <div className="avatar">
+              {avatar ? (
+                <img src={avatar} alt={profile.username} />
+              ) : (
+                profile.username[0].toUpperCase()
+              )}
+            </div>
+            <button className="avatar-edit-btn" onClick={handleAvatarClick} title="Изменить аватар">
+              <IconCamera />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              className="avatar-input"
+              onChange={handleAvatarChange}
+            />
+          </div>
           <div className="hero-info">
-            <div className="hero-handle">@{user.username}</div>
-            <h1 className="hero-name">{user.username}</h1>
-            <div className="hero-email">{user.email}</div>
+            <div className="hero-handle">@{profile.username}</div>
+            <h1 className="hero-name">{profile.displayName || profile.username}</h1>
+            <div className="hero-email">{profile.email}</div>
           </div>
         </div>
 
-        {/* Bio */}
-        <div className="bio-section">
-          {isEditing ? (
-            <div className="bio-edit-wrap">
+        {/* Edit Form */}
+        {isEditing && (
+          <div className="edit-form">
+            <div className="form-group">
+              <label className="form-label">Имя</label>
+              <input
+                type="text"
+                className="form-input"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Ваше отображаемое имя"
+                maxLength={50}
+              />
+              {getFieldError('displayName') && (
+                <span className="form-error">{getFieldError('displayName')}</span>
+              )}
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">О себе</label>
               <textarea
-                className="bio-textarea"
+                className="form-textarea"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                rows={3}
                 placeholder="Расскажите о себе..."
-                autoFocus
+                rows={3}
+                maxLength={500}
               />
-              <div className="bio-actions">
-                <button className="btn btn-ghost" onClick={() => setIsEditing(false)}>Отмена</button>
-                <button className="btn btn-primary" onClick={() => setIsEditing(false)}>Сохранить</button>
-              </div>
+              {getFieldError('bio') && (
+                <span className="form-error">{getFieldError('bio')}</span>
+              )}
             </div>
-          ) : (
-            <p className="bio-text">{bio}</p>
-          )}
-        </div>
+            
+            <div className="bio-actions">
+              <button className="btn btn-ghost" onClick={handleCancel} disabled={isSaving}>
+                Отмена
+              </button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Сохранение...' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Bio */}
+        {!isEditing && (
+          <div className="bio-section">
+            {bio ? (
+              <p className="bio-text">{bio}</p>
+            ) : (
+              <p className="bio-empty">Нет описания. Нажмите редактировать, чтобы добавить.</p>
+            )}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="stats-row">
@@ -491,7 +811,7 @@ export default function Profile() {
           <div className="detail-row">
             <span className="detail-icon"><IconMail /></span>
             <span className="detail-label">Email</span>
-            <span className="detail-value">{user.email}</span>
+            <span className="detail-value">{profile.email}</span>
           </div>
           <div className="detail-row">
             <span className="detail-icon"><IconPin /></span>
@@ -514,6 +834,13 @@ export default function Profile() {
         </div>
 
       </div>
+
+      {/* Save Status Toast */}
+      {saveStatus && (
+        <div className={`save-status ${saveStatus}`}>
+          {saveStatus === 'success' ? 'Сохранено' : 'Ошибка сохранения'}
+        </div>
+      )}
     </div>
   );
 }
