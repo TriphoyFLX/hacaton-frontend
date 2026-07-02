@@ -465,6 +465,14 @@ ${FONT_IMPORT}
 }
 
 /* ── FAB ── */
+.st-root--feed {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .st-fab {
   position: fixed;
   bottom: 32px;
@@ -670,7 +678,7 @@ export default function SoundTok() {
   }
 
   return (
-    <div className="st-root">
+    <div className={`st-root ${soundToks.length > 0 ? 'st-root--feed' : ''}`}>
       <style>{css}</style>
 
       {/* Toast notifications */}
@@ -719,8 +727,16 @@ export default function SoundTok() {
         </div>
       ) : (
         /* Video feed with content */
-        <div style={{ position: 'relative', height: '100%' }}>
-          <VideoFeed soundToks={soundToks} onLike={handleLike} />
+        <div style={{ position: 'relative', height: '100vh', maxHeight: '100dvh' }}>
+          <VideoFeed
+            soundToks={soundToks}
+            onLike={handleLike}
+            onCommentCountChange={(id, count) => {
+              setSoundToks((prev) =>
+                prev.map((tok) => (tok.id === id ? { ...tok, commentsCount: count } : tok))
+              );
+            }}
+          />
           
           <button className="st-fab" onClick={() => setShowUpload(true)} title="Загрузить видео">
             <IconPlus />

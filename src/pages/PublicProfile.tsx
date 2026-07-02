@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Calendar, Mail, MapPin, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Calendar } from 'lucide-react';
 import { chatsApi } from '../api/chats';
+import { profileApi, UserProfile } from '../api/profile';
+import { resolveMediaUrl } from '../lib/mediaUrl';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -163,6 +165,12 @@ ${FONT_IMPORT}
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.01em;
+  overflow: hidden;
+}
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .profile-info {
   flex: 1;
@@ -440,37 +448,21 @@ ${FONT_IMPORT}
 export default function PublicProfile() {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
       if (!username) return;
-      
+
       setLoading(true);
       try {
-        const response = await fetch(`http://localhost:5002/api/search?q=${username}&type=users`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        const data = await response.json();
-        
-        if (data.users && data.users.length > 0) {
-          const foundUser = data.users.find((u: any) => u.username === username);
-          if (foundUser) {
-            setUser({
-              ...foundUser,
-              bio: 'Музыкант и творец',
-              followers: 0,
-              following: 0,
-              posts: 0
-            });
-          }
-        }
+        const data = await profileApi.getPublicProfile(username);
+        setUser(data);
       } catch (error) {
         console.error('Failed to fetch user:', error);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -557,12 +549,15 @@ export default function PublicProfile() {
         {/* Profile Header */}
         <div className="profile-header">
           <div className="profile-avatar">
-            {user.username[0].toUpperCase()}
+            {user.avatar ? (
+              <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} />
+            ) : (
+              user.username[0].toUpperCase()
+            )}
           </div>
           <div className="profile-info">
             <div className="profile-handle">@{user.username}</div>
-            <h1 className="profile-name">{user.username}</h1>
-            <div className="profile-email">{user.email}</div>
+            <h1 className="profile-name">{user.displayName || user.username}</h1>
           </div>
           <div className="profile-actions">
             <button
@@ -579,23 +574,21 @@ export default function PublicProfile() {
         </div>
 
         {/* Bio */}
-        <div className="profile-bio">
-          <p className="bio-text">{user.bio}</p>
-        </div>
+        {user.bio && (
+          <div className="profile-bio">
+            <p className="bio-text">{user.bio}</p>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="profile-stats">
           <div className="stat-cell">
-            <div className="stat-num">{user.posts}</div>
+            <div className="stat-num">{user.postsCount ?? 0}</div>
             <div className="stat-label">Постов</div>
           </div>
           <div className="stat-cell">
-            <div className="stat-num">{user.followers}</div>
-            <div className="stat-label">Подписчиков</div>
-          </div>
-          <div className="stat-cell">
-            <div className="stat-num">{user.following}</div>
-            <div className="stat-label">Подписок</div>
+            <div className="stat-num">{user.soundToksCount ?? 0}</div>
+            <div className="stat-label">SoundTok</div>
           </div>
         </div>
 
@@ -615,21 +608,6 @@ export default function PublicProfile() {
                   })
                 : '—'}
             </span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-icon"><Mail size={15} /></span>
-            <span className="detail-label">Email</span>
-            <span className="detail-value">{user.email}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-icon"><MapPin size={15} /></span>
-            <span className="detail-label">Локация</span>
-            <span className="detail-value">Россия</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-icon"><LinkIcon size={15} /></span>
-            <span className="detail-label">Сайт</span>
-            <a href="#" className="detail-link">mysite.com</a>
           </div>
         </div>
 

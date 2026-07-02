@@ -1,28 +1,45 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-
-import { Heart, MessageCircle, Share, X, Send, Play } from 'lucide-react';
-
+import { useNavigate } from 'react-router-dom';
+import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check } from 'lucide-react';
 import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
-
-
-
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
-
-
-
-// TikTok стиль VideoFeed - без скролла, чистое переключение видео
+import { API_ORIGIN } from '../api/client';
+import { resolveMediaUrl } from '../lib/mediaUrl';
+import { formatCount, formatRelativeTime, pluralizeComments } from '../lib/format';
+import { useAuthStore } from '../store/authStore';
 
 const css = `
-
-${FONT_IMPORT}
-
-
-
 .vf-root {
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   position: relative;
   overflow: hidden;
+  background: #000;
+}
+
+.vf-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.vf-video-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform, opacity;
+  touch-action: none;
+}
+
+.vf-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
   background: #000;
 }
 
@@ -32,1248 +49,977 @@ ${FONT_IMPORT}
   left: 50%;
   transform: translate(-50%, -50%);
   color: white;
-  opacity: 0.8;
+  opacity: 0.85;
   pointer-events: none;
   z-index: 5;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
 }
 
-
-
-.vf-video-container {
+.vf-gradient-top {
   position: absolute;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(rgba(0,0,0,0.45), transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.vf-gradient-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 220px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.75));
+  pointer-events: none;
+  z-index: 2;
+}
+
+.vf-bottom-info {
+  position: absolute;
+  left: 0;
+  right: 72px;
+  bottom: 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 8;
+  color: #fff;
+}
+
+.vf-author-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.vf-author-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+
+.vf-follow-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.8);
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.vf-description {
+  font-size: 14px;
+  line-height: 1.45;
+  margin-bottom: 10px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vf-music-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  opacity: 0.9;
+  max-width: 100%;
+}
+
+.vf-music-row span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vf-music-icon {
+  flex-shrink: 0;
+  animation: vf-spin 3s linear infinite;
+}
+
+@keyframes vf-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Action bar (TikTok right side) ── */
+.vf-actions {
+  position: absolute;
+  right: 10px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 9;
+}
+
+.vf-action-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.vf-author-block {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.vf-author-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #222;
   display: flex;
   align-items: center;
   justify-content: center;
-  will-change: transform, opacity;
-  touch-action: none;
-}
-
-
-
-.vf-video {
-
-  width: 100%;
-
-  height: 100%;
-
-  object-fit: cover;
-
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
   cursor: pointer;
-
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
-
-
-.vf-overlay {
-
-  position: absolute;
-
-  bottom: 0;
-
-  left: 0;
-
-  right: 0;
-
-  padding: 20px;
-
-  background: linear-gradient(transparent, rgba(0,0,0,0.8));
-
-  color: white;
-
+.vf-author-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-
-
-.vf-actions {
-
-  position: absolute;
-
-  right: 20px;
-
-  bottom: 100px;
-
+.vf-follow-btn {
+  position: relative;
+  margin-top: -11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fe2c55;
+  border: 2px solid #000;
+  color: #fff;
   display: flex;
-
-  flex-direction: column;
-
-  gap: 20px;
-
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, background 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
 }
 
+.vf-follow-btn:hover {
+  transform: scale(1.1);
+  background: #ff4466;
+}
 
+.vf-follow-btn:active {
+  transform: scale(0.92);
+}
+
+.vf-follow-btn.following {
+  background: #2a2a2a;
+  border-color: rgba(255,255,255,0.9);
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+}
+
+.vf-follow-btn svg {
+  stroke-width: 3;
+}
 
 .vf-action-btn {
-
   width: 48px;
-
   height: 48px;
-
   border-radius: 50%;
-
-  background: rgba(255,255,255,0.1);
-
+  background: transparent;
   border: none;
-
-  color: white;
-
+  color: #fff;
   display: flex;
-
   align-items: center;
-
   justify-content: center;
-
   cursor: pointer;
-
-  transition: all 0.2s;
-
+  transition: transform 0.15s;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
 }
 
-
-
-.vf-action-btn:hover {
-
-  background: rgba(255,255,255,0.2);
-
-  transform: scale(1.1);
-
+.vf-action-btn:active {
+  transform: scale(0.9);
 }
-
-
 
 .vf-action-btn.liked {
-
-  background: #ff4444;
-
+  color: #fe2c55;
 }
 
+.vf-action-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  margin-top: 2px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  min-width: 48px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
-
+/* Progress dots */
 .vf-progress-indicator {
-
   position: fixed;
-
-  right: 20px;
-
+  right: max(12px, calc(50% - 240px + 8px));
   top: 50%;
-
   transform: translateY(-50%);
-
   z-index: 10;
-
   display: flex;
-
   flex-direction: column;
-
-  gap: 8px;
-
+  gap: 6px;
 }
-
-
 
 .vf-progress-dot {
-
-  width: 6px;
-
-  height: 6px;
-
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-
-  background: rgba(255, 255, 255, 0.3);
-
+  background: rgba(255,255,255,0.35);
   cursor: pointer;
-
   transition: all 0.2s;
-
 }
-
-
 
 .vf-progress-dot.active {
-
-  background: white;
-
-  transform: scale(1.2);
-
+  background: #fff;
+  height: 18px;
+  border-radius: 3px;
 }
 
-
-
-.vf-modal-overlay {
-
+/* ── Comments bottom sheet (TikTok style) ── */
+.vf-sheet-backdrop {
   position: fixed;
-
   inset: 0;
-
-  background: rgba(0, 0, 0, 0.85);
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  z-index: 100;
-
-  backdrop-filter: blur(4px);
-
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  animation: vf-fade-in 0.25s ease;
 }
 
-.vf-modal {
+@keyframes vf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
-  background: #111111;
-
-  border: 1px solid #232323;
-
-  border-radius: 12px;
-
+.vf-sheet {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
   width: 100%;
-
-  max-width: 420px;
-
-  max-height: 80vh;
-
+  max-width: 480px;
+  max-height: min(75vh, 640px);
+  background: #121212;
+  border-radius: 12px 12px 0 0;
+  z-index: 201;
   display: flex;
-
   flex-direction: column;
-
+  animation: vf-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.vf-modal-header {
+@keyframes vf-slide-up {
+  from { transform: translateX(-50%) translateY(100%); }
+  to { transform: translateX(-50%) translateY(0); }
+}
 
+.vf-sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 2px;
+  margin: 10px auto 4px;
+  flex-shrink: 0;
+}
+
+.vf-sheet-header {
   display: flex;
-
   align-items: center;
-
-  justify-content: space-between;
-
-  padding: 20px;
-
-  border-bottom: 1px solid #1a1a1a;
-
-}
-
-.vf-modal-title {
-
-  font-family: 'Syne', sans-serif;
-
-  font-size: 16px;
-
-  font-weight: 600;
-
-  color: #f0ede8;
-
-  letter-spacing: -0.01em;
-
-}
-
-.vf-modal-close {
-
-  width: 32px;
-
-  height: 32px;
-
-  display: flex;
-
-  align-items: center;
-
   justify-content: center;
+  position: relative;
+  padding: 8px 16px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
 
-  border: 1px solid #1a1a1a;
+.vf-sheet-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f1f1;
+}
 
-  border-radius: 6px;
-
-  background: transparent;
-
+.vf-sheet-close {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255,255,255,0.08);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-
-  transition: border-color 0.15s, background 0.15s;
-
-  color: #c5c0b8;
-
-}
-
-.vf-modal-close:hover {
-
-  border-color: #2e2e2e;
-
-  background: #141414;
-
-  color: #f0ede8;
-
-}
-
-.vf-modal-close svg {
-
-  width: 14px;
-
-  height: 14px;
-
-  stroke-width: 1.5;
-
 }
 
 .vf-comments-list {
-
   flex: 1;
-
   overflow-y: auto;
-
-  padding: 16px 20px;
-
+  overscroll-behavior: contain;
+  padding: 4px 16px;
 }
 
 .vf-comments-list::-webkit-scrollbar {
-
   width: 4px;
-
-}
-
-.vf-comments-list::-webkit-scrollbar-track {
-
-  background: transparent;
-
 }
 
 .vf-comments-list::-webkit-scrollbar-thumb {
-
-  background: #232323;
-
+  background: rgba(255,255,255,0.15);
   border-radius: 2px;
-
 }
 
 .vf-comment-item {
-
   display: flex;
-
   gap: 12px;
-
   padding: 12px 0;
-
-  border-bottom: 1px solid #1a1a1a;
-
-}
-
-.vf-comment-item:last-child {
-
-  border-bottom: none;
-
 }
 
 .vf-comment-avatar {
-
-  width: 32px;
-
-  height: 32px;
-
-  background: #181818;
-
-  border: 1px solid #232323;
-
-  border-radius: 8px;
-
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #2a2a2a;
   display: flex;
-
   align-items: center;
-
   justify-content: center;
-
-  font-family: 'Syne', sans-serif;
-
-  font-size: 12px;
-
-  font-weight: 600;
-
-  color: #f0ede8;
-
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
   flex-shrink: 0;
-
+  overflow: hidden;
 }
 
-.vf-comment-content {
+.vf-comment-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
+.vf-comment-body {
   flex: 1;
-
   min-width: 0;
-
 }
 
-.vf-comment-header {
-
+.vf-comment-meta {
   display: flex;
-
-  align-items: center;
-
+  align-items: baseline;
   gap: 8px;
-
   margin-bottom: 4px;
-
 }
 
-.vf-comment-username {
-
-  font-family: 'Syne', sans-serif;
-
+.vf-comment-user {
   font-size: 13px;
-
   font-weight: 600;
-
-  color: #f0ede8;
-
+  color: rgba(255,255,255,0.6);
 }
 
 .vf-comment-time {
-
-  font-family: 'DM Mono', monospace;
-
-  font-size: 10px;
-
-  color: #5a5a5a;
-
-  letter-spacing: 0.04em;
-
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
 }
 
 .vf-comment-text {
-
-  font-family: 'Syne', sans-serif;
-
   font-size: 14px;
-
-  color: #c5c0b8;
-
-  line-height: 1.5;
-
-}
-
-.vf-comment-input-wrapper {
-
-  padding: 16px 20px;
-
-  border-top: 1px solid #1a1a1a;
-
-}
-
-.vf-comment-input {
-
-  width: 100%;
-
-  box-sizing: border-box;
-
-  background: #181818;
-
-  border: 1px solid #232323;
-
-  border-radius: 8px;
-
-  color: #f0ede8;
-
-  font-family: 'Syne', sans-serif;
-
-  font-size: 14px;
-
-  line-height: 1.5;
-
-  padding: 12px 16px;
-
-  resize: none;
-
-  outline: none;
-
-  transition: border-color 0.15s;
-
-}
-
-.vf-comment-input:focus {
-
-  border-color: #2e2e2e;
-
-}
-
-.vf-comment-input::placeholder {
-
-  color: #5a5a5a;
-
-}
-
-.vf-comment-actions {
-
-  display: flex;
-
-  justify-content: flex-end;
-
-  margin-top: 10px;
-
-}
-
-.vf-btn {
-
-  height: 34px;
-
-  padding: 0 16px;
-
-  border-radius: 8px;
-
-  font-family: 'DM Mono', monospace;
-
-  font-size: 12px;
-
-  letter-spacing: 0.04em;
-
-  cursor: pointer;
-
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-
-  display: inline-flex;
-
-  align-items: center;
-
-  gap: 6px;
-
-  border: 1px solid transparent;
-
-}
-
-.vf-btn-ghost {
-
-  background: transparent;
-
-  border: 1px solid #1a1a1a;
-
-  color: #c5c0b8;
-
-}
-
-.vf-btn-ghost:hover {
-
-  border-color: #2e2e2e;
-
-  color: #f0ede8;
-
-}
-
-.vf-btn-primary {
-
-  background: #f0ede8;
-
-  border: 1px solid #f0ede8;
-
-  color: #0a0a0a;
-
-  font-weight: 500;
-
-}
-
-.vf-btn-primary:hover {
-
-  background: #c5c0b8;
-
-  border-color: #c5c0b8;
-
-}
-
-.vf-btn-primary:disabled {
-
-  opacity: 0.5;
-
-  cursor: not-allowed;
-
+  line-height: 1.45;
+  color: #f1f1f1;
+  word-break: break-word;
 }
 
 .vf-empty-comments {
-
   text-align: center;
-
-  padding: 40px 20px;
-
+  padding: 48px 20px;
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
 }
 
-.vf-empty-text {
-
-  font-family: 'DM Mono', monospace;
-
-  font-size: 12px;
-
-  color: #5a5a5a;
-
-  letter-spacing: 0.04em;
-
+.vf-comments-loading {
+  text-align: center;
+  padding: 32px;
+  color: rgba(255,255,255,0.5);
+  font-size: 13px;
 }
 
-.vf-loading {
-
+.vf-sheet-input {
   display: flex;
-
   align-items: center;
-
-  justify-content: center;
-
-  padding: 40px;
-
+  gap: 10px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+  background: #121212;
 }
 
-.vf-loading-text {
-
-  font-family: 'DM Mono', monospace;
-
-  font-size: 12px;
-
-  color: #c5c0b8;
-
-  letter-spacing: 0.04em;
-
+.vf-sheet-input input {
+  flex: 1;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  border-radius: 20px;
+  padding: 10px 16px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
 }
 
-
-
-/* Кастомный скроллбар для VideoFeed */
-
-.vf-feed-container::-webkit-scrollbar {
-
-  width: 6px;
-
+.vf-sheet-input input::placeholder {
+  color: rgba(255,255,255,0.35);
 }
 
-.vf-feed-container::-webkit-scrollbar-track {
-
-  background: transparent;
-
-}
-
-.vf-feed-container::-webkit-scrollbar-thumb {
-
-  background: rgba(255, 255, 255, 0.2);
-
-  border-radius: 3px;
-
-  transition: background 0.2s;
-
-}
-
-.vf-feed-container::-webkit-scrollbar-thumb:hover {
-
-  background: rgba(255, 255, 255, 0.3);
-
-}
-
-.vf-feed-container::-webkit-scrollbar-corner {
-
-  background: transparent;
-
-}
-
-
-
-/* Настройка snap-center для TikTok поведения */
-
-.vf-feed-container {
-
-  scroll-snap-type: y mandatory;
-
-  scroll-behavior: smooth;
-
-}
-
-
-
-.snap-center {
-
-  scroll-snap-align: center;
-
-  scroll-snap-stop: always;
-
-}
-
-
-
-/* Индикатор прогресса */
-
-.vf-progress-indicator {
-
-  position: fixed;
-
-  right: 20px;
-
-  top: 50%;
-
-  transform: translateY(-50%);
-
-  z-index: 10;
-
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 8px;
-
-}
-
-.vf-progress-dot {
-
-  width: 6px;
-
-  height: 6px;
-
+.vf-send-btn {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-
-  background: rgba(255, 255, 255, 0.3);
-
+  border: none;
+  background: #fe2c55;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-
-  transition: all 0.2s;
-
+  flex-shrink: 0;
+  transition: opacity 0.15s;
 }
 
-.vf-progress-dot.active {
-
-  background: white;
-
-  transform: scale(1.2);
-
+.vf-send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
+@media (max-width: 380px) {
+  .vf-actions {
+    right: 6px;
+  }
+  .vf-action-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .vf-bottom-info {
+    right: 64px;
+    padding-left: 12px;
+  }
+}
+
+@media (min-width: 768px) {
+  .vf-root {
+    background: #0a0a0a;
+  }
+  .vf-stage {
+    border-left: 1px solid #1a1a1a;
+    border-right: 1px solid #1a1a1a;
+  }
+}
 `;
 
-
-
 interface VideoFeedProps {
-
   soundToks: SoundTok[];
-
   onLike: (id: string) => void;
-
+  onCommentCountChange?: (id: string, count: number) => void;
 }
 
+function CommentAvatar({ author }: { author: Comment['author'] }) {
+  const url = resolveMediaUrl(author.avatar);
+  const label = (author.displayName || author.username)[0]?.toUpperCase() ?? '?';
 
+  return (
+    <div className="vf-comment-avatar">
+      {url ? <img src={url} alt={author.username} /> : label}
+    </div>
+  );
+}
 
-export default function VideoFeed({ soundToks, onLike }: VideoFeedProps) {
-
+export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: VideoFeedProps) {
+  const navigate = useNavigate();
+  const currentUser = useAuthStore((s) => s.user);
+  const [followedAuthors, setFollowedAuthors] = useState<Record<string, boolean>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  const [commentsModalOpen, setCommentsModalOpen] = useState(false);
-
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [currentSoundTokId, setCurrentSoundTokId] = useState<string | null>(null);
-
   const [comments, setComments] = useState<Comment[]>([]);
-
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [newComment, setNewComment] = useState('');
-
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [localCounts, setLocalCounts] = useState<Record<string, number>>({});
 
-  // === ПАУЗА ВИДЕО ===
   const [isPaused, setIsPaused] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // === УЛУЧШЕННЫЙ ВЕРТИКАЛЬНЫЙ СКРОЛЛ ===
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const touchStartY = useRef<number>(0);
-  const touchStartTime = useRef<number>(0);
-  const touchLastY = useRef<number>(0);
-  const touchVelocity = useRef<number>(0);
-  const lastTouchTime = useRef<number>(0);
+  const touchStartY = useRef(0);
+  const touchStartTime = useRef(0);
+  const touchLastY = useRef(0);
+  const touchVelocity = useRef(0);
+  const lastTouchTime = useRef(0);
   const animationRef = useRef<number | null>(null);
-  const lastWheelTime = useRef<number>(0);
-  const wheelVelocity = useRef<number>(0);
+  const lastWheelTime = useRef(0);
+  const wheelVelocity = useRef(0);
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
-  // Параметры анимации
   const FLING_VELOCITY_THRESHOLD = 0.5;
   const DRAG_THRESHOLD = 80;
 
+  const getCommentCount = (tok: SoundTok) =>
+    localCounts[tok.id] ?? tok.commentsCount ?? 0;
 
+  const toggleFollow = (authorId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFollowedAuthors((prev) => ({
+      ...prev,
+      [authorId]: !prev[authorId],
+    }));
+  };
 
-  // === УЛУЧШЕННЫЕ ОБРАБОТЧИКИ СВАЙПОВ ===
+  const isOwnVideo = (authorId: string) => currentUser?.id === authorId;
+
+  useEffect(() => {
+    const counts: Record<string, number> = {};
+    soundToks.forEach((t) => {
+      counts[t.id] = t.commentsCount ?? 0;
+    });
+    setLocalCounts(counts);
+  }, [soundToks]);
+
+  useEffect(() => {
+    if (commentsOpen) {
+      videoRef.current?.pause();
+      setIsPaused(true);
+      setTimeout(() => commentInputRef.current?.focus(), 350);
+    }
+  }, [commentsOpen]);
+
+  useEffect(() => {
+    setIsPaused(false);
+  }, [currentIndex]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (commentsOpen) return;
     const touch = e.touches[0];
     touchStartY.current = touch.clientY;
     touchLastY.current = touch.clientY;
     touchStartTime.current = Date.now();
     lastTouchTime.current = Date.now();
     touchVelocity.current = 0;
-    
     setIsDragging(true);
     setIsAnimating(false);
-    
-    // Отменяем текущую анимацию
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
+    if (animationRef.current) cancelAnimationFrame(animationRef.current);
   };
 
-
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isDragging) return;
-    
-    const touch = e.touches[0];
-    const currentY = touch.clientY;
-    const diffY = touchStartY.current - currentY;
-    
-    // Вычисляем скорость для momentum
-    const now = Date.now();
-    const dt = now - lastTouchTime.current;
-    if (dt > 0) {
-      const dy = touchLastY.current - currentY;
-      touchVelocity.current = dy / dt;
-    }
-    lastTouchTime.current = now;
-    touchLastY.current = currentY;
-    
-    // Применяем сопротивление при достижении границ
-    let resistance = 1;
-    if (currentIndex === 0 && diffY < 0) resistance = 0.4;
-    if (currentIndex === soundToks.length - 1 && diffY > 0) resistance = 0.4;
-    
-    setDragOffset(diffY * resistance);
-  }, [isDragging, currentIndex, soundToks.length]);
-
-  const springToPosition = useCallback((targetOffset: number, targetIndex: number | null = null) => {
-    setIsAnimating(true);
-    setIsDragging(false);
-    
-    const startOffset = dragOffset;
-    const startTime = performance.now();
-    const duration = 400; // ms
-    
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Spring easing
-      const eased = 1 - Math.pow(2, -10 * progress) * Math.cos((progress - 0.1) * 15);
-      
-      const currentOffset = startOffset + (targetOffset - startOffset) * eased;
-      setDragOffset(currentOffset);
-      
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        setDragOffset(0);
-        setIsAnimating(false);
-        if (targetIndex !== null) {
-          setCurrentIndex(targetIndex);
-        }
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!isDragging || commentsOpen) return;
+      const touch = e.touches[0];
+      const currentY = touch.clientY;
+      const diffY = touchStartY.current - currentY;
+      const now = Date.now();
+      const dt = now - lastTouchTime.current;
+      if (dt > 0) {
+        touchVelocity.current = (touchLastY.current - currentY) / dt;
       }
-    };
-    
-    animationRef.current = requestAnimationFrame(animate);
-  }, [dragOffset]);
+      lastTouchTime.current = now;
+      touchLastY.current = currentY;
+      let resistance = 1;
+      if (currentIndex === 0 && diffY < 0) resistance = 0.4;
+      if (currentIndex === soundToks.length - 1 && diffY > 0) resistance = 0.4;
+      setDragOffset(diffY * resistance);
+    },
+    [isDragging, commentsOpen, currentIndex, soundToks.length]
+  );
+
+  const springToPosition = useCallback(
+    (targetOffset: number, targetIndex: number | null = null) => {
+      setIsAnimating(true);
+      setIsDragging(false);
+      const startOffset = dragOffset;
+      const startTime = performance.now();
+      const duration = 400;
+
+      const animate = (currentTime: number) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(2, -10 * progress) * Math.cos((progress - 0.1) * 15);
+        setDragOffset(startOffset + (targetOffset - startOffset) * eased);
+        if (progress < 1) {
+          animationRef.current = requestAnimationFrame(animate);
+        } else {
+          setDragOffset(0);
+          setIsAnimating(false);
+          if (targetIndex !== null) setCurrentIndex(targetIndex);
+        }
+      };
+      animationRef.current = requestAnimationFrame(animate);
+    },
+    [dragOffset]
+  );
 
   const handleTouchEnd = useCallback(() => {
-    if (!isDragging) return;
-    
+    if (!isDragging || commentsOpen) return;
     const dragDistance = dragOffset;
     const velocity = touchVelocity.current;
     const dragDuration = Date.now() - touchStartTime.current;
-    
-    // Флип-жест (быстрый свайп)
     const isFlingUp = velocity > FLING_VELOCITY_THRESHOLD && dragDuration < 300;
     const isFlingDown = velocity < -FLING_VELOCITY_THRESHOLD && dragDuration < 300;
-    
-    // Обычный свайп (достаточное расстояние)
     const isSwipeUp = dragDistance > DRAG_THRESHOLD;
     const isSwipeDown = dragDistance < -DRAG_THRESHOLD;
-    
+
     if ((isFlingUp || isSwipeUp) && currentIndex < soundToks.length - 1) {
-      // Свайп вверх — следующее видео
       springToPosition(window.innerHeight, currentIndex + 1);
     } else if ((isFlingDown || isSwipeDown) && currentIndex > 0) {
-      // Свайп вниз — предыдущее видео
       springToPosition(-window.innerHeight, currentIndex - 1);
     } else {
-      // Возвращаем на место
       springToPosition(0);
     }
-  }, [isDragging, dragOffset, currentIndex, soundToks.length, springToPosition]);
+  }, [isDragging, commentsOpen, dragOffset, currentIndex, soundToks.length, springToPosition]);
 
-  // Очистка анимации при размонтировании
   useEffect(() => {
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, []);
 
-
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    const now = Date.now();
-    const deltaTime = now - lastWheelTime.current;
-    
-    // Накапливаем velocity для более плавного отклика
-    wheelVelocity.current += e.deltaY * 0.1;
-    
-    // Throttle с учётом velocity (быстрая прокрутка = меньший throttle)
-    const throttleTime = Math.max(150, 350 - Math.abs(wheelVelocity.current) * 50);
-    
-    if (deltaTime < throttleTime) return;
-    lastWheelTime.current = now;
-    
-    // Сбрасываем velocity со временем
-    wheelVelocity.current *= 0.7;
-    
-    // Проверяем накопленное значение для переключения
-    if (Math.abs(wheelVelocity.current) > 3) {
-      if (wheelVelocity.current > 0 && currentIndex < soundToks.length - 1) {
-        setCurrentIndex(prev => prev + 1);
-        wheelVelocity.current = 0;
-      } else if (wheelVelocity.current < 0 && currentIndex > 0) {
-        setCurrentIndex(prev => prev - 1);
-        wheelVelocity.current = 0;
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (commentsOpen) return;
+      const now = Date.now();
+      const deltaTime = now - lastWheelTime.current;
+      wheelVelocity.current += e.deltaY * 0.1;
+      const throttleTime = Math.max(150, 350 - Math.abs(wheelVelocity.current) * 50);
+      if (deltaTime < throttleTime) return;
+      lastWheelTime.current = now;
+      wheelVelocity.current *= 0.7;
+      if (Math.abs(wheelVelocity.current) > 3) {
+        if (wheelVelocity.current > 0 && currentIndex < soundToks.length - 1) {
+          setCurrentIndex((prev) => prev + 1);
+          wheelVelocity.current = 0;
+        } else if (wheelVelocity.current < 0 && currentIndex > 0) {
+          setCurrentIndex((prev) => prev - 1);
+          wheelVelocity.current = 0;
+        }
       }
-    }
-  }, [currentIndex, soundToks.length]);
+    },
+    [commentsOpen, currentIndex, soundToks.length]
+  );
 
-
-
-
-
-
-  const scrollToVideo = (index: number) => {
-
-    setCurrentIndex(index);
-
-  };
-
-
-
-  const handleLike = async (id: string) => {
-
-    onLike(id);
-
-  };
-
-
-
-  const handleComments = async (id: string) => {
-
+  const openComments = async (id: string) => {
     setCurrentSoundTokId(id);
-
-    setCommentsModalOpen(true);
-
-    
-
+    setCommentsOpen(true);
+    setComments([]);
+    setCommentsLoading(true);
     try {
-
-      const commentsData = await soundTokApi.getComments(id);
-
-      setComments(commentsData);
-
+      const data = await soundTokApi.getComments(id);
+      setComments(data);
     } catch (error) {
-
       console.error('Failed to fetch comments:', error);
-
+    } finally {
+      setCommentsLoading(false);
     }
-
   };
 
-
+  const closeComments = () => {
+    setCommentsOpen(false);
+    setCurrentSoundTokId(null);
+    setNewComment('');
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {});
+      setIsPaused(false);
+    }
+  };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
-
     e.preventDefault();
-
-    if (!currentSoundTokId || !newComment.trim()) return;
-
-
+    if (!currentSoundTokId || !newComment.trim() || submittingComment) return;
 
     setSubmittingComment(true);
+    const text = newComment.trim();
+    setNewComment('');
 
     try {
-
-      const currentSoundTok = soundToks[currentIndex];
-
-
-
-      if (!currentSoundTok) {
-
-        return (
-
-          <div className="vf-root">
-
-            <style>{css}</style>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'white' }}>
-
-              Нет видео
-
-            </div>
-
-          </div>
-
-        );
-
-      }
-
-
-
-      const comment = await soundTokApi.createComment(currentSoundTokId, newComment);
-
-      setComments(prev => [...prev, comment]);
-
-      setNewComment('');
-
+      const { comment, commentsCount } = await soundTokApi.createComment(currentSoundTokId, text);
+      setComments((prev) => [comment, ...prev]);
+      setLocalCounts((prev) => ({ ...prev, [currentSoundTokId]: commentsCount }));
+      onCommentCountChange?.(currentSoundTokId, commentsCount);
     } catch (error) {
-
       console.error('Failed to create comment:', error);
-
+      setNewComment(text);
     } finally {
-
       setSubmittingComment(false);
-
     }
-
   };
 
+  const sheetCommentCount = currentSoundTokId
+    ? localCounts[currentSoundTokId] ??
+      soundToks.find((t) => t.id === currentSoundTokId)?.commentsCount ??
+      0
+    : 0;
 
+  if (!soundToks.length) {
+    return (
+      <div className="vf-root">
+        <style>{css}</style>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff' }}>
+          Нет видео
+        </div>
+      </div>
+    );
+  }
 
   return (
-
     <div className="vf-root">
-
       <style>{css}</style>
 
-      
-
-      {/* Контейнер видео с TikTok поведением */}
-
-      <div 
-
+      <div
+        className="vf-stage"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
-
       >
+        {soundToks.map((soundTok, index) => {
+          const isActive = index === currentIndex;
+          const commentCount = getCommentCount(soundTok);
+          const authorAvatar = resolveMediaUrl(soundTok.author?.avatar);
 
-        {soundToks.map((soundTok, index) => (
-
-          <div
-
-            key={soundTok.id}
-
-            className="vf-video-container"
-
-            style={{
-              transform: `translateY(calc(${(index - currentIndex) * 100}vh - ${index === currentIndex ? dragOffset : 0}px))`,
-              opacity: isDragging || isAnimating 
-                ? (Math.abs(index - currentIndex) <= 1 ? 1 : 0)
-                : (index === currentIndex ? 1 : 0),
-              transition: isDragging || isAnimating ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
-              pointerEvents: index === currentIndex ? 'auto' : 'none',
-              zIndex: index === currentIndex ? 10 : 0
-            }}
-
-          >
-
-            <video
-              ref={index === currentIndex ? videoRef : null}
-              src={`http://localhost:5002${soundTok.videoUrl}`}
-              className="vf-video"
-              autoPlay={index === currentIndex && !isPaused}
-              muted={index !== currentIndex}
-              loop
-              playsInline
-              onClick={() => {
-                if (index === currentIndex && videoRef.current) {
+          return (
+            <div
+              key={soundTok.id}
+              className="vf-video-container"
+              style={{
+                transform: `translateY(calc(${(index - currentIndex) * 100}% - ${isActive ? dragOffset : 0}px))`,
+                opacity:
+                  isDragging || isAnimating
+                    ? Math.abs(index - currentIndex) <= 1
+                      ? 1
+                      : 0
+                    : isActive
+                      ? 1
+                      : 0,
+                transition:
+                  isDragging || isAnimating ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
+                pointerEvents: isActive ? 'auto' : 'none',
+                zIndex: isActive ? 10 : 0,
+              }}
+            >
+              <video
+                ref={isActive ? videoRef : null}
+                src={`${API_ORIGIN}${soundTok.videoUrl}`}
+                className="vf-video"
+                autoPlay={isActive && !isPaused && !commentsOpen}
+                muted={!isActive}
+                loop
+                playsInline
+                onClick={() => {
+                  if (!isActive || !videoRef.current) return;
                   if (isPaused) {
                     videoRef.current.play();
                   } else {
                     videoRef.current.pause();
                   }
                   setIsPaused(!isPaused);
-                }
-              }}
-            />
-
-            {/* Индикатор паузы */}
-            {index === currentIndex && isPaused && (
-              <div className="vf-pause-overlay">
-                <Play size={64} fill="white" />
-              </div>
-            )}
-
-            
-
-            {/* Оверлей с информацией */}
-
-            {index === currentIndex && (
-
-              <div className="vf-overlay">
-
-                <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
-
-                  {soundTok.description || 'Без описания'}
-
-                </div>
-
-                <div style={{ fontSize: '14px', opacity: 0.8 }}>
-
-                  @{soundTok.author?.username || 'user'}
-
-                </div>
-
-              </div>
-
-            )}
-
-            
-
-            {/* Кнопки действий */}
-
-            {index === currentIndex && (
-
-              <div className="vf-actions">
-
-                <button 
-
-                  className={`vf-action-btn ${soundTok.isLiked ? 'liked' : ''}`}
-
-                  onClick={() => handleLike(soundTok.id)}
-
-                >
-
-                  <Heart size={24} fill={soundTok.isLiked ? 'white' : 'none'} />
-
-                </button>
-
-                
-
-                <button 
-
-                  className="vf-action-btn"
-
-                  onClick={() => handleComments(soundTok.id)}
-
-                >
-
-                  <MessageCircle size={24} />
-
-                </button>
-
-                
-
-                <button className="vf-action-btn">
-
-                  <Share size={24} />
-
-                </button>
-
-              </div>
-
-            )}
-
-          </div>
-
-        ))}
-
-      </div>
-
-
-
-      {/* Индикатор прогресса */}
-
-      <div className="vf-progress-indicator">
-
-        {soundToks.map((_, index) => (
-
-          <div
-
-            key={index}
-
-            className={`vf-progress-dot ${index === currentIndex ? 'active' : ''}`}
-
-            onClick={() => scrollToVideo(index)}
-
-          />
-
-        ))}
-
-      </div>
-
-
-
-      {/* Модальное окно комментариев */}
-
-      {commentsModalOpen && (
-
-        <div className="vf-modal-overlay" onClick={() => setCommentsModalOpen(false)}>
-
-          <div className="vf-modal-content" onClick={(e) => e.stopPropagation()}>
-
-            <div className="vf-modal-header">
-
-              <h3>Комментарии</h3>
-
-              <button onClick={() => setCommentsModalOpen(false)}>
-
-                <X size={20} color="white" />
-
-              </button>
-
-            </div>
-
-            
-
-            <div>
-
-              {comments.map(comment => (
-
-                <div key={comment.id} className="vf-comment">
-
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-
-                    @{comment.author?.username || 'user'}
-
-                  </div>
-
-                  <div>{comment.text}</div>
-
-                </div>
-
-              ))}
-
-            </div>
-
-            
-
-            <form onSubmit={handleSubmitComment} className="vf-comment-input">
-
-              <input
-
-                type="text"
-
-                value={newComment}
-
-                onChange={(e) => setNewComment(e.target.value)}
-
-                placeholder="Добавить комментарий..."
-
+                }}
               />
 
-              <button type="submit" disabled={submittingComment}>
+              {isActive && isPaused && (
+                <div className="vf-pause-overlay">
+                  <Play size={64} fill="white" />
+                </div>
+              )}
 
-                <Send size={16} />
+              {isActive && (
+                <>
+                  <div className="vf-gradient-top" />
+                  <div className="vf-gradient-bottom" />
 
-              </button>
+                  <div className="vf-bottom-info">
+                    <div className="vf-author-row">
+                      <span className="vf-author-name">@{soundTok.author?.username || 'user'}</span>
+                    </div>
+                    {soundTok.description && (
+                      <div className="vf-description">{soundTok.description}</div>
+                    )}
+                    <div className="vf-music-row">
+                      <Music2 size={14} className="vf-music-icon" />
+                      <span>Оригинальный звук — {soundTok.author?.username}</span>
+                    </div>
+                  </div>
 
-            </form>
+                  <div className="vf-actions">
+                    <div className="vf-author-block">
+                      <div
+                        className="vf-author-avatar"
+                        onClick={() => navigate(`/profile/${soundTok.author?.username}`)}
+                        title={soundTok.author?.username}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') navigate(`/profile/${soundTok.author?.username}`);
+                        }}
+                      >
+                        {authorAvatar ? (
+                          <img src={authorAvatar} alt={soundTok.author.username} />
+                        ) : (
+                          (soundTok.author?.username?.[0] ?? 'U').toUpperCase()
+                        )}
+                      </div>
+                      {!isOwnVideo(soundTok.authorId) && (
+                        <button
+                          type="button"
+                          className={`vf-follow-btn ${followedAuthors[soundTok.authorId] ? 'following' : ''}`}
+                          onClick={(e) => toggleFollow(soundTok.authorId, e)}
+                          aria-label={
+                            followedAuthors[soundTok.authorId] ? 'Отписаться' : 'Подписаться'
+                          }
+                          title={followedAuthors[soundTok.authorId] ? 'Подписка оформлена' : 'Подписаться'}
+                        >
+                          {followedAuthors[soundTok.authorId] ? (
+                            <Check size={12} />
+                          ) : (
+                            <Plus size={14} />
+                          )}
+                        </button>
+                      )}
+                    </div>
 
-          </div>
+                    <div className="vf-action-group">
+                      <button
+                        type="button"
+                        className={`vf-action-btn ${soundTok.isLiked ? 'liked' : ''}`}
+                        onClick={() => onLike(soundTok.id)}
+                        aria-label="Нравится"
+                      >
+                        <Heart size={28} fill={soundTok.isLiked ? 'currentColor' : 'none'} strokeWidth={1.8} />
+                      </button>
+                      <span className="vf-action-count">{formatCount(soundTok.likes)}</span>
+                    </div>
 
+                    <div className="vf-action-group">
+                      <button
+                        type="button"
+                        className="vf-action-btn"
+                        onClick={() => openComments(soundTok.id)}
+                        aria-label="Комментарии"
+                      >
+                        <MessageCircle size={28} strokeWidth={1.8} />
+                      </button>
+                      <span className="vf-action-count">{formatCount(commentCount)}</span>
+                    </div>
+
+                    <div className="vf-action-group">
+                      <button type="button" className="vf-action-btn" aria-label="Поделиться">
+                        <Share2 size={26} strokeWidth={1.8} />
+                      </button>
+                      <span className="vf-action-count">Поделиться</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {soundToks.length > 1 && (
+        <div className="vf-progress-indicator">
+          {soundToks.map((_, index) => (
+            <div
+              key={index}
+              className={`vf-progress-dot ${index === currentIndex ? 'active' : ''}`}
+              onClick={() => setCurrentIndex(index)}
+              role="button"
+              aria-label={`Видео ${index + 1}`}
+            />
+          ))}
         </div>
-
       )}
 
+      {commentsOpen && (
+        <>
+          <div className="vf-sheet-backdrop" onClick={closeComments} aria-hidden />
+          <div className="vf-sheet" role="dialog" aria-label="Комментарии">
+            <div className="vf-sheet-handle" />
+            <div className="vf-sheet-header">
+              <span className="vf-sheet-title">
+                {sheetCommentCount === 0
+                  ? 'Комментарии'
+                  : `${formatCount(sheetCommentCount)} ${pluralizeComments(sheetCommentCount)}`}
+              </span>
+              <button type="button" className="vf-sheet-close" onClick={closeComments} aria-label="Закрыть">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="vf-comments-list">
+              {commentsLoading ? (
+                <div className="vf-comments-loading">Загрузка...</div>
+              ) : comments.length === 0 ? (
+                <div className="vf-empty-comments">
+                  Пока нет комментариев.<br />
+                  Будьте первым!
+                </div>
+              ) : (
+                comments.map((comment) => (
+                  <div key={comment.id} className="vf-comment-item">
+                    <CommentAvatar author={comment.author} />
+                    <div className="vf-comment-body">
+                      <div className="vf-comment-meta">
+                        <span className="vf-comment-user">
+                          {comment.author.displayName || comment.author.username}
+                        </span>
+                        <span className="vf-comment-time">{formatRelativeTime(comment.createdAt)}</span>
+                      </div>
+                      <div className="vf-comment-text">{comment.text}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <form className="vf-sheet-input" onSubmit={handleSubmitComment}>
+              <input
+                ref={commentInputRef}
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Добавить комментарий..."
+                maxLength={500}
+                disabled={submittingComment}
+              />
+              <button
+                type="submit"
+                className="vf-send-btn"
+                disabled={submittingComment || !newComment.trim()}
+                aria-label="Отправить"
+              >
+                <Send size={18} />
+              </button>
+            </form>
+          </div>
+        </>
+      )}
     </div>
-
   );
-
 }
-

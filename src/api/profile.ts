@@ -1,31 +1,18 @@
-import axios from 'axios';
-
-const api = axios.create({
-  baseURL: 'http://localhost:5002/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import api from './client';
 
 export interface UserProfile {
   id: string;
   username: string;
-  email: string;
+  email?: string;
   displayName?: string | null;
   avatar?: string | null;
   bio?: string | null;
   birthDate?: string;
-  role: string;
+  role?: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+  postsCount?: number;
+  soundToksCount?: number;
 }
 
 export interface UpdateProfileData {
@@ -45,6 +32,14 @@ export interface UpdateProfileResponse {
   error?: string;
 }
 
+export interface ProfileSearchUser {
+  id: string;
+  username: string;
+  displayName?: string | null;
+  avatar?: string | null;
+  bio?: string;
+}
+
 export const profileApi = {
   getMyProfile: async (): Promise<UserProfile> => {
     const response = await api.get('/profile');
@@ -52,7 +47,7 @@ export const profileApi = {
   },
 
   getPublicProfile: async (identifier: string): Promise<UserProfile> => {
-    const response = await api.get(`/profile/${identifier}`);
+    const response = await api.get(`/profile/${encodeURIComponent(identifier)}`);
     return response.data;
   },
 
@@ -78,13 +73,7 @@ export const profileApi = {
     return response.data;
   },
 
-  searchUsers: async (query: string, limit: number = 10): Promise<Array<{
-    id: string;
-    username: string;
-    displayName?: string | null;
-    avatar?: string | null;
-    bio?: string;
-  }>> => {
+  searchUsers: async (query: string, limit: number = 10): Promise<ProfileSearchUser[]> => {
     const response = await api.get(`/profile/search?q=${encodeURIComponent(query)}&limit=${limit}`);
     return response.data;
   },

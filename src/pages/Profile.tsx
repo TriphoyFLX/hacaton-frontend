@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { profileApi, UserProfile, ValidationError } from '../api/profile';
+import { resolveMediaUrl } from '../lib/mediaUrl';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
 
@@ -140,6 +141,18 @@ ${FONT_IMPORT}
 .avatar-edit-btn svg {
   width: 14px;
   height: 14px;
+}
+.avatar-remove-btn {
+  right: auto;
+  left: -4px;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 400;
+}
+.avatar-remove-btn:hover {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
 }
 .avatar-input {
   display: none;
@@ -599,11 +612,36 @@ export default function Profile() {
     try {
       const result = await profileApi.uploadAvatar(file);
       setAvatar(result.avatar);
+      if (profile) {
+        setProfile({ ...profile, avatar: result.avatar });
+      }
       setSaveStatus('success');
       setErrors([]);
     } catch (error) {
       console.error('Failed to upload avatar:', error);
       setErrors([{ field: 'avatar', message: 'Ошибка загрузки аватара' }]);
+      setSaveStatus('error');
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    if (!avatar) return;
+
+    try {
+      await profileApi.deleteAvatar();
+      setAvatar(null);
+      if (profile) {
+        setProfile({ ...profile, avatar: null });
+      }
+      setSaveStatus('success');
+      setErrors([]);
+    } catch (error) {
+      console.error('Failed to delete avatar:', error);
+      setErrors([{ field: 'avatar', message: 'Не удалось удалить аватар' }]);
       setSaveStatus('error');
     }
   };
@@ -705,7 +743,7 @@ export default function Profile() {
           <div className="avatar-wrapper">
             <div className="avatar">
               {avatar ? (
-                <img src={avatar} alt={profile.username} />
+                <img src={resolveMediaUrl(avatar) ?? ''} alt={profile.username} />
               ) : (
                 profile.username[0].toUpperCase()
               )}
@@ -713,6 +751,16 @@ export default function Profile() {
             <button className="avatar-edit-btn" onClick={handleAvatarClick} title="Изменить аватар">
               <IconCamera />
             </button>
+            {avatar && (
+              <button
+                className="avatar-edit-btn avatar-remove-btn"
+                onClick={handleDeleteAvatar}
+                title="Удалить аватар"
+                type="button"
+              >
+                ×
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"

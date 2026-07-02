@@ -1,19 +1,4 @@
-import axios from 'axios';
-
-const api = axios.create({
-  baseURL: 'http://localhost:5002/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import api from './client';
 
 export interface Comment {
   id: string;
@@ -24,6 +9,8 @@ export interface Comment {
   author: {
     id: string;
     username: string;
+    displayName?: string | null;
+    avatar?: string | null;
   };
 }
 
@@ -40,8 +27,15 @@ export interface SoundTok {
   author: {
     id: string;
     username: string;
+    displayName?: string | null;
+    avatar?: string | null;
   };
   comments?: Comment[];
+}
+
+export interface CreateCommentResponse {
+  comment: Comment;
+  commentsCount: number;
 }
 
 export const soundTokApi = {
@@ -49,20 +43,18 @@ export const soundTokApi = {
     const formData = new FormData();
     formData.append('description', description);
     formData.append('video', videoFile);
-    
+
     const response = await api.post('/soundtok', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
-  
-  getSoundToks: async () => {
+
+  getSoundToks: async (): Promise<SoundTok[]> => {
     const response = await api.get('/soundtok');
     return response.data;
   },
-  
+
   likeSoundTok: async (id: string) => {
     const response = await api.post(`/soundtok/${id}/like`);
     return response.data;
@@ -73,10 +65,10 @@ export const soundTokApi = {
     return response.data;
   },
 
-  createComment: async (soundTokId: string, text: string): Promise<Comment> => {
+  createComment: async (soundTokId: string, text: string): Promise<CreateCommentResponse> => {
     const response = await api.post(`/soundtok/${soundTokId}/comments`, { text });
     return response.data;
   },
 };
 
-export default api;
+export default soundTokApi;

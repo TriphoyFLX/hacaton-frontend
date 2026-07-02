@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { searchApi, SearchResult } from '../api/search';
 import { chatsApi } from '../api/chats';
+import { resolveMediaUrl } from '../lib/mediaUrl';
 import { Search, X, Users, FileText, Video, MessageCircle } from 'lucide-react';
 
 interface SearchModalProps {
@@ -208,6 +209,12 @@ ${FONT_IMPORT}
   font-size: 17px;
   font-weight: 700;
   color: #e8e4dc;
+  overflow: hidden;
+}
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .user-info {
   flex: 1;
@@ -517,11 +524,17 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                         }}
                       >
                         <div className="user-avatar">
-                          {user.username[0].toUpperCase()}
+                          {user.avatar ? (
+                            <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} />
+                          ) : (
+                            user.username[0].toUpperCase()
+                          )}
                         </div>
                         <div className="user-info">
                           <div className="user-username">@{user.username}</div>
-                          <div className="user-email">{user.email}</div>
+                          <div className="user-email">
+                            {user.displayName || user.bio?.slice(0, 40) || 'Профиль'}
+                          </div>
                         </div>
                       </div>
                       <button
