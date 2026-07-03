@@ -378,6 +378,21 @@ ${FONT_IMPORT}
   0%, 80%, 100% { opacity: 0.3; }
   40% { opacity: 1; }
 }
+
+@media (max-width: 768px) {
+  .search-overlay {
+    padding: 12px;
+    align-items: flex-start;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  .search-modal {
+    max-height: calc(100dvh - 24px);
+    border-radius: 12px;
+  }
+  .search-input-area {
+    padding: 12px 14px;
+  }
+}
 `;
 
 export default function SearchModal({ isOpen, onClose }: SearchModalProps) {

@@ -9,10 +9,21 @@ import { useAuthStore } from '../store/authStore';
 
 const css = `
 .vf-root {
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+
+.vf-phone {
   position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   overflow: hidden;
   background: #000;
 }
@@ -21,8 +32,102 @@ const css = `
   position: relative;
   width: 100%;
   height: 100%;
-  max-width: 480px;
-  margin: 0 auto;
+  overflow: hidden;
+}
+
+.vf-top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+  pointer-events: none;
+}
+
+.vf-top-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+}
+
+.vf-top-counter {
+  position: absolute;
+  right: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.75);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+.vf-video-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: vf-spin-loader 0.7s linear infinite;
+}
+
+@keyframes vf-spin-loader {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.vf-music-disc {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 8px solid #1a1a1a;
+  background: linear-gradient(135deg, #2a2a2a, #111);
+  margin-top: 4px;
+  animation: vf-spin 4s linear infinite;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-music-disc img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vf-music-disc-letter {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.vf-share-label {
+  font-size: 11px;
+}
+
+.vf-desc-expanded {
+  -webkit-line-clamp: unset;
+  display: block;
+}
+
+.vf-desc-toggle {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.65);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+  margin-top: 4px;
+  cursor: pointer;
 }
 
 .vf-video-container {
@@ -274,11 +379,11 @@ const css = `
 
 /* Progress dots */
 .vf-progress-indicator {
-  position: fixed;
-  right: max(12px, calc(50% - 240px + 8px));
+  position: absolute;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 10;
+  z-index: 11;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -318,8 +423,7 @@ const css = `
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: min(100%, 480px);
   max-height: min(75vh, 640px);
   background: #121212;
   border-radius: 12px 12px 0 0;
@@ -509,27 +613,60 @@ const css = `
   cursor: not-allowed;
 }
 
-@media (max-width: 380px) {
-  .vf-actions {
-    right: 6px;
+@media (max-width: 768px) {
+  .vf-phone {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
   }
+
+  .vf-actions {
+    right: 8px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .vf-bottom-info {
+    right: 56px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .vf-progress-indicator {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .vf-phone {
+    height: 100%;
+    width: auto;
+    aspect-ratio: 9 / 16;
+    max-width: min(480px, calc(100% - 32px));
+    border-radius: 16px;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 24px 64px rgba(0, 0, 0, 0.55);
+  }
+
+  .vf-actions {
+    right: 12px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .vf-bottom-info {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 380px) {
   .vf-action-btn {
     width: 44px;
     height: 44px;
   }
   .vf-bottom-info {
-    right: 64px;
     padding-left: 12px;
   }
-}
-
-@media (min-width: 768px) {
-  .vf-root {
-    background: #0a0a0a;
-  }
-  .vf-stage {
-    border-left: 1px solid #1a1a1a;
-    border-right: 1px solid #1a1a1a;
+  .vf-share-label {
+    display: none;
   }
 }
 `;
@@ -565,7 +702,11 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
   const [localCounts, setLocalCounts] = useState<Record<string, number>>({});
 
   const [isPaused, setIsPaused] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const soundEnabledRef = useRef(false);
 
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -607,18 +748,73 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
 
   useEffect(() => {
     if (commentsOpen) {
-      videoRef.current?.pause();
+      videoRefs.current[currentIndex]?.pause();
       setIsPaused(true);
       setTimeout(() => commentInputRef.current?.focus(), 350);
     }
-  }, [commentsOpen]);
+  }, [commentsOpen, currentIndex]);
+
+  const enableSound = useCallback(() => {
+    if (soundEnabledRef.current) return;
+    soundEnabledRef.current = true;
+    setSoundEnabled(true);
+    const video = videoRefs.current[currentIndex];
+    if (video) {
+      video.muted = false;
+      video.play().catch(() => {});
+    }
+  }, [currentIndex]);
+
+  const playVideoAt = useCallback(
+    async (index: number) => {
+      if (commentsOpen || isPaused) return;
+
+      videoRefs.current.forEach((video, i) => {
+        if (!video || i === index) return;
+        video.pause();
+        video.muted = true;
+      });
+
+      const video = videoRefs.current[index];
+      if (!video) return;
+
+      setVideoLoading(true);
+
+      try {
+        video.muted = !soundEnabledRef.current;
+        await video.play();
+        setVideoLoading(false);
+      } catch {
+        try {
+          video.muted = true;
+          await video.play();
+          setVideoLoading(false);
+        } catch {
+          setVideoLoading(false);
+        }
+      }
+    },
+    [commentsOpen, isPaused]
+  );
 
   useEffect(() => {
+    setDescExpanded(false);
     setIsPaused(false);
-  }, [currentIndex]);
+    setVideoLoading(true);
+    playVideoAt(currentIndex);
+  }, [currentIndex, playVideoAt]);
+
+  useEffect(() => {
+    if (isPaused || commentsOpen) {
+      videoRefs.current[currentIndex]?.pause();
+    } else {
+      playVideoAt(currentIndex);
+    }
+  }, [isPaused, commentsOpen, currentIndex, playVideoAt]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (commentsOpen) return;
+    enableSound();
     const touch = e.touches[0];
     touchStartY.current = touch.clientY;
     touchLastY.current = touch.clientY;
@@ -705,6 +901,7 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       if (commentsOpen) return;
+      enableSound();
       const now = Date.now();
       const deltaTime = now - lastWheelTime.current;
       wheelVelocity.current += e.deltaY * 0.1;
@@ -722,7 +919,7 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
         }
       }
     },
-    [commentsOpen, currentIndex, soundToks.length]
+    [commentsOpen, currentIndex, soundToks.length, enableSound]
   );
 
   const openComments = async (id: string) => {
@@ -744,10 +941,8 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
     setCommentsOpen(false);
     setCurrentSoundTokId(null);
     setNewComment('');
-    if (videoRef.current) {
-      videoRef.current.play().catch(() => {});
-      setIsPaused(false);
-    }
+    setIsPaused(false);
+    playVideoAt(currentIndex);
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
@@ -792,14 +987,22 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
     <div className="vf-root">
       <style>{css}</style>
 
-      <div
-        className="vf-stage"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onWheel={handleWheel}
-      >
-        {soundToks.map((soundTok, index) => {
+      <div className="vf-phone">
+        <div
+          className="vf-stage"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onWheel={handleWheel}
+        >
+          <div className="vf-top-bar">
+            <span className="vf-top-title">SoundTok</span>
+            <span className="vf-top-counter">
+              {currentIndex + 1} / {soundToks.length}
+            </span>
+          </div>
+
+          {soundToks.map((soundTok, index) => {
           const isActive = index === currentIndex;
           const commentCount = getCommentCount(soundTok);
           const authorAvatar = resolveMediaUrl(soundTok.author?.avatar);
@@ -825,25 +1028,51 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
               }}
             >
               <video
-                ref={isActive ? videoRef : null}
+                ref={(el) => {
+                  videoRefs.current[index] = el;
+                }}
                 src={`${API_ORIGIN}${soundTok.videoUrl}`}
                 className="vf-video"
-                autoPlay={isActive && !isPaused && !commentsOpen}
-                muted={!isActive}
                 loop
                 playsInline
-                onClick={() => {
-                  if (!isActive || !videoRef.current) return;
-                  if (isPaused) {
-                    videoRef.current.play();
-                  } else {
-                    videoRef.current.pause();
+                preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'metadata'}
+                muted={index !== currentIndex || !soundEnabled}
+                onLoadedData={() => {
+                  if (index === currentIndex && !commentsOpen && !isPaused) {
+                    playVideoAt(index);
                   }
-                  setIsPaused(!isPaused);
+                }}
+                onCanPlay={() => {
+                  if (index === currentIndex && !commentsOpen && !isPaused) {
+                    playVideoAt(index);
+                  }
+                }}
+                onWaiting={() => {
+                  if (index === currentIndex) setVideoLoading(true);
+                }}
+                onPlaying={() => {
+                  if (index === currentIndex) setVideoLoading(false);
+                }}
+                onClick={() => {
+                  if (!isActive) return;
+                  const video = videoRefs.current[index];
+                  if (!video) return;
+                  enableSound();
+                  if (isPaused) {
+                    video.play().catch(() => {});
+                    setIsPaused(false);
+                  } else {
+                    video.pause();
+                    setIsPaused(true);
+                  }
                 }}
               />
 
-              {isActive && isPaused && (
+              {isActive && videoLoading && !isPaused && (
+                <div className="vf-video-loading" aria-hidden />
+              )}
+
+              {isActive && isPaused && !commentsOpen && (
                 <div className="vf-pause-overlay">
                   <Play size={64} fill="white" />
                 </div>
@@ -859,7 +1088,20 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
                       <span className="vf-author-name">@{soundTok.author?.username || 'user'}</span>
                     </div>
                     {soundTok.description && (
-                      <div className="vf-description">{soundTok.description}</div>
+                      <>
+                        <div className={`vf-description ${descExpanded ? 'vf-desc-expanded' : ''}`}>
+                          {soundTok.description}
+                        </div>
+                        {soundTok.description.length > 80 && (
+                          <button
+                            type="button"
+                            className="vf-desc-toggle"
+                            onClick={() => setDescExpanded((v) => !v)}
+                          >
+                            {descExpanded ? 'Свернуть' : 'Ещё'}
+                          </button>
+                        )}
+                      </>
                     )}
                     <div className="vf-music-row">
                       <Music2 size={14} className="vf-music-icon" />
@@ -932,7 +1174,17 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
                       <button type="button" className="vf-action-btn" aria-label="Поделиться">
                         <Share2 size={26} strokeWidth={1.8} />
                       </button>
-                      <span className="vf-action-count">Поделиться</span>
+                      <span className="vf-action-count vf-share-label">Поделиться</span>
+                    </div>
+
+                    <div className="vf-music-disc" aria-hidden>
+                      {authorAvatar ? (
+                        <img src={authorAvatar} alt="" />
+                      ) : (
+                        <span className="vf-music-disc-letter">
+                          {(soundTok.author?.username?.[0] ?? 'S').toUpperCase()}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </>
@@ -940,21 +1192,25 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
             </div>
           );
         })}
-      </div>
-
-      {soundToks.length > 1 && (
-        <div className="vf-progress-indicator">
-          {soundToks.map((_, index) => (
-            <div
-              key={index}
-              className={`vf-progress-dot ${index === currentIndex ? 'active' : ''}`}
-              onClick={() => setCurrentIndex(index)}
-              role="button"
-              aria-label={`Видео ${index + 1}`}
-            />
-          ))}
         </div>
-      )}
+
+        {soundToks.length > 1 && (
+          <div className="vf-progress-indicator">
+            {soundToks.map((_, index) => (
+              <div
+                key={index}
+                className={`vf-progress-dot ${index === currentIndex ? 'active' : ''}`}
+                onClick={() => {
+                  enableSound();
+                  setCurrentIndex(index);
+                }}
+                role="button"
+                aria-label={`Видео ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {commentsOpen && (
         <>

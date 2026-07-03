@@ -99,6 +99,22 @@ ${FONT_IMPORT}
 .header-btn:hover .header-hint {
   opacity: 1;
 }
+
+@media (max-width: 768px) {
+  .header-inner {
+    padding: 8px 12px;
+    justify-content: flex-end;
+  }
+
+  .header-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .header-hint {
+    display: none;
+  }
+}
 `;
 
 // ── SVG ICONS ──

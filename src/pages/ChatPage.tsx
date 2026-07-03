@@ -28,7 +28,8 @@ ${FONT_IMPORT}
   --success: #27ae60;
   font-family: 'Syne', sans-serif;
   background: var(--bg);
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   color: var(--text-primary);

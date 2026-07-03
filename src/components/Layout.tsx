@@ -1,17 +1,66 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+
 import Sidebar from './Sidebar';
+
 import Header from './Header';
 
-export default function Layout() {
-  return (
-    <div className="flex min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-blue-900">
-      <Sidebar />
-      <div className="flex-1 flex flex-col ml-[220px]">
-        <Header />
-        <main className="flex-1 overflow-auto">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  );
+function isImmersiveRoute(pathname: string): boolean {
+
+  if (pathname === '/soundtok') return true;
+
+  if (pathname.startsWith('/chats/') && pathname !== '/chats') return true;
+
+  if (pathname === '/studio' || pathname === '/midi') return true;
+
+  return false;
+
 }
+
+
+
+export default function Layout() {
+
+  const { pathname } = useLocation();
+
+  const immersive = isImmersiveRoute(pathname);
+
+  const hideHeader = immersive;
+
+
+
+  return (
+
+    <div className="flex min-h-screen bg-[#0a0a0a]">
+
+      <Sidebar />
+
+      <div className="flex flex-1 flex-col ml-0 pb-[72px] md:ml-[200px] lg:ml-[220px] md:pb-0 min-h-0 min-w-0">
+
+        {!hideHeader && <Header />}
+
+        <main
+
+          className={`flex-1 min-h-0 ${
+
+            immersive
+
+              ? 'overflow-hidden h-[calc(100dvh-var(--app-bottom-nav))] md:h-screen'
+
+              : 'overflow-auto'
+
+          }`}
+
+        >
+
+          <Outlet />
+
+        </main>
+
+      </div>
+
+    </div>
+
+  );
+
+}
+

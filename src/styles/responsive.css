@@ -1,0 +1,226 @@
+/* ── Global responsive tokens ── */
+:root {
+  --app-bottom-nav: 72px;
+  --app-header-h: 58px;
+  --page-pad-x: 28px;
+  --page-pad-top: 48px;
+  --page-pad-bottom: 80px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --app-header-h: 48px;
+    --page-pad-x: 16px;
+    --page-pad-top: 20px;
+    --page-pad-bottom: 24px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root {
+    --page-pad-x: 20px;
+    --page-pad-top: 32px;
+    --page-pad-bottom: 48px;
+  }
+}
+
+/* ── Page shells: unified padding ── */
+@media (max-width: 1024px) {
+  .feed-wrapper,
+  .profile-wrapper,
+  .projects-wrapper,
+  .ai-wrapper,
+  .chats-wrapper,
+  .st-wrapper,
+  .db-wrap,
+  .rb-wrap {
+    padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom) !important;
+  }
+
+  .feed-root,
+  .profile-root,
+  .projects-root,
+  .ai-root,
+  .chats-root,
+  .st-root {
+    min-height: auto !important;
+  }
+}
+
+/* ── Mobile (≤768px) ── */
+@media (max-width: 768px) {
+  /* Profile */
+  .profile-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 16px !important;
+  }
+
+  .profile-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .profile-actions .btn-primary,
+  .profile-actions .btn-ghost,
+  .profile-actions button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .profile-hero {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 20px !important;
+  }
+
+  .profile-name {
+    font-size: 20px !important;
+  }
+
+  .stat-cell {
+    padding: 12px 14px !important;
+  }
+
+  .stat-num {
+    font-size: 20px !important;
+  }
+
+  /* Feed */
+  .feed-topbar {
+    margin-bottom: 24px !important;
+  }
+
+  .feed-tabs {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  .feed-tab {
+    flex: 1;
+    padding: 8px 10px !important;
+    font-size: 10px !important;
+    text-align: center;
+  }
+
+  .post-media-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cp-preview-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Chats */
+  .chats-topbar {
+    margin-bottom: 24px !important;
+  }
+
+  /* AI */
+  .ai-topbar {
+    margin-bottom: 24px !important;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .brand-text {
+    font-size: 17px !important;
+  }
+
+  /* Dashboard */
+  .db-topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .db-info-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Chat — fill Layout main, not viewport */
+  .chat-root {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  /* Rap battle */
+  .rb-wrap .rb-topbar,
+  .rb-topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* Projects */
+  .projects-topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* Auth */
+  .login-root,
+  .register-root {
+    padding: 16px !important;
+    align-items: flex-start !important;
+    min-height: 100dvh;
+  }
+
+  .login-card,
+  .register-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 24px 20px !important;
+  }
+
+  .login-split,
+  .register-split {
+    display: none !important;
+  }
+
+  /* Search modal */
+  .search-overlay {
+    padding: 12px !important;
+    align-items: flex-start !important;
+    padding-top: max(12px, env(safe-area-inset-top)) !important;
+  }
+
+  .search-modal {
+    max-height: calc(100dvh - 24px) !important;
+    border-radius: 12px !important;
+    margin-top: 0 !important;
+  }
+
+  /* MIDI welcome */
+  .instrument-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .welcome-screen {
+    padding: 24px 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-stats {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stat-cell + .stat-cell {
+    border-left: none !important;
+    border-top: 1px solid var(--border, #1a1a1a);
+  }
+
+  .instrument-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Safe area for bottom nav */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .sb-root {
+      padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+    }
+  }
+}

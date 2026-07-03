@@ -168,7 +168,7 @@ export function StudioLayout() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex flex-col h-screen w-full overflow-hidden" style={{ backgroundColor: FL_COLORS.MAIN_BG }}>
+      <div className="flex flex-col h-full w-full overflow-hidden" style={{ backgroundColor: FL_COLORS.MAIN_BG }}>
         {/* 
           FL STUDIO LAYER 1: MENU BAR (Top)
           - File, Edit, View, Options, Help

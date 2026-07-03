@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar, Volume2, Save, Download, Upload, Repeat } from 'lucide-react';
+import DesktopOnlyGate from '../components/DesktopOnlyGate';
 
 // ================= ИНТЕРФЕЙСЫ =================
 interface Note {
@@ -67,8 +68,8 @@ ${FONT_IMPORT}
   font-family: 'Syne', sans-serif;
   background: var(--bg);
   color: var(--text-primary);
-  min-height: 100vh;
-  max-height: 100vh;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -79,7 +80,8 @@ ${FONT_IMPORT}
   max-width: 1400px;
   margin: 0 auto;
   padding: 16px;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -90,7 +92,7 @@ ${FONT_IMPORT}
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  min-height: 100%;
   text-align: center;
   padding: 20px;
 }
@@ -764,7 +766,7 @@ class Synthesizer {
 }
 
 // ================= ГЛАВНЫЙ КОМПОНЕНТ =================
-export default function MIDISequencer() {
+function MIDISequencer() {
   const [project, setProject] = useState<MIDIProject | null>(null);
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentType | null>(null);
   const [midiConnected, setMidiConnected] = useState(false);
@@ -1553,5 +1555,13 @@ export default function MIDISequencer() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MIDI() {
+  return (
+    <DesktopOnlyGate feature="MIDI секвенсор" hint="Редактор нот удобнее на компьютере или планшете в альбомной ориентации.">
+      <MIDISequencer />
+    </DesktopOnlyGate>
   );
 }

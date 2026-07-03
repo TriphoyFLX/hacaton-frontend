@@ -162,21 +162,21 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-900">
+    <div className="h-full flex flex-col bg-gray-900 min-h-0">
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Shield size={24} />
+      <div className="bg-gray-800 border-b border-gray-700 p-3 sm:p-4">
+        <h1 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
+          <Shield size={22} className="sm:w-6 sm:h-6" />
           Админ панель
         </h1>
       </div>
 
       {/* Tabs */}
-      <div className="bg-gray-800 border-b border-gray-700">
-        <div className="flex">
+      <div className="bg-gray-800 border-b border-gray-700 overflow-x-auto">
+        <div className="flex min-w-max sm:min-w-0">
           <button
             onClick={() => setActiveTab('users')}
-            className={`px-6 py-3 font-medium transition ${
+            className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
               activeTab === 'users'
                 ? 'text-purple-400 border-b-2 border-purple-400'
                 : 'text-gray-400 hover:text-white'
@@ -187,7 +187,7 @@ export default function AdminPanel() {
           </button>
           <button
             onClick={() => setActiveTab('posts')}
-            className={`px-6 py-3 font-medium transition ${
+            className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
               activeTab === 'posts'
                 ? 'text-purple-400 border-b-2 border-purple-400'
                 : 'text-gray-400 hover:text-white'
@@ -198,7 +198,7 @@ export default function AdminPanel() {
           </button>
           <button
             onClick={() => setActiveTab('soundtoks')}
-            className={`px-6 py-3 font-medium transition ${
+            className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
               activeTab === 'soundtoks'
                 ? 'text-purple-400 border-b-2 border-purple-400'
                 : 'text-gray-400 hover:text-white'
@@ -211,12 +211,12 @@ export default function AdminPanel() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
         {activeTab === 'users' && (
           <div className="space-y-4">
             {users.map((user) => (
-              <div key={user.id} className="bg-gray-800 rounded-lg p-4">
-                <div className="flex items-center justify-between">
+              <div key={user.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <p className="text-white font-medium">@{user.username}</p>
                     <p className="text-gray-400 text-sm">{user.email}</p>
@@ -254,8 +254,8 @@ export default function AdminPanel() {
         {activeTab === 'posts' && (
           <div className="space-y-4">
             {posts.map((post) => (
-              <div key={post.id} className="bg-gray-800 rounded-lg p-4">
-                <div className="flex items-start justify-between">
+              <div key={post.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex-1">
                     <p className="text-white mb-2">{post.content}</p>
                     <p className="text-gray-400 text-sm mb-2">
@@ -286,8 +286,8 @@ export default function AdminPanel() {
         {activeTab === 'soundtoks' && (
           <div className="space-y-4">
             {soundToks.map((soundTok) => (
-              <div key={soundTok.id} className="bg-gray-800 rounded-lg p-4">
-                <div className="flex items-start justify-between">
+              <div key={soundTok.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex-1">
                     <p className="text-white mb-2">{soundTok.description}</p>
                     <p className="text-gray-400 text-sm mb-2">

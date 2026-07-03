@@ -318,7 +318,7 @@ ${FONT_IMPORT}
     width: 100% !important;
     height: auto !important;
     background: var(--bg);
-    border-top: 1px solid var(--b1);
+    border-top: 1px solid var(--border);
     border-left: none;
     border-right: none;
     z-index: 1000;
@@ -370,7 +370,7 @@ ${FONT_IMPORT}
     transform: translateX(-50%);
     width: 4px;
     height: 4px;
-    background: var(--t1);
+    background: var(--text-primary);
     border-radius: 50%;
   }
 
@@ -378,24 +378,19 @@ ${FONT_IMPORT}
     width: 22px !important;
     height: 22px !important;
     margin-bottom: 4px !important;
-    color: var(--t3) !important;
+    color: var(--text-muted) !important;
   }
 
   .sb-item.active .sb-item-icon {
-    color: var(--t1) !important;
+    color: var(--text-primary) !important;
   }
 
   .sb-item:hover {
-    background: var(--surf) !important;
+    background: var(--bg-hover) !important;
   }
 
   .sb-item:hover .sb-item-icon {
-    color: var(--t2) !important;
-  }
-
-  /* Адаптация основного контента */
-  body:has(.sb-root) {
-    padding-bottom: 80px !important;
+    color: var(--text-secondary) !important;
   }
 }
 

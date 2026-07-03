@@ -466,16 +466,22 @@ ${FONT_IMPORT}
 
 /* ── FAB ── */
 .st-root--feed {
-  min-height: 100vh;
-  min-height: 100dvh;
-  height: 100vh;
-  height: 100dvh;
+  position: relative;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
+  background: #0a0a0a;
+}
+
+.st-feed-mode {
+  position: absolute;
+  inset: 0;
+  background: #0a0a0a;
 }
 
 .st-fab {
-  position: fixed;
-  bottom: 32px;
+  position: absolute;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   width: 52px;
@@ -491,6 +497,10 @@ ${FONT_IMPORT}
   z-index: 50;
   color: #0a0a0a;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.st-feed-mode .st-fab {
+  z-index: 30;
 }
 
 .st-fab:hover {
@@ -727,7 +737,7 @@ export default function SoundTok() {
         </div>
       ) : (
         /* Video feed with content */
-        <div style={{ position: 'relative', height: '100vh', maxHeight: '100dvh' }}>
+        <div className="st-feed-mode">
           <VideoFeed
             soundToks={soundToks}
             onLike={handleLike}
@@ -738,7 +748,11 @@ export default function SoundTok() {
             }}
           />
           
-          <button className="st-fab" onClick={() => setShowUpload(true)} title="Загрузить видео">
+          <button
+            className="st-fab"
+            onClick={() => setShowUpload(true)}
+            title="Загрузить видео"
+          >
             <IconPlus />
           </button>
         </div>
