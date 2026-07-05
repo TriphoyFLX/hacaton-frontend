@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, Calendar } from 'lucide-react';
 import { chatsApi } from '../api/chats';
 import { profileApi, UserProfile } from '../api/profile';
+import { followsApi } from '../api/follows';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { useAuthStore } from '../store/authStore';
+import FollowListModal from '../components/FollowListModal';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -258,14 +261,26 @@ ${FONT_IMPORT}
   position: relative;
   z-index: 10;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 32px;
 }
+@media (min-width: 640px) {
+  .profile-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
 .stat-cell {
   padding: 18px 20px;
+}
+.stat-cell.clickable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.stat-cell.clickable:hover {
+  background: var(--bg-surface);
 }
 .stat-cell + .stat-cell {
   border-left: 1px solid var(--border);
@@ -451,6 +466,10 @@ export default function PublicProfile() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [listModal, setListModal] = useState<'followers' | 'following' | null>(null);
+  const currentUser = useAuthStore((s) => s.user);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -460,6 +479,8 @@ export default function PublicProfile() {
       try {
         const data = await profileApi.getPublicProfile(username);
         setUser(data);
+        setIsFollowing(!!data.isFollowing);
+        setFollowersCount(data.followersCount ?? 0);
       } catch (error) {
         console.error('Failed to fetch user:', error);
         setUser(null);
@@ -471,8 +492,27 @@ export default function PublicProfile() {
     fetchUser();
   }, [username]);
 
-  const handleFollow = () => {
-    setIsFollowing(!isFollowing);
+  const handleFollow = async () => {
+    if (!user || followLoading || currentUser?.id === user.id) return;
+
+    const wasFollowing = isFollowing;
+    setIsFollowing(!wasFollowing);
+    setFollowersCount((c) => (wasFollowing ? Math.max(0, c - 1) : c + 1));
+    setFollowLoading(true);
+
+    try {
+      const result = wasFollowing
+        ? await followsApi.unfollow(user.id)
+        : await followsApi.follow(user.id);
+      setIsFollowing(result.following);
+      setFollowersCount(result.followersCount);
+    } catch (error) {
+      setIsFollowing(wasFollowing);
+      setFollowersCount((c) => (wasFollowing ? c + 1 : Math.max(0, c - 1)));
+      console.error('Failed to toggle follow:', error);
+    } finally {
+      setFollowLoading(false);
+    }
   };
 
   const startChat = async () => {
@@ -560,12 +600,15 @@ export default function PublicProfile() {
             <h1 className="profile-name">{user.displayName || user.username}</h1>
           </div>
           <div className="profile-actions">
-            <button
-              onClick={handleFollow}
-              className={`btn-primary ${isFollowing ? 'following' : ''}`}
-            >
-              {isFollowing ? 'Отписаться' : 'Подписаться'}
-            </button>
+            {currentUser?.id !== user.id && (
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`btn-primary ${isFollowing ? 'following' : ''}`}
+              >
+                {isFollowing ? 'Отписаться' : 'Подписаться'}
+              </button>
+            )}
             <button onClick={startChat} className="btn-primary">
               <MessageCircle size={14} />
               Чат
@@ -589,6 +632,26 @@ export default function PublicProfile() {
           <div className="stat-cell">
             <div className="stat-num">{user.soundToksCount ?? 0}</div>
             <div className="stat-label">SoundTok</div>
+          </div>
+          <div
+            className="stat-cell clickable"
+            onClick={() => setListModal('followers')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && setListModal('followers')}
+          >
+            <div className="stat-num">{followersCount}</div>
+            <div className="stat-label">Подписчиков</div>
+          </div>
+          <div
+            className="stat-cell clickable"
+            onClick={() => setListModal('following')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && setListModal('following')}
+          >
+            <div className="stat-num">{user.followingCount ?? 0}</div>
+            <div className="stat-label">Подписок</div>
           </div>
         </div>
 
@@ -620,6 +683,15 @@ export default function PublicProfile() {
           </div>
         </div>
       </div>
+
+      {listModal && user && (
+        <FollowListModal
+          userId={user.id}
+          type={listModal}
+          title={listModal === 'followers' ? 'Подписчики' : 'Подписки'}
+          onClose={() => setListModal(null)}
+        />
+      )}
     </div>
   );
 }

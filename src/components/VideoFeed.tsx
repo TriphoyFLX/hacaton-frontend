@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check } from 'lucide-react';
 import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
+import { followsApi } from '../api/follows';
 import { API_ORIGIN } from '../api/client';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount, formatRelativeTime, pluralizeComments } from '../lib/format';
@@ -692,6 +693,7 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const [followedAuthors, setFollowedAuthors] = useState<Record<string, boolean>>({});
+  const [followLoading, setFollowLoading] = useState<Record<string, boolean>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [currentSoundTokId, setCurrentSoundTokId] = useState<string | null>(null);
@@ -707,6 +709,8 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
   const [descExpanded, setDescExpanded] = useState(false);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const soundEnabledRef = useRef(false);
+  const commentsOpenRef = useRef(false);
+  const isPausedRef = useRef(false);
 
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -728,15 +732,56 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
   const getCommentCount = (tok: SoundTok) =>
     localCounts[tok.id] ?? tok.commentsCount ?? 0;
 
-  const toggleFollow = (authorId: string, e: React.MouseEvent) => {
+  const toggleFollow = async (authorId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFollowedAuthors((prev) => ({
-      ...prev,
-      [authorId]: !prev[authorId],
-    }));
+    if (isOwnVideo(authorId) || followLoading[authorId]) return;
+
+    const wasFollowing = !!followedAuthors[authorId];
+    setFollowedAuthors((prev) => ({ ...prev, [authorId]: !wasFollowing }));
+    setFollowLoading((prev) => ({ ...prev, [authorId]: true }));
+
+    try {
+      if (wasFollowing) {
+        await followsApi.unfollow(authorId);
+      } else {
+        await followsApi.follow(authorId);
+      }
+    } catch (error) {
+      setFollowedAuthors((prev) => ({ ...prev, [authorId]: wasFollowing }));
+      console.error('Failed to toggle follow:', error);
+    } finally {
+      setFollowLoading((prev) => ({ ...prev, [authorId]: false }));
+    }
   };
 
   const isOwnVideo = (authorId: string) => currentUser?.id === authorId;
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fromVideos: Record<string, boolean> = {};
+    soundToks.forEach((tok) => {
+      if (tok.authorIsFollowed) {
+        fromVideos[tok.authorId] = true;
+      }
+    });
+
+    if (Object.keys(fromVideos).length > 0) {
+      setFollowedAuthors((prev) => ({ ...prev, ...fromVideos }));
+      return;
+    }
+
+    followsApi
+      .getFollowingIds()
+      .then((ids) => {
+        const map: Record<string, boolean> = {};
+        ids.forEach((id) => {
+          map[id] = true;
+        });
+        setFollowedAuthors((prev) => ({ ...prev, ...map }));
+      })
+      .catch((error) => console.error('Failed to load following:', error));
+  }, [currentUser, soundToks]);
 
   useEffect(() => {
     const counts: Record<string, number> = {};
@@ -747,12 +792,18 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
   }, [soundToks]);
 
   useEffect(() => {
+    commentsOpenRef.current = commentsOpen;
+  }, [commentsOpen]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
     if (commentsOpen) {
-      videoRefs.current[currentIndex]?.pause();
-      setIsPaused(true);
       setTimeout(() => commentInputRef.current?.focus(), 350);
     }
-  }, [commentsOpen, currentIndex]);
+  }, [commentsOpen]);
 
   const enableSound = useCallback(() => {
     if (soundEnabledRef.current) return;
@@ -765,52 +816,53 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
     }
   }, [currentIndex]);
 
-  const playVideoAt = useCallback(
-    async (index: number) => {
-      if (commentsOpen || isPaused) return;
+  const playVideoAt = useCallback(async (index: number) => {
+    if (commentsOpenRef.current || isPausedRef.current) return;
 
-      videoRefs.current.forEach((video, i) => {
-        if (!video || i === index) return;
-        video.pause();
-        video.muted = true;
-      });
+    videoRefs.current.forEach((video, i) => {
+      if (!video || i === index) return;
+      video.pause();
+      video.muted = true;
+    });
 
-      const video = videoRefs.current[index];
-      if (!video) return;
+    const video = videoRefs.current[index];
+    if (!video) return;
 
+    if (video.readyState >= 2) {
+      setVideoLoading(false);
+    } else {
       setVideoLoading(true);
+    }
 
+    try {
+      video.muted = !soundEnabledRef.current;
+      await video.play();
+      setVideoLoading(false);
+    } catch {
       try {
-        video.muted = !soundEnabledRef.current;
+        video.muted = true;
         await video.play();
         setVideoLoading(false);
       } catch {
-        try {
-          video.muted = true;
-          await video.play();
-          setVideoLoading(false);
-        } catch {
-          setVideoLoading(false);
-        }
+        setVideoLoading(false);
       }
-    },
-    [commentsOpen, isPaused]
-  );
+    }
+  }, []);
 
   useEffect(() => {
     setDescExpanded(false);
     setIsPaused(false);
-    setVideoLoading(true);
+    isPausedRef.current = false;
     playVideoAt(currentIndex);
   }, [currentIndex, playVideoAt]);
 
   useEffect(() => {
-    if (isPaused || commentsOpen) {
+    if (isPaused) {
       videoRefs.current[currentIndex]?.pause();
     } else {
       playVideoAt(currentIndex);
     }
-  }, [isPaused, commentsOpen, currentIndex, playVideoAt]);
+  }, [isPaused, currentIndex, playVideoAt]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (commentsOpen) return;
@@ -941,8 +993,6 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
     setCommentsOpen(false);
     setCurrentSoundTokId(null);
     setNewComment('');
-    setIsPaused(false);
-    playVideoAt(currentIndex);
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
@@ -1038,17 +1088,19 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
                 preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'metadata'}
                 muted={index !== currentIndex || !soundEnabled}
                 onLoadedData={() => {
-                  if (index === currentIndex && !commentsOpen && !isPaused) {
+                  if (index === currentIndex && !commentsOpenRef.current && !isPausedRef.current) {
                     playVideoAt(index);
                   }
                 }}
                 onCanPlay={() => {
-                  if (index === currentIndex && !commentsOpen && !isPaused) {
+                  if (index === currentIndex && !commentsOpenRef.current && !isPausedRef.current) {
                     playVideoAt(index);
                   }
                 }}
                 onWaiting={() => {
-                  if (index === currentIndex) setVideoLoading(true);
+                  if (index === currentIndex && !commentsOpenRef.current && !isPausedRef.current) {
+                    setVideoLoading(true);
+                  }
                 }}
                 onPlaying={() => {
                   if (index === currentIndex) setVideoLoading(false);
@@ -1068,7 +1120,7 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
                 }}
               />
 
-              {isActive && videoLoading && !isPaused && (
+              {isActive && videoLoading && !isPaused && !commentsOpen && (
                 <div className="vf-video-loading" aria-hidden />
               )}
 

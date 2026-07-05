@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatsApi, Chat } from '../api/chats';
+import { useAuthStore } from '../store/authStore';
 import { Search, MessageCircle } from 'lucide-react';
 
 // ── Styles ──
@@ -327,6 +328,7 @@ const IconChat = () => (
 
 export default function Chats() {
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -347,7 +349,7 @@ export default function Chats() {
   }, []);
 
   const getOtherUser = (chat: Chat) => {
-    const currentUserId = localStorage.getItem('userId');
+    const currentUserId = user?.id;
     return chat.users.find(cu => cu.user.id !== currentUserId)?.user;
   };
 

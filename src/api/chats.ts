@@ -1,19 +1,4 @@
-import axios from 'axios';
-
-const api = axios.create({
-  baseURL: 'http://localhost:5002/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import api from './client';
 
 export interface Chat {
   id: string;
@@ -73,22 +58,22 @@ export const chatsApi = {
     const response = await api.get('/chats');
     return response.data;
   },
-  
+
   getMessages: async (chatId: string) => {
     const response = await api.get(`/chats/${chatId}/messages`);
     return response.data;
   },
-  
+
   createChat: async (receiverId: string) => {
     const response = await api.post('/chats', { receiverId });
     return response.data;
   },
-  
+
   sendMessage: async (chatId: string, content: string, receiverId?: string, clientMessageId?: string) => {
-    const response = await api.post(`/chats/${chatId}/messages`, { 
-      content, 
-      receiverId, 
-      clientMessageId 
+    const response = await api.post(`/chats/${chatId}/messages`, {
+      content,
+      receiverId,
+      clientMessageId,
     });
     return response.data;
   },
@@ -103,5 +88,3 @@ export const chatsApi = {
     return response.data;
   },
 };
-
-export default api;

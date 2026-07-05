@@ -13,6 +13,9 @@ export interface UserProfile {
   updatedAt?: string;
   postsCount?: number;
   soundToksCount?: number;
+  followersCount?: number;
+  followingCount?: number;
+  isFollowing?: boolean;
 }
 
 export interface UpdateProfileData {

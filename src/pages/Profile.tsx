@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { profileApi, UserProfile, ValidationError } from '../api/profile';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import FollowListModal from '../components/FollowListModal';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
 
@@ -315,15 +316,27 @@ ${FONT_IMPORT}
 /* ── STATS ── */
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 40px;
 }
+@media (min-width: 640px) {
+  .stats-row {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
 .stat-cell {
   padding: 20px 24px;
   position: relative;
+}
+.stat-cell.clickable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.stat-cell.clickable:hover {
+  background: var(--bg-surface);
 }
 .stat-cell + .stat-cell {
   border-left: 1px solid var(--border);
@@ -551,6 +564,7 @@ export default function Profile() {
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [listModal, setListModal] = useState<'followers' | 'following' | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -834,15 +848,31 @@ export default function Profile() {
         {/* Stats */}
         <div className="stats-row">
           <div className="stat-cell">
-            <div className="stat-num">0</div>
+            <div className="stat-num">{profile.postsCount ?? 0}</div>
             <div className="stat-label">Постов</div>
           </div>
           <div className="stat-cell">
-            <div className="stat-num">0</div>
+            <div className="stat-num">{profile.soundToksCount ?? 0}</div>
+            <div className="stat-label">SoundTok</div>
+          </div>
+          <div
+            className="stat-cell clickable"
+            onClick={() => setListModal('followers')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && setListModal('followers')}
+          >
+            <div className="stat-num">{profile.followersCount ?? 0}</div>
             <div className="stat-label">Подписчиков</div>
           </div>
-          <div className="stat-cell">
-            <div className="stat-num">0</div>
+          <div
+            className="stat-cell clickable"
+            onClick={() => setListModal('following')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && setListModal('following')}
+          >
+            <div className="stat-num">{profile.followingCount ?? 0}</div>
             <div className="stat-label">Подписок</div>
           </div>
         </div>
@@ -888,6 +918,15 @@ export default function Profile() {
         <div className={`save-status ${saveStatus}`}>
           {saveStatus === 'success' ? 'Сохранено' : 'Ошибка сохранения'}
         </div>
+      )}
+
+      {listModal && profile && (
+        <FollowListModal
+          userId={profile.id}
+          type={listModal}
+          title={listModal === 'followers' ? 'Мои подписчики' : 'Мои подписки'}
+          onClose={() => setListModal(null)}
+        />
       )}
     </div>
   );

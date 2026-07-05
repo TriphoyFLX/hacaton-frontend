@@ -1,8 +1,9 @@
-const API_BASE = 'http://localhost:5002/api';
+import { getAuthToken } from '../lib/authToken';
 
-// Get auth token from localStorage
+const API_BASE = `${import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5002'}/api`;
+
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getAuthToken();
   return {
     'Content-Type': 'application/json',
     ...(token && { Authorization: `Bearer ${token}` })
@@ -158,7 +159,7 @@ export const getBattleInvitations = async (): Promise<Battle[]> => {
 // Respond to battle invitation
 export const respondToBattle = async (battleId: string, accept: boolean): Promise<void> => {
   console.log(`Frontend: Responding to battle ${battleId}, accept=${accept}`);
-  console.log(`Frontend: Token exists:`, !!localStorage.getItem('token'));
+  console.log(`Frontend: Token exists:`, !!getAuthToken());
   
   const response = await fetch(`${API_BASE}/battles/${battleId}/respond`, {
     method: 'PATCH',
@@ -182,7 +183,7 @@ export const uploadBeatFile = async (file: File): Promise<{ url: string }> => {
   const formData = new FormData();
   formData.append('beat', file);
   
-  const token = localStorage.getItem('token');
+  const token = getAuthToken();
   console.log('Debug: Uploading beat file, token exists:', !!token);
   console.log('Debug: File:', file.name, file.type);
   
@@ -264,7 +265,7 @@ export const saveBattleRecording = async (
   const response = await fetch(`${API_BASE}/battles/${battleId}/recordings`, {
     method: 'POST',
     headers: {
-      ...(localStorage.getItem('token') && { Authorization: `Bearer ${localStorage.getItem('token')}` })
+      ...(getAuthToken() && { Authorization: `Bearer ${getAuthToken()}` })
     },
     body: formData
   });

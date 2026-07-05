@@ -629,29 +629,48 @@ export default function SoundTok() {
 
   const handleLike = async (id: string) => {
     const soundTok = soundToks.find(tok => tok.id === id);
-    if (soundTok?.isLiked) return;
+    if (!soundTok) return;
+
+    const wasLiked = !!soundTok.isLiked;
 
     setSoundToks(prev =>
       prev.map(tok => {
         if (tok.id === id) {
-          return { ...tok, likes: tok.likes + 1, isLiked: true };
+          return {
+            ...tok,
+            likes: wasLiked ? Math.max(0, tok.likes - 1) : tok.likes + 1,
+            isLiked: !wasLiked
+          };
         }
         return tok;
       })
     );
 
     try {
-      await soundTokApi.likeSoundTok(id);
+      if (wasLiked) {
+        await soundTokApi.unlikeSoundTok(id);
+      } else {
+        await soundTokApi.likeSoundTok(id);
+      }
     } catch (error) {
       setSoundToks(prev =>
         prev.map(tok => {
           if (tok.id === id) {
-            return { ...tok, likes: tok.likes - 1, isLiked: false };
+            return {
+              ...tok,
+              likes: wasLiked ? tok.likes + 1 : Math.max(0, tok.likes - 1),
+              isLiked: wasLiked
+            };
           }
           return tok;
         })
       );
-      showToast('Не удалось поставить лайк', 'error');
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        showToast('Сессия истекла — войдите снова', 'error');
+      } else {
+        showToast(wasLiked ? 'Не удалось убрать лайк' : 'Не удалось поставить лайк', 'error');
+      }
     }
   };
 

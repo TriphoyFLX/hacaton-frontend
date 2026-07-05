@@ -24,6 +24,7 @@ export interface SoundTok {
   createdAt: string;
   updatedAt: string;
   isLiked?: boolean;
+  authorIsFollowed?: boolean;
   author: {
     id: string;
     username: string;
@@ -57,6 +58,11 @@ export const soundTokApi = {
 
   likeSoundTok: async (id: string) => {
     const response = await api.post(`/soundtok/${id}/like`);
+    return response.data;
+  },
+
+  unlikeSoundTok: async (id: string) => {
+    const response = await api.delete(`/soundtok/${id}/like`);
     return response.data;
   },
 
