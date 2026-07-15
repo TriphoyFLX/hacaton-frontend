@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { useChatUnreadStore } from '../store/chatUnreadStore';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
 
@@ -205,6 +207,14 @@ ${FONT_IMPORT}
   background: #1a1510;
   color: #8a6c3a;
   border: 1px solid #2a2010;
+  margin-left: auto;
+}
+.sb-badge-count-active {
+  background: #e8e4dc;
+  color: #0b0b0b;
+  border: 1px solid #e8e4dc;
+  margin-left: auto;
+  font-weight: 600;
 }
 .sb-badge-beta {
   background: #1e1530;
@@ -459,12 +469,22 @@ const CONTENT_NAV = [
   { path: '/soundtok', label: 'SoundTok',     icon: <IconVideo />,  badge: <span className="sb-badge sb-badge-new">NEW</span> },
   { path: '/rap-battle', label: 'Rap Battle',  icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-hot">HOT</span> },
   { path: '/midi',      label: 'MIDI',         icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-beta">β</span> },
-  { path: '/chats',    label: 'Чаты',          icon: <IconChat />,   badge: <span className="sb-badge sb-badge-count">3</span> },
+  { path: '/chats',    label: 'Чаты',          icon: <IconChat /> },
 ];
 
 export default function Sidebar() {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
+  const totalUnread = useChatUnreadStore((s) => s.totalUnread);
+  const refreshUnread = useChatUnreadStore((s) => s.refresh);
   const isAdmin = user?.role === 'ADMIN';
+
+  useEffect(() => {
+    if (!token) return;
+
+    refreshUnread();
+    const interval = setInterval(refreshUnread, 15000);
+    return () => clearInterval(interval);
+  }, [token, refreshUnread]);
 
   const linkClass = ({ isActive }: { isActive: boolean }, extra = '') => {
     return `sb-item${isActive ? ' active' : ''}${extra ? ` ${extra}` : ''}`;
@@ -503,7 +523,13 @@ export default function Sidebar() {
           <NavLink key={path} to={path} className={linkClass}>
             <span className="sb-item-icon">{icon}</span>
             <span className="sb-item-label">{label}</span>
-            {badge}
+            {path === '/chats' && totalUnread > 0 ? (
+              <span className="sb-badge sb-badge-count-active">
+                {totalUnread > 99 ? '99+' : totalUnread}
+              </span>
+            ) : (
+              badge
+            )}
           </NavLink>
         ))}
 

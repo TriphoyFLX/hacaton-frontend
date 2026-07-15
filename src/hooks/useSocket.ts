@@ -6,7 +6,7 @@ export interface Message {
   id: string;
   content: string;
   senderId: string;
-  receiverId: string;
+  receiverId?: string | null;
   chatId: string;
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
@@ -33,6 +33,7 @@ interface ServerToClientEvents {
   'message:status': (data: { messageId: string; status: string; readAt?: Date }) => void;
   'message:delivered': (data: { clientMessageId: string; messageId: string }) => void;
   'chat:typing': (data: { chatId: string; userId: string; isTyping: boolean }) => void;
+  'chat:presence': (data: { chatId: string; userId: string; isOnline: boolean }) => void;
   'user:online': (data: { userId: string; isOnline: boolean }) => void;
   'error': (error: { message: string; code: string }) => void;
   'connect': () => void;
@@ -45,7 +46,7 @@ interface ClientToServerEvents {
     content: string;
     chatId: string;
     clientMessageId: string;
-    receiverId: string;
+    receiverId?: string | null;
   }, callback: (response: SocketMessageResponse) => void) => void;
   'message:read': (data: { messageIds: string[]; chatId: string }) => void;
   'message:deliver': (data: { messageId: string; chatId: string }) => void;
@@ -60,6 +61,7 @@ interface UseSocketOptions {
   onMessageDelivered?: (data: { clientMessageId: string; messageId: string }) => void;
   onMessageRead?: (data: { messageId: string; status: string; readAt?: Date }) => void;
   onTyping?: (data: { chatId: string; userId: string; isTyping: boolean }) => void;
+  onPresence?: (data: { chatId: string; userId: string; isOnline: boolean }) => void;
   onUserOnline?: (data: { userId: string; isOnline: boolean }) => void;
   onError?: (error: { message: string; code: string }) => void;
   onConnect?: () => void;
@@ -76,7 +78,7 @@ interface UseSocketReturn {
   sendMessage: (data: {
     content: string;
     chatId: string;
-    receiverId: string;
+    receiverId?: string | null;
     clientMessageId: string;
   }) => Promise<SocketMessageResponse>;
   markAsRead: (messageIds: string[], chatId: string) => void;
@@ -163,6 +165,10 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
       optionsRef.current.onTyping?.(data);
     });
 
+    socket.on('chat:presence', (data) => {
+      optionsRef.current.onPresence?.(data);
+    });
+
     socket.on('user:online', (data) => {
       optionsRef.current.onUserOnline?.(data);
     });
@@ -193,7 +199,7 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
     (data: {
       content: string;
       chatId: string;
-      receiverId: string;
+      receiverId?: string | null;
       clientMessageId: string;
     }): Promise<SocketMessageResponse> => {
       return new Promise((resolve) => {
@@ -264,6 +270,7 @@ export function useChatSocket(
     onMessageDelivered?: (data: { clientMessageId: string; messageId: string }) => void;
     onMessageRead?: (data: { messageId: string; status: string; readAt?: Date }) => void;
     onTyping?: (isTyping: boolean, userId: string) => void;
+    onPresence?: (isOnline: boolean) => void;
     onOtherUserOnline?: (isOnline: boolean) => void;
     onError?: (error: { message: string; code: string }) => void;
   } = {}
@@ -287,9 +294,15 @@ export function useChatSocket(
           options.onTyping?.(data.isTyping, data.userId);
         }
       },
+      onPresence: (data) => {
+        if (data.chatId === chatId && otherUserId && data.userId === otherUserId) {
+          options.onPresence?.(data.isOnline);
+        }
+      },
       onUserOnline: (data) => {
         if (otherUserId && data.userId === otherUserId) {
           options.onOtherUserOnline?.(data.isOnline);
+          options.onPresence?.(data.isOnline);
         }
       },
       onError: (error) => {
@@ -314,7 +327,7 @@ export function useChatSocket(
   }, [otherUserId, isConnected, subscribeToUser]);
 
   const sendChatMessage = useCallback(
-    async (content: string, receiverId: string, clientMessageId: string) => {
+    async (content: string, receiverId: string | undefined, clientMessageId: string) => {
       if (!chatId) {
         return { success: false, error: 'No chat selected', clientMessageId };
       }

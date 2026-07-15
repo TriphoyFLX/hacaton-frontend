@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Check, CheckCheck, Loader2, WifiOff } from 'lucide-react';
-import { chatsApi, Chat, Message } from '../api/chats';
+import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users } from 'lucide-react';
+import { chatsApi, Chat, Message, resolveChatPinState } from '../api/chats';
+import { blocksApi, BlockStatus } from '../api/blocks';
+import { usersApi } from '../api/users';
 import { useAuthStore } from '../store/authStore';
+import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { useChatSocket, Message as SocketMessage } from '../hooks/useSocket';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -83,38 +87,6 @@ ${FONT_IMPORT}
   background-size: 200px;
 }
 
-/* ── CONNECTION STATUS ── */
-.connection-status {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  transition: all 0.3s ease;
-}
-.connection-status.connected {
-  background: rgba(39, 174, 96, 0.15);
-  color: var(--success);
-  border: 1px solid rgba(39, 174, 96, 0.3);
-}
-.connection-status.disconnected {
-  background: rgba(192, 57, 43, 0.15);
-  color: var(--red);
-  border: 1px solid rgba(192, 57, 43, 0.3);
-}
-.connection-status.reconnecting {
-  background: rgba(232, 228, 220, 0.08);
-  color: var(--accent-dim);
-  border: 1px solid var(--border-mid);
-}
 .error-toast {
   position: fixed;
   bottom: 100px;
@@ -217,11 +189,12 @@ ${FONT_IMPORT}
 .chat-header {
   position: relative;
   z-index: 10;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  background: rgba(11, 11, 11, 0.85);
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(11, 11, 11, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -277,15 +250,147 @@ ${FONT_IMPORT}
   position: absolute;
   bottom: 2px;
   right: 2px;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background: var(--success);
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.25);
+}
+.header-avatar .offline-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  background: var(--text-muted);
   border-radius: 50%;
   border: 2px solid var(--bg);
 }
 .header-info {
   flex: 1;
   min-width: 0;
+}
+.header-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  color: inherit;
+}
+.header-profile-btn:hover .header-username {
+  color: var(--accent);
+}
+.header-block-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(192, 57, 43, 0.45);
+  background: rgba(192, 57, 43, 0.14);
+  color: #f0a8a2;
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.header-block-btn:hover {
+  background: rgba(192, 57, 43, 0.24);
+  border-color: rgba(192, 57, 43, 0.7);
+  color: #ffd0cb;
+}
+.header-block-btn.unblock {
+  border-color: var(--border-mid);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+.header-block-btn.unblock:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.header-block-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.header-block-label {
+  display: inline;
+}
+.header-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.header-pin-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--accent);
+}
+.header-pin-btn.active {
+  color: var(--accent);
+  border-color: rgba(232, 228, 220, 0.25);
+}
+.header-pin-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.header-group-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  color: inherit;
+  cursor: default;
+}
+.message-sender {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--accent-dim);
+  margin-bottom: 4px;
+}
+@media (max-width: 520px) {
+  .header-block-label {
+    display: none;
+  }
+  .header-block-btn {
+    width: 40px;
+    padding: 0;
+  }
+}
+.block-banner {
+  position: relative;
+  z-index: 10;
+  padding: 10px 20px;
+  background: rgba(192, 57, 43, 0.12);
+  border-bottom: 1px solid rgba(192, 57, 43, 0.25);
+  color: #e8a8a2;
+  font-size: 13px;
+  text-align: center;
 }
 .header-username {
   font-size: 15px;
@@ -303,6 +408,13 @@ ${FONT_IMPORT}
 }
 .header-status.online {
   color: var(--success);
+}
+.header-status.offline {
+  color: var(--text-muted);
+}
+.header-status.unknown {
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 /* ── MESSAGES AREA ── */
@@ -570,7 +682,7 @@ interface PendingMessage {
   id: string;
   content: string;
   senderId: string;
-  receiverId: string;
+  receiverId?: string | null;
   chatId: string;
   createdAt: string;
   status: 'PENDING';
@@ -589,6 +701,11 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [blockStatus, setBlockStatus] = useState<BlockStatus | null>(null);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [blockConfirm, setBlockConfirm] = useState<'block' | 'unblock' | null>(null);
+  const [pinning, setPinning] = useState(false);
+  const clearChatUnread = useChatUnreadStore((s) => s.clearChatUnread);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markAsReadRef = useRef<(ids: string[]) => void>(() => {});
@@ -598,15 +715,22 @@ export default function ChatPage() {
   const processedMessageIds = useRef(new Set<string>());
   const processedClientIds = useRef(new Set<string>());
   
-  // Track other user's online status and typing
-  const [otherUserOnline, setOtherUserOnline] = useState(false);
+  // Track other user's presence and typing
+  const [presenceStatus, setPresenceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [otherUserTyping, setOtherUserTyping] = useState(false);
 
-  // Get other user info
+  const isGroupChat = chat?.type === 'GROUP';
+  const pinState = useMemo(
+    () => (chat && user ? resolveChatPinState(chat, user.id) : { isPinned: false, pinnedAt: null }),
+    [chat, user]
+  );
+
+  // Get other user info (direct chats only)
   const otherUser = useMemo(() => {
-    if (!chat || !user) return null;
-    return chat.users.find(cu => cu.user.id !== user.id)?.user;
-  }, [chat, user]);
+    if (!chat || !user || isGroupChat) return null;
+    if (chat.otherUser) return chat.otherUser;
+    return chat.users.find(cu => cu.user.id !== user.id)?.user ?? null;
+  }, [chat, user, isGroupChat]);
 
   // Handle new message from socket
   const handleNewMessage = (message: SocketMessage) => {
@@ -669,6 +793,17 @@ export default function ChatPage() {
     setSendError(error.message);
   };
 
+  const handlePresence = (isOnline: boolean) => {
+    setPresenceStatus(isOnline ? 'online' : 'offline');
+  };
+
+  const getPresenceLabel = () => {
+    if (otherUserTyping) return 'печатает...';
+    if (presenceStatus === 'unknown') return 'проверка статуса...';
+    if (presenceStatus === 'online') return 'В сети';
+    return 'Не в сети';
+  };
+
   // WebSocket connection
   const {
     isConnected,
@@ -680,13 +815,87 @@ export default function ChatPage() {
     onMessageDelivered: handleMessageDelivered,
     onMessageRead: handleMessageRead,
     onTyping: handleTyping,
-    onOtherUserOnline: setOtherUserOnline,
+    onPresence: handlePresence,
+    onOtherUserOnline: handlePresence,
     onError: handleSocketError,
   });
 
   useEffect(() => {
     markAsReadRef.current = markChatAsRead;
   }, [markChatAsRead]);
+
+  useEffect(() => {
+    if (!otherUser?.id || isGroupChat) return;
+
+    setPresenceStatus('unknown');
+    usersApi.getPresence(otherUser.id)
+      .then((data) => setPresenceStatus(data.isOnline ? 'online' : 'offline'))
+      .catch(() => setPresenceStatus('offline'));
+
+    blocksApi.checkStatus(otherUser.id)
+      .then(setBlockStatus)
+      .catch(() => setBlockStatus(null));
+  }, [otherUser?.id, isGroupChat]);
+
+  const openProfile = () => {
+    if (!otherUser) return;
+    navigate(`/profile/${otherUser.username}`);
+  };
+
+  const handleBlockToggle = () => {
+    if (!otherUser || blockLoading) return;
+    setBlockConfirm(blockStatus?.blockedByMe ? 'unblock' : 'block');
+  };
+
+  const executeBlockToggle = async () => {
+    if (!otherUser || blockLoading) return;
+
+    setBlockLoading(true);
+    try {
+      if (blockStatus?.blockedByMe) {
+        await blocksApi.unblockUser(otherUser.id);
+        setBlockStatus({ blockedByMe: false, blockedByOther: false, isBlocked: false });
+      } else {
+        await blocksApi.blockUser(otherUser.id);
+        setBlockStatus({ blockedByMe: true, blockedByOther: false, isBlocked: true });
+      }
+      setBlockConfirm(null);
+    } catch {
+      setSendError('Не удалось изменить статус блокировки');
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
+  const isMessagingBlocked = !isGroupChat && (blockStatus?.isBlocked ?? false);
+  const canSendMessages = isGroupChat || !!otherUser;
+
+  const handleTogglePin = async () => {
+    if (!chat || pinning) return;
+
+    const nextPinned = !pinState.isPinned;
+    setPinning(true);
+    setSendError(null);
+    try {
+      const result = await chatsApi.pinChat(chat.id, nextPinned);
+      const pinnedAt = result.pinnedAt ? String(result.pinnedAt) : null;
+      setChat((prev) => {
+        if (!prev || !user) return prev;
+        return {
+          ...prev,
+          isPinned: result.isPinned,
+          pinnedAt,
+          users: prev.users.map((cu) =>
+            cu.userId === user.id ? { ...cu, pinnedAt } : cu
+          ),
+        };
+      });
+    } catch {
+      setSendError('Не удалось изменить закрепление');
+    } finally {
+      setPinning(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -740,7 +949,11 @@ export default function ChatPage() {
     if (!chatId || !user?.id || messages.length === 0) return;
 
     const unreadIds = messages
-      .filter((m): m is Message => m.status !== 'PENDING' && m.receiverId === user.id && m.status !== 'READ')
+      .filter((m): m is Message => {
+        if (m.status === 'PENDING' || m.status === 'READ') return false;
+        if (isGroupChat) return m.senderId !== user.id;
+        return m.receiverId === user.id;
+      })
       .map(m => m.id)
       .filter(id => !markedReadIds.current.has(id));
 
@@ -753,7 +966,11 @@ export default function ChatPage() {
     } else {
       chatsApi.markAsRead(chatId, unreadIds).catch(console.error);
     }
-  }, [chatId, user?.id, isConnected, messages, markChatAsRead]);
+
+    if (chatId) {
+      clearChatUnread(chatId);
+    }
+  }, [chatId, user?.id, isConnected, messages, markChatAsRead, clearChatUnread, isGroupChat]);
 
   useEffect(() => {
     if (!sendError) return;
@@ -780,10 +997,11 @@ export default function ChatPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !chatId || !otherUser || sending) return;
+    if (!newMessage.trim() || !chatId || !canSendMessages || sending || isMessagingBlocked) return;
 
     const content = newMessage.trim();
     const clientMessageId = `${chatId}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const receiverId = isGroupChat ? undefined : otherUser?.id;
 
     setNewMessage('');
     setSending(true);
@@ -793,7 +1011,7 @@ export default function ChatPage() {
       id: clientMessageId,
       content,
       senderId: user!.id,
-      receiverId: otherUser.id,
+      receiverId,
       chatId,
       createdAt: new Date().toISOString(),
       status: 'PENDING',
@@ -807,7 +1025,7 @@ export default function ChatPage() {
       let sent = false;
 
       if (isConnected) {
-        const result = await sendChatMessage(content, otherUser.id, clientMessageId);
+        const result = await sendChatMessage(content, receiverId, clientMessageId);
         if (result.success && result.message) {
           confirmSentMessage(clientMessageId, {
             ...result.message,
@@ -820,7 +1038,7 @@ export default function ChatPage() {
       }
 
       if (!sent) {
-        const serverMessage = await chatsApi.sendMessage(chatId, content, otherUser.id, clientMessageId);
+        const serverMessage = await chatsApi.sendMessage(chatId, content, receiverId, clientMessageId);
         confirmSentMessage(clientMessageId, serverMessage);
       }
     } catch (error) {
@@ -887,18 +1105,6 @@ export default function ChatPage() {
       <div className="chat-noise" />
       <div className="chat-grid-bg" />
 
-      {/* Connection Status */}
-      <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
-        {isConnected ? (
-          <span>В сети</span>
-        ) : (
-          <>
-            <WifiOff size={12} />
-            <span>Офлайн · отправка через API</span>
-          </>
-        )}
-      </div>
-
       {sendError && (
         <div className="error-toast">{sendError}</div>
       )}
@@ -922,28 +1128,79 @@ export default function ChatPage() {
               <ArrowLeft size={18} />
             </button>
 
-            {otherUser && (
-              <>
+            {isGroupChat ? (
+              <div className="header-group-btn">
                 <div className="header-avatar">
-                  {otherUser.avatar ? (
-                    <img src={otherUser.avatar} alt={otherUser.username} />
-                  ) : (
-                    otherUser.username[0].toUpperCase()
-                  )}
-                  {otherUserOnline && <span className="online-indicator" />}
+                  <Users size={18} />
                 </div>
                 <div className="header-info">
-                  <div className="header-username">
-                    {otherUser.displayName || `@${otherUser.username}`}
-                  </div>
-                  <div className={`header-status ${otherUserOnline ? 'online' : ''}`}>
-                    {otherUserOnline ? 'В сети' : 'Не в сети'}
-                    {otherUserTyping && ' • печатает...'}
+                  <div className="header-username">{chat.name || 'Группа'}</div>
+                  <div className="header-status">
+                    {chat.memberCount || chat.users.length} участников
                   </div>
                 </div>
+              </div>
+            ) : otherUser ? (
+              <>
+                <button type="button" className="header-profile-btn" onClick={openProfile}>
+                  <div className="header-avatar">
+                    {otherUser.avatar ? (
+                      <img src={otherUser.avatar} alt={otherUser.username} />
+                    ) : (
+                      otherUser.username[0].toUpperCase()
+                    )}
+                    {presenceStatus === 'online' && <span className="online-indicator" />}
+                    {presenceStatus === 'offline' && <span className="offline-indicator" />}
+                  </div>
+                  <div className="header-info">
+                    <div className="header-username">
+                      {otherUser.displayName || `@${otherUser.username}`}
+                    </div>
+                    <div className={`header-status ${presenceStatus}`}>
+                      {getPresenceLabel()}
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`header-block-btn ${blockStatus?.blockedByMe ? 'unblock' : ''}`}
+                  onClick={handleBlockToggle}
+                  disabled={blockLoading}
+                  title={blockStatus?.blockedByMe ? 'Разблокировать' : 'Заблокировать'}
+                >
+                  {blockStatus?.blockedByMe ? <ShieldOff size={17} /> : <Ban size={17} />}
+                  <span className="header-block-label">
+                    {blockStatus?.blockedByMe ? 'Разблокировать' : 'Заблокировать'}
+                  </span>
+                </button>
               </>
-            )}
+            ) : null}
+
+            <button
+              type="button"
+              className={`header-pin-btn ${pinState.isPinned ? 'active' : ''}`}
+              onClick={handleTogglePin}
+              disabled={pinning}
+              title={pinState.isPinned ? 'Открепить' : 'Закрепить'}
+            >
+              {pinning ? (
+                <Loader2 size={17} className="loader" />
+              ) : pinState.isPinned ? (
+                <PinOff size={17} />
+              ) : (
+                <Pin size={17} />
+              )}
+            </button>
           </header>
+
+          {isMessagingBlocked && (
+            <div className="block-banner">
+              {blockStatus?.blockedByMe
+                ? 'Вы заблокировали этого пользователя. Сообщения недоступны.'
+                : 'Этот пользователь ограничил общение с вами.'}
+            </div>
+          )}
 
           {/* Messages */}
           <div className="chat-messages">
@@ -957,6 +1214,9 @@ export default function ChatPage() {
               messages.map((message) => {
                 const isOwn = message.senderId === user?.id;
                 const isPending = message.status === 'PENDING';
+                const senderName = 'sender' in message
+                  ? message.sender?.username
+                  : undefined;
                 
                 return (
                   <div
@@ -964,6 +1224,9 @@ export default function ChatPage() {
                     className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''}`}
                   >
                     <div className={`message-bubble ${isOwn ? 'own' : 'other'}`}>
+                      {isGroupChat && !isOwn && senderName && (
+                        <div className="message-sender">@{senderName}</div>
+                      )}
                       <p className="message-text">{message.content}</p>
                       <div className="message-meta">
                         <span className="message-time">{formatTime(message.createdAt)}</span>
@@ -975,7 +1238,7 @@ export default function ChatPage() {
               })
             )}
             
-            {otherUserTyping && (
+            {otherUserTyping && !isGroupChat && (
               <div className="typing-indicator">
                 <span className="typing-text">печатает</span>
                 <div className="typing-dots">
@@ -1002,14 +1265,14 @@ export default function ChatPage() {
                     handleSendMessage(e);
                   }
                 }}
-                placeholder="Введите сообщение..."
+                placeholder={isMessagingBlocked ? 'Сообщения недоступны' : 'Введите сообщение...'}
                 className="message-input"
-                disabled={sending}
+                disabled={sending || isMessagingBlocked || !canSendMessages}
                 maxLength={4000}
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim() || sending}
+                disabled={!newMessage.trim() || sending || isMessagingBlocked || !canSendMessages}
                 className="send-btn"
               >
                 {sending ? (
@@ -1022,6 +1285,27 @@ export default function ChatPage() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={blockConfirm !== null}
+        title={
+          blockConfirm === 'block'
+            ? 'Заблокировать пользователя?'
+            : 'Разблокировать пользователя?'
+        }
+        message={
+          blockConfirm === 'block'
+            ? `Вы уверены, что хотите заблокировать @${otherUser?.username ?? 'пользователя'}? Вы больше не сможете отправлять друг другу сообщения.`
+            : `Разблокировать @${otherUser?.username ?? 'пользователя'}? Вы снова сможете общаться в чате.`
+        }
+        confirmLabel={blockConfirm === 'block' ? 'Заблокировать' : 'Разблокировать'}
+        cancelLabel="Отмена"
+        variant={blockConfirm === 'block' ? 'danger' : 'default'}
+        icon={blockConfirm === 'block' ? 'ban' : 'unblock'}
+        loading={blockLoading}
+        onConfirm={executeBlockToggle}
+        onCancel={() => !blockLoading && setBlockConfirm(null)}
+      />
     </div>
   );
 }

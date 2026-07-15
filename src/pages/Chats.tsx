@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { chatsApi, Chat } from '../api/chats';
+import { chatsApi, Chat, resolveChatPinState } from '../api/chats';
 import { useAuthStore } from '../store/authStore';
-import { Search, MessageCircle } from 'lucide-react';
+import { useChatUnreadStore } from '../store/chatUnreadStore';
+import { Search, MessageCircle, Pin, PinOff, Users, Plus, X } from 'lucide-react';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -134,6 +135,34 @@ ${FONT_IMPORT}
   color: var(--text-muted);
   letter-spacing: 0.04em;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.create-group-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.create-group-btn:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-elevated);
+}
+.create-group-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ── SEARCH ── */
 .search-wrap {
@@ -202,6 +231,70 @@ ${FONT_IMPORT}
   background: var(--bg-surface);
   border-color: var(--border);
 }
+.chat-row.pinned {
+  background: rgba(232, 228, 220, 0.03);
+  border-color: rgba(232, 228, 220, 0.08);
+}
+.chat-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+.chat-row:hover .chat-row-actions,
+.chat-row.pinned .chat-row-actions {
+  opacity: 1;
+}
+.pin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pin-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-mid);
+  color: var(--accent);
+}
+.pin-btn.active {
+  color: var(--accent);
+  border-color: rgba(232, 228, 220, 0.2);
+  opacity: 1;
+}
+.pin-error-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2500;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(192, 57, 43, 0.92);
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+.chat-avatar.group {
+  font-size: 16px;
+}
+.chat-member-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.pin-indicator {
+  color: var(--accent-dim);
+  flex-shrink: 0;
+}
 .chat-avatar {
   flex-shrink: 0;
   width: 48px;
@@ -227,6 +320,31 @@ ${FONT_IMPORT}
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 4px;
+}
+.chat-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.chat-unread-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.chat-preview.unread {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 .chat-name {
   font-size: 15px;
@@ -317,6 +435,189 @@ ${FONT_IMPORT}
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* ── GROUP MODAL ── */
+.group-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+}
+.group-modal {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-mid);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+.group-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.group-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.group-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-mid);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.group-modal-close:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.group-field {
+  margin-bottom: 16px;
+}
+.group-field-label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.group-field-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  padding: 12px 14px;
+  outline: none;
+}
+.group-field-input:focus {
+  border-color: var(--border-hover);
+}
+.group-search-results {
+  margin-top: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+.group-search-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.group-search-item:last-child {
+  border-bottom: none;
+}
+.group-search-item:hover {
+  background: var(--bg-surface);
+}
+.group-search-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.group-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 36px;
+}
+.group-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  font-size: 13px;
+}
+.group-member-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.group-member-remove:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+.group-modal-error {
+  font-size: 13px;
+  color: #e88a82;
+  margin-bottom: 12px;
+}
+.group-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.group-btn-secondary,
+.group-btn-primary {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.group-btn-secondary {
+  border: 1px solid var(--border-mid);
+  background: transparent;
+  color: var(--text-secondary);
+}
+.group-btn-secondary:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.group-btn-primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+.group-btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.group-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 `;
 
 // ── SVG Icon ──
@@ -329,33 +630,185 @@ const IconChat = () => (
 export default function Chats() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const refreshUnread = useChatUnreadStore((s) => s.refresh);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pinningId, setPinningId] = useState<string | null>(null);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+  }>>([]);
+  const [selectedMembers, setSelectedMembers] = useState<Array<{
+    id: string;
+    username: string;
+    displayName?: string | null;
+  }>>([]);
+  const [groupCreating, setGroupCreating] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchChats = async () => {
+    try {
+      const data = await chatsApi.getChats();
+      setChats(data);
+      refreshUnread();
+    } catch (error) {
+      console.error('Failed to fetch chats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchChats = async () => {
-      try {
-        const data = await chatsApi.getChats();
-        setChats(data);
-      } catch (error) {
-        console.error('Failed to fetch chats:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchChats();
   }, []);
 
+  useEffect(() => {
+    if (!showGroupModal) return;
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (!memberSearch.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const users = await chatsApi.searchUsers(memberSearch.trim());
+        setSearchResults(users);
+      } catch {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [memberSearch, showGroupModal]);
+
+  useEffect(() => {
+    if (!pinError) return;
+    const timer = setTimeout(() => setPinError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [pinError]);
+
+  const isGroupChat = (chat: Chat) => chat.type === 'GROUP';
+
   const getOtherUser = (chat: Chat) => {
+    if (chat.otherUser) return chat.otherUser;
     const currentUserId = user?.id;
     return chat.users.find(cu => cu.user.id !== currentUserId)?.user;
+  };
+
+  const getChatTitle = (chat: Chat) => {
+    if (isGroupChat(chat)) return chat.name || 'Группа';
+    const otherUser = getOtherUser(chat);
+    return otherUser ? `@${otherUser.username}` : 'Чат';
+  };
+
+  const getChatAvatar = (chat: Chat) => {
+    if (isGroupChat(chat)) {
+      const name = chat.name || 'G';
+      return name[0].toUpperCase();
+    }
+    const otherUser = getOtherUser(chat);
+    return otherUser ? otherUser.username[0].toUpperCase() : '?';
   };
 
   const getLastMessage = (chat: Chat) => {
     if (!chat.messages || chat.messages.length === 0) return null;
     return chat.messages[chat.messages.length - 1];
+  };
+
+  const getPreviewText = (chat: Chat, lastMessage: Chat['messages'][0] | null) => {
+    if (!lastMessage) return null;
+    if (isGroupChat(chat) && lastMessage.senderId !== user?.id) {
+      const sender = lastMessage.sender?.username || 'участник';
+      return `${sender}: ${lastMessage.content}`;
+    }
+    return lastMessage.content;
+  };
+
+  const handleTogglePin = async (e: React.MouseEvent, chat: Chat) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (pinningId === chat.id) return;
+
+    const { isPinned } = resolveChatPinState(chat, user?.id);
+    const nextPinned = !isPinned;
+
+    setPinningId(chat.id);
+    setPinError(null);
+    try {
+      await chatsApi.pinChat(chat.id, nextPinned);
+      await fetchChats();
+    } catch (error: unknown) {
+      const message = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
+        : null;
+      setPinError(message || 'Не удалось закрепить чат');
+    } finally {
+      setPinningId(null);
+    }
+  };
+
+  const resetGroupModal = () => {
+    setShowGroupModal(false);
+    setGroupName('');
+    setMemberSearch('');
+    setSearchResults([]);
+    setSelectedMembers([]);
+    setGroupError(null);
+  };
+
+  const addMember = (member: { id: string; username: string; displayName?: string | null }) => {
+    if (member.id === user?.id) return;
+    if (selectedMembers.some(m => m.id === member.id)) return;
+    setSelectedMembers(prev => [...prev, member]);
+    setMemberSearch('');
+    setSearchResults([]);
+  };
+
+  const removeMember = (memberId: string) => {
+    setSelectedMembers(prev => prev.filter(m => m.id !== memberId));
+  };
+
+  const handleCreateGroup = async () => {
+    if (groupCreating) return;
+
+    const trimmedName = groupName.trim();
+    if (trimmedName.length < 2) {
+      setGroupError('Название группы должно быть минимум 2 символа');
+      return;
+    }
+    if (selectedMembers.length < 1) {
+      setGroupError('Добавьте хотя бы одного участника');
+      return;
+    }
+
+    setGroupCreating(true);
+    setGroupError(null);
+    try {
+      const newChat = await chatsApi.createGroup(trimmedName, selectedMembers.map(m => m.id));
+      resetGroupModal();
+      await fetchChats();
+      navigate(`/chats/${newChat.id}`);
+    } catch (error: unknown) {
+      const message = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
+        : null;
+      setGroupError(message || 'Не удалось создать группу');
+    } finally {
+      setGroupCreating(false);
+    }
   };
 
   const formatTime = (dateString: string) => {
@@ -381,9 +834,13 @@ export default function Chats() {
 
   const filteredChats = chats.filter(chat => {
     if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    if (isGroupChat(chat)) {
+      return (chat.name || '').toLowerCase().includes(query);
+    }
     const otherUser = getOtherUser(chat);
     if (!otherUser) return false;
-    return otherUser.username.toLowerCase().includes(searchQuery.toLowerCase());
+    return otherUser.username.toLowerCase().includes(query);
   });
 
   return (
@@ -398,6 +855,8 @@ export default function Chats() {
       <div className="chats-noise" />
       <div className="chats-grid-bg" />
 
+      {pinError && <div className="pin-error-toast">{pinError}</div>}
+
       <div className="chats-wrapper">
         {/* Top Bar */}
         <div className="chats-topbar">
@@ -407,9 +866,19 @@ export default function Chats() {
             </div>
             <span className="brand-text">Чаты</span>
           </div>
-          {!loading && chats.length > 0 && (
-            <span className="chat-count">{chats.length} {chats.length === 1 ? 'чат' : chats.length < 5 ? 'чата' : 'чатов'}</span>
-          )}
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="create-group-btn"
+              onClick={() => setShowGroupModal(true)}
+            >
+              <Plus size={15} />
+              Создать группу
+            </button>
+            {!loading && chats.length > 0 && (
+              <span className="chat-count">{chats.length} {chats.length === 1 ? 'чат' : chats.length < 5 ? 'чата' : 'чатов'}</span>
+            )}
+          </div>
         </div>
 
         {/* Search */}
@@ -454,24 +923,39 @@ export default function Chats() {
           /* Chat List */
           <div className="chat-list">
             {filteredChats.map((chat) => {
-              const otherUser = getOtherUser(chat);
               const lastMessage = getLastMessage(chat);
-              
-              if (!otherUser) return null;
+              const previewText = getPreviewText(chat, lastMessage);
+              const isGroup = isGroupChat(chat);
+              const pinState = resolveChatPinState(chat, user?.id);
+
+              if (!isGroup && !getOtherUser(chat)) return null;
 
               return (
                 <div
                   key={chat.id}
                   onClick={() => navigate(`/chats/${chat.id}`)}
-                  className="chat-row"
+                  className={`chat-row ${pinState.isPinned ? 'pinned' : ''}`}
                 >
-                  <div className="chat-avatar">
-                    {otherUser.username[0].toUpperCase()}
+                  <div className={`chat-avatar ${isGroup ? 'group' : ''}`}>
+                    {isGroup ? <Users size={20} /> : getChatAvatar(chat)}
                   </div>
                   
                   <div className="chat-info">
                     <div className="chat-header">
-                      <span className="chat-name">@{otherUser.username}</span>
+                      <div className="chat-name-row">
+                        {pinState.isPinned && <Pin size={12} className="pin-indicator" />}
+                        <span className="chat-name">{getChatTitle(chat)}</span>
+                        {isGroup && (
+                          <span className="chat-member-count">
+                            {chat.memberCount || chat.users.length} уч.
+                          </span>
+                        )}
+                        {(chat.unreadCount || 0) > 0 && (
+                          <span className="chat-unread-badge">
+                            {chat.unreadCount! > 99 ? '99+' : chat.unreadCount}
+                          </span>
+                        )}
+                      </div>
                       {lastMessage && (
                         <span className="chat-time">
                           {formatTime(lastMessage.createdAt)}
@@ -479,11 +963,31 @@ export default function Chats() {
                       )}
                     </div>
                     
-                    {lastMessage ? (
-                      <p className="chat-preview">{lastMessage.content}</p>
+                    {previewText ? (
+                      <p className={`chat-preview ${(chat.unreadCount || 0) > 0 ? 'unread' : ''}`}>
+                        {previewText}
+                      </p>
                     ) : (
                       <p className="chat-empty-preview">Нет сообщений</p>
                     )}
+                  </div>
+
+                  <div className="chat-row-actions">
+                    <button
+                      type="button"
+                      className={`pin-btn ${pinState.isPinned ? 'active' : ''}`}
+                      onClick={(e) => handleTogglePin(e, chat)}
+                      disabled={pinningId === chat.id}
+                      title={pinState.isPinned ? 'Открепить' : 'Закрепить'}
+                    >
+                      {pinningId === chat.id ? (
+                        <span style={{ width: 14, height: 14, border: '2px solid var(--border-mid)', borderTopColor: 'var(--accent)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                      ) : pinState.isPinned ? (
+                        <PinOff size={15} />
+                      ) : (
+                        <Pin size={15} />
+                      )}
+                    </button>
                   </div>
                 </div>
               );
@@ -491,6 +995,100 @@ export default function Chats() {
           </div>
         )}
       </div>
+
+      {showGroupModal && (
+        <div className="group-modal-overlay" onClick={resetGroupModal}>
+          <div className="group-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="group-modal-header">
+              <h2 className="group-modal-title">Новая группа</h2>
+              <button type="button" className="group-modal-close" onClick={resetGroupModal}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="group-field">
+              <label className="group-field-label">Название</label>
+              <input
+                type="text"
+                className="group-field-input"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="Например: Команда проекта"
+                maxLength={80}
+              />
+            </div>
+
+            <div className="group-field">
+              <label className="group-field-label">Участники</label>
+              <div className="group-members">
+                {selectedMembers.map((member) => (
+                  <span key={member.id} className="group-member-chip">
+                    @{member.username}
+                    <button
+                      type="button"
+                      className="group-member-remove"
+                      onClick={() => removeMember(member.id)}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="group-field">
+              <label className="group-field-label">Добавить участника</label>
+              <input
+                type="text"
+                className="group-field-input"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Поиск по username..."
+              />
+              {searchResults.length > 0 && (
+                <div className="group-search-results">
+                  {searchResults.map((result) => {
+                    const alreadyAdded = selectedMembers.some(m => m.id === result.id);
+                    const isSelf = result.id === user?.id;
+                    return (
+                      <button
+                        key={result.id}
+                        type="button"
+                        className="group-search-item"
+                        disabled={alreadyAdded || isSelf}
+                        onClick={() => addMember(result)}
+                      >
+                        <span>@{result.username}</span>
+                        {result.displayName && (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                            {result.displayName}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {groupError && <div className="group-modal-error">{groupError}</div>}
+
+            <div className="group-modal-actions">
+              <button type="button" className="group-btn-secondary" onClick={resetGroupModal}>
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="group-btn-primary"
+                onClick={handleCreateGroup}
+                disabled={groupCreating || groupName.trim().length < 2 || selectedMembers.length < 1}
+              >
+                {groupCreating ? 'Создание...' : 'Создать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
