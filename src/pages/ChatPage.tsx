@@ -524,6 +524,22 @@ ${FONT_IMPORT}
 .message-mention:hover {
   opacity: 1;
 }
+.message-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+.message-bubble.own .message-link {
+  color: var(--bg);
+}
+.message-bubble.other .message-link {
+  color: var(--accent);
+}
+.message-link:hover {
+  opacity: 0.85;
+}
 .message-sender {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
@@ -1172,6 +1188,28 @@ export default function ChatPage() {
     navigate(`/profile/${username}`);
   };
 
+  const openMessageLink = (url: string) => {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      const isSameOrigin = parsed.origin === window.location.origin;
+      if (isSameOrigin && parsed.pathname.startsWith('/soundtok')) {
+        navigate(`${parsed.pathname}${parsed.search}`);
+        return;
+      }
+      if (isSameOrigin && parsed.pathname.startsWith('/profile/')) {
+        navigate(`${parsed.pathname}${parsed.search}`);
+        return;
+      }
+      if (isSameOrigin && parsed.pathname.startsWith('/chats')) {
+        navigate(`${parsed.pathname}${parsed.search}`);
+        return;
+      }
+    } catch {
+      // fall through to external open
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const clearMentionSuggestions = () => {
     setMentionSuggestions([]);
     setMentionRange(null);
@@ -1464,6 +1502,7 @@ export default function ChatPage() {
                         {renderTextWithMentions({
                           text: message.content,
                           onMentionClick: (username) => openMentionProfile(username),
+                          onLinkClick: (url) => openMessageLink(url),
                         })}
                       </p>
                       <div className="message-meta">

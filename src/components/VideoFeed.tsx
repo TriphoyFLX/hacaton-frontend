@@ -7,6 +7,7 @@ import { API_ORIGIN } from '../api/client';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount, formatRelativeTime, pluralizeComments } from '../lib/format';
 import { useAuthStore } from '../store/authStore';
+import ShareSoundTokModal from './ShareSoundTokModal';
 
 const css = `
 .vf-root {
@@ -676,6 +677,7 @@ interface VideoFeedProps {
   soundToks: SoundTok[];
   onLike: (id: string) => void;
   onCommentCountChange?: (id: string, count: number) => void;
+  initialIndex?: number;
 }
 
 function CommentAvatar({ author }: { author: Comment['author'] }) {
@@ -689,12 +691,20 @@ function CommentAvatar({ author }: { author: Comment['author'] }) {
   );
 }
 
-export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: VideoFeedProps) {
+export default function VideoFeed({
+  soundToks,
+  onLike,
+  onCommentCountChange,
+  initialIndex = 0,
+}: VideoFeedProps) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const [followedAuthors, setFollowedAuthors] = useState<Record<string, boolean>>({});
   const [followLoading, setFollowLoading] = useState<Record<string, boolean>>({});
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() =>
+    Math.min(Math.max(initialIndex, 0), Math.max(soundToks.length - 1, 0))
+  );
+  const [shareTok, setShareTok] = useState<SoundTok | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [currentSoundTokId, setCurrentSoundTokId] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -755,6 +765,12 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
   };
 
   const isOwnVideo = (authorId: string) => currentUser?.id === authorId;
+
+  useEffect(() => {
+    if (soundToks.length === 0) return;
+    const safeIndex = Math.min(Math.max(initialIndex, 0), soundToks.length - 1);
+    setCurrentIndex(safeIndex);
+  }, [initialIndex, soundToks.length]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -1223,7 +1239,15 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
                     </div>
 
                     <div className="vf-action-group">
-                      <button type="button" className="vf-action-btn" aria-label="Поделиться">
+                      <button
+                        type="button"
+                        className="vf-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShareTok(soundTok);
+                        }}
+                        aria-label="Поделиться"
+                      >
                         <Share2 size={26} strokeWidth={1.8} />
                       </button>
                       <span className="vf-action-count vf-share-label">Поделиться</span>
@@ -1328,6 +1352,12 @@ export default function VideoFeed({ soundToks, onLike, onCommentCountChange }: V
           </div>
         </>
       )}
+
+      <ShareSoundTokModal
+        open={!!shareTok}
+        soundTok={shareTok}
+        onClose={() => setShareTok(null)}
+      />
     </div>
   );
 }

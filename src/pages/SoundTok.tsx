@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import VideoFeed from '../components/VideoFeed';
 import { SoundTok, soundTokApi } from '../api/soundtok';
 
@@ -598,6 +599,7 @@ const IconSparkles = () => (
 );
 
 export default function SoundTok() {
+  const [searchParams] = useSearchParams();
   const [soundToks, setSoundToks] = useState<SoundTok[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -605,6 +607,18 @@ export default function SoundTok() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const sharedVideoId = searchParams.get('v');
+
+  const orderedSoundToks = useMemo(() => {
+    if (!sharedVideoId || soundToks.length === 0) return soundToks;
+    const index = soundToks.findIndex((tok) => tok.id === sharedVideoId);
+    if (index <= 0) return soundToks;
+    const selected = soundToks[index];
+    return [selected, ...soundToks.slice(0, index), ...soundToks.slice(index + 1)];
+  }, [soundToks, sharedVideoId]);
+
+  const initialIndex = 0;
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -758,7 +772,8 @@ export default function SoundTok() {
         /* Video feed with content */
         <div className="st-feed-mode">
           <VideoFeed
-            soundToks={soundToks}
+            soundToks={orderedSoundToks}
+            initialIndex={initialIndex}
             onLike={handleLike}
             onCommentCountChange={(id, count) => {
               setSoundToks((prev) =>
