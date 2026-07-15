@@ -15,6 +15,20 @@ interface Note {
   duration: number;
   velocity: number;
   trackId: string;
+  patternId: string;
+}
+
+interface Pattern {
+  id: string;
+  name: string;
+  length: number;
+}
+
+interface PlaylistClip {
+  id: string;
+  patternId: string;
+  startBar: number;
+  lane: number;
 }
 
 interface Track {
@@ -39,12 +53,34 @@ interface MIDIProject {
   name: string;
   bpm: number;
   tracks: Track[];
-  currentTime: number;
   isPlaying: boolean;
   activeTrackId: string | null;
   patternLength: number;
   metronomeEnabled: boolean;
+  patterns: Pattern[];
+  activePatternId: string;
+  arrangement: PlaylistClip[];
+  transportMode: 'pattern' | 'song';
 }
+
+type DragState = {
+  id: string;
+  type: 'move' | 'resize';
+  startX: number;
+  startY: number;
+  origStart: number;
+  origPitch: number;
+  origDur: number;
+  trackId: string;
+};
+
+type PlaylistDragState = {
+  clipId: string;
+  startX: number;
+  startY: number;
+  origStartBar: number;
+  origLane: number;
+};
 
 // ================= СТИЛИ =================
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
@@ -644,6 +680,36 @@ const INSTRUMENTS: { id: InstrumentType; name: string; icon: any; color: string 
   { id: 'hihat', name: 'HI-HAT', icon: Music, color: '#FFFFFF' },
 ];
 
+const PLAYLIST_LANES = 8;
+const PLAYLIST_LANE_HEIGHT = 28;
+const PLAYLIST_LABEL_WIDTH = 88;
+const MIN_PATTERN_LENGTH = 5;
+const PATTERN_LENGTH_OPTIONS = [5, 8, 16, 32, 64];
+
+function computePatternLength(tracks: Track[], patternId: string): number {
+  let maxEnd = 0;
+  tracks.forEach(track => {
+    track.notes.forEach(note => {
+      if (note.patternId !== patternId) return;
+      maxEnd = Math.max(maxEnd, note.startTime + note.duration);
+    });
+  });
+  return maxEnd > 0 ? Math.max(MIN_PATTERN_LENGTH, Math.ceil(maxEnd)) : MIN_PATTERN_LENGTH;
+}
+
+function normalizeProjectPatterns(project: MIDIProject): MIDIProject {
+  const patterns = project.patterns.map(pattern => ({
+    ...pattern,
+    length: computePatternLength(project.tracks, pattern.id),
+  }));
+  const activePattern = patterns.find(pattern => pattern.id === project.activePatternId) || patterns[0];
+  return {
+    ...project,
+    patterns,
+    patternLength: activePattern?.length ?? MIN_PATTERN_LENGTH,
+  };
+}
+
 // ================= AUDIO ENGINE =================
 class AudioEngine {
   ctx: AudioContext;
@@ -856,24 +922,43 @@ class AudioEngine {
 // ================= ГЛАВНЫЙ КОМПОНЕНТ =================
 function MIDISequencer() {
   const [project, setProject] = useState<MIDIProject | null>(null);
+  const [playheadTime, setPlayheadTime] = useState(0);
   const [zoom, setZoom] = useState(180);
+  const [editorView, setEditorView] = useState<'piano' | 'playlist'>('piano');
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
-  const [dragging, setDragging] = useState<{ 
-    id: string; 
-    type: 'move' | 'resize'; 
-    startX: number; 
-    startY: number;
-    origStart: number; 
-    origPitch: number; 
-    origDur: number;
-    trackId: string;
-  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [quantizeGrid, setQuantizeGrid] = useState(0.125);
   
   const engineRef = useRef<AudioEngine | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef(0);
   const lastMetronomeBeatRef = useRef(-1);
   const scheduledNotesRef = useRef<Set<string>>(new Set());
+  const dragStateRef = useRef<DragState | null>(null);
+  const playlistDragRef = useRef<PlaylistDragState | null>(null);
+  const playheadRef = useRef(0);
+  const isPlayingRef = useRef(false);
+
+  const snapToGrid = useCallback((value: number) => {
+    return Math.round(value / quantizeGrid) * quantizeGrid;
+  }, [quantizeGrid]);
+
+  const getActivePattern = useCallback((p: MIDIProject) => {
+    return p.patterns.find(pattern => pattern.id === p.activePatternId) || p.patterns[0];
+  }, []);
+
+  const getTimelineLength = useCallback((p: MIDIProject) => {
+    if (p.transportMode === 'pattern') {
+      const activePattern = getActivePattern(p);
+      return activePattern ? activePattern.length : p.patternLength;
+    }
+    const arrangementEnd = p.arrangement.reduce((maxEnd, clip) => {
+      const clipLength = computePatternLength(p.tracks, clip.patternId);
+      const clipEnd = clip.startBar + clipLength;
+      return Math.max(maxEnd, clipEnd);
+    }, p.patternLength);
+    return Math.max(p.patternLength, arrangementEnd);
+  }, [getActivePattern]);
 
   const getEngine = useCallback(() => {
     if (!engineRef.current) engineRef.current = new AudioEngine();
@@ -885,8 +970,37 @@ function MIDISequencer() {
     const saved = localStorage.getItem('aura_pro_sequencer_v2');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        setProject(parsed);
+        const parsed = JSON.parse(saved) as Partial<MIDIProject>;
+        const fallbackPatternId = crypto.randomUUID();
+        const tracks = (parsed.tracks ?? []).map(track => ({
+          ...track,
+          notes: (track.notes ?? []).map(note => ({
+            ...note,
+            patternId: note.patternId ?? (parsed.activePatternId || fallbackPatternId),
+          })),
+        }));
+        const patterns = parsed.patterns && parsed.patterns.length > 0
+          ? parsed.patterns
+          : [{ id: parsed.activePatternId || fallbackPatternId, name: 'Pattern 1', length: parsed.patternLength || MIN_PATTERN_LENGTH }];
+        const projectSafe = normalizeProjectPatterns({
+          id: parsed.id || crypto.randomUUID(),
+          name: parsed.name || 'midnight_studio_v1',
+          bpm: parsed.bpm || 124,
+          tracks,
+          isPlaying: false,
+          activeTrackId: parsed.activeTrackId || tracks[0]?.id || null,
+          patternLength: parsed.patternLength || patterns[0]?.length || MIN_PATTERN_LENGTH,
+          metronomeEnabled: parsed.metronomeEnabled ?? true,
+          patterns,
+          activePatternId: parsed.activePatternId || patterns[0].id,
+          arrangement: parsed.arrangement && parsed.arrangement.length > 0
+            ? parsed.arrangement
+            : [{ id: crypto.randomUUID(), patternId: patterns[0].id, startBar: 0, lane: 0 }],
+          transportMode: parsed.transportMode || 'pattern',
+        });
+        playheadRef.current = 0;
+        setPlayheadTime(0);
+        setProject(projectSafe);
       } catch (e) {
         console.error('Failed to load project:', e);
       }
@@ -894,16 +1008,62 @@ function MIDISequencer() {
   }, []);
 
   useEffect(() => {
-    if (project) {
-      localStorage.setItem('aura_pro_sequencer_v2', JSON.stringify(project));
-    }
+    if (!project) return;
+    const save = () => {
+      try {
+        localStorage.setItem('aura_pro_sequencer_v2', JSON.stringify(project));
+      } catch (e) {
+        console.error('Save failed:', e);
+      }
+    };
+    const timer = window.setTimeout(save, 400);
+    return () => window.clearTimeout(timer);
+  }, [project]);
+
+  // Auto-expand/shrink pattern length by note content; empty patterns stay at MIN_PATTERN_LENGTH.
+  useEffect(() => {
+    if (!project) return;
+    setProject(prev => {
+      if (!prev) return prev;
+      const normalized = normalizeProjectPatterns(prev);
+      const sameLength = normalized.patterns.every((pattern, i) => pattern.length === prev.patterns[i]?.length);
+      if (sameLength && normalized.patternLength === prev.patternLength) {
+        return prev;
+      }
+      return normalized;
+    });
+  }, [project?.tracks, project?.activePatternId]);
+
+  useEffect(() => {
+    const save = () => {
+      const p = project;
+      if (!p) return;
+      try {
+        localStorage.setItem('aura_pro_sequencer_v2', JSON.stringify(p));
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('beforeunload', save);
+    window.addEventListener('pagehide', save);
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('beforeunload', save);
+      window.removeEventListener('pagehide', save);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [project]);
 
   // ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ДЛЯ ПЕРЕТАСКИВАНИЯ
   useEffect(() => {
-    if (!dragging) return;
+    if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
+      const dragging = dragStateRef.current;
+      if (!dragging) return;
       if (!project) return;
       
       const deltaX = e.clientX - dragging.startX;
@@ -922,9 +1082,9 @@ function MIDISequencer() {
               if (note.id !== dragging.id) return note;
               
               if (dragging.type === 'move') {
-                const newStartTime = Math.max(0, Math.min(prev.patternLength - 0.125, dragging.origStart + beatDelta));
+                const newStartTime = Math.max(0, Math.min(prev.patternLength - quantizeGrid, dragging.origStart + beatDelta));
                 const newPitch = Math.max(LOWEST_NOTE, Math.min(HIGHEST_NOTE, dragging.origPitch + pitchDelta));
-                const quantized = Math.round(newStartTime * 8) / 8;
+                const quantized = snapToGrid(newStartTime);
                 
                 return {
                   ...note,
@@ -932,7 +1092,7 @@ function MIDISequencer() {
                   pitch: newPitch,
                 };
               } else if (dragging.type === 'resize') {
-                const newDuration = Math.max(0.125, Math.round((dragging.origDur + beatDelta) * 8) / 8);
+                const newDuration = Math.max(quantizeGrid, snapToGrid(dragging.origDur + beatDelta));
                 
                 return {
                   ...note,
@@ -948,7 +1108,8 @@ function MIDISequencer() {
     };
 
     const handleMouseUp = () => {
-      setDragging(null);
+      dragStateRef.current = null;
+      setIsDragging(false);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -958,10 +1119,42 @@ function MIDISequencer() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging, zoom, project]);
+  }, [isDragging, zoom, project, quantizeGrid, snapToGrid]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const dragging = playlistDragRef.current;
+      if (!dragging) return;
+      setProject(prev => {
+        if (!prev) return prev;
+        const deltaX = e.clientX - dragging.startX;
+        const deltaY = e.clientY - dragging.startY;
+        const startBar = snapToGrid(dragging.origStartBar + deltaX / zoom);
+        const lane = Math.max(0, Math.min(PLAYLIST_LANES - 1, dragging.origLane + Math.round(deltaY / PLAYLIST_LANE_HEIGHT)));
+        return {
+          ...prev,
+          arrangement: prev.arrangement.map(clip => clip.id === dragging.clipId ? { ...clip, startBar: Math.max(0, startBar), lane } : clip),
+        };
+      });
+    };
+
+    const handleMouseUp = () => {
+      playlistDragRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [snapToGrid, zoom]);
 
   const createNewProject = () => {
     const trackId = crypto.randomUUID();
+    const patternId = crypto.randomUUID();
+    playheadRef.current = 0;
+    setPlayheadTime(0);
     setProject({
       id: crypto.randomUUID(),
       name: "midnight_studio_v1",
@@ -979,11 +1172,14 @@ function MIDISequencer() {
         reverbSend: 0.2,
         delaySend: 0.3
       }],
-      currentTime: 0,
       isPlaying: false,
       activeTrackId: trackId,
-      patternLength: 16,
-      metronomeEnabled: true
+      patternLength: MIN_PATTERN_LENGTH,
+      metronomeEnabled: true,
+      patterns: [{ id: patternId, name: 'Pattern 1', length: MIN_PATTERN_LENGTH }],
+      activePatternId: patternId,
+      arrangement: [{ id: crypto.randomUUID(), patternId, startBar: 0, lane: 0 }],
+      transportMode: 'pattern',
     });
   };
 
@@ -1002,75 +1198,103 @@ function MIDISequencer() {
     if (!project) return;
     
     const eng = getEngine();
+    const timelineLength = getTimelineLength(project);
     
     setProject(prev => prev ? { ...prev, isPlaying: true } : null);
+    isPlayingRef.current = true;
     lastTimeRef.current = eng.ctx.currentTime;
     lastMetronomeBeatRef.current = -1;
     scheduledNotesRef.current.clear();
+    playheadRef.current = Math.min(playheadRef.current, Math.max(0, timelineLength - quantizeGrid));
+    let lastUiUpdate = 0;
 
     const scheduleNotes = () => {
-      setProject(prev => {
-        if (!prev || !prev.isPlaying) {
-          if (rafRef.current) cancelAnimationFrame(rafRef.current);
-          return prev;
+      const snapshot = project;
+      if (!snapshot) return;
+
+      if (!isPlayingRef.current) {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        return;
+      }
+
+      const now = eng.ctx.currentTime;
+      const delta = Math.min(now - lastTimeRef.current, 0.05);
+      lastTimeRef.current = now;
+
+      const bps = snapshot.bpm / 60;
+      const beatDelta = delta * bps;
+      const prevTime = playheadRef.current;
+      let nextTime = prevTime + beatDelta;
+      const currentTimelineLength = getTimelineLength(snapshot);
+
+      if (snapshot.metronomeEnabled) {
+        const currentBeat = Math.floor(nextTime);
+        const lastBeat = Math.floor(prevTime);
+        if (currentBeat !== lastBeat) {
+          eng.playMetronome(0, currentBeat % 4 === 0);
         }
-        
-        const now = eng.ctx.currentTime;
-        const delta = Math.min(now - lastTimeRef.current, 0.05); // Ограничиваем дельту чтобы избежать скачков
-        lastTimeRef.current = now;
-        
-        const bps = prev.bpm / 60;
-        const beatDelta = delta * bps;
-        let newTime = prev.currentTime + beatDelta;
+      }
 
-        if (prev.metronomeEnabled) {
-          const currentBeat = Math.floor(newTime);
-          const lastBeat = Math.floor(prev.currentTime);
-          
-          if (currentBeat !== lastBeat || (newTime < prev.currentTime && currentBeat === 0)) {
-            eng.playMetronome(0, currentBeat % 4 === 0);
-          }
-        }
+      const lookahead = 0.2;
+      const lookaheadBeats = lookahead * bps;
+      const windowStart = prevTime;
+      const windowEnd = windowStart + lookaheadBeats;
+      const wrappedWindow = windowEnd >= currentTimelineLength;
+      const normalizedWindowEnd = wrappedWindow ? windowEnd - currentTimelineLength : windowEnd;
+      const soloExists = snapshot.tracks.some(t => t.solo);
 
-        const lookahead = 0.2;
-        const lookaheadBeats = lookahead * bps;
-        const scheduleUntil = newTime + lookaheadBeats;
+      snapshot.tracks.forEach(track => {
+        if (track.muted) return;
+        if (soloExists && !track.solo) return;
 
-        prev.tracks.forEach(track => {
-          if (track.muted) return;
-          const soloExists = prev.tracks.some(t => t.solo);
-          if (soloExists && !track.solo) return;
-
-          track.notes.forEach(note => {
-    // Удаляем неиспользуемую переменную
-    // const noteEnd = note.startTime + note.duration;
-            
-            // Планируем ноты которые должны сыграть в ближайшем будущем (только если еще не запланированы)
-            if (note.startTime >= newTime && note.startTime < scheduleUntil) {
-              if (!scheduledNotesRef.current.has(note.id)) {
-                scheduledNotesRef.current.add(note.id);
-                const delay = (note.startTime - newTime) / bps;
-                if (delay >= 0 && delay < lookahead) {
-                  eng.playNote(track, note.pitch, delay, note.duration / bps, note.velocity / 127);
-                }
-              }
+        const scheduleNoteAt = (note: Note, absoluteStart: number) => {
+          const noteKey = `${note.id}-${Math.floor(absoluteStart * 1000)}`;
+          const isInWindow = wrappedWindow
+            ? (absoluteStart >= windowStart || absoluteStart < normalizedWindowEnd)
+            : (absoluteStart >= windowStart && absoluteStart < normalizedWindowEnd);
+          if (isInWindow && !scheduledNotesRef.current.has(noteKey)) {
+            scheduledNotesRef.current.add(noteKey);
+            const beatsUntilNote = wrappedWindow && absoluteStart < windowStart
+              ? absoluteStart + currentTimelineLength - windowStart
+              : absoluteStart - windowStart;
+            const delay = beatsUntilNote / bps;
+            if (delay >= 0 && delay < lookahead) {
+              eng.playNote(track, note.pitch, delay, note.duration / bps, note.velocity / 127);
             }
-          });
-        });
+          }
+        };
 
-        if (newTime >= prev.patternLength) {
-          newTime = newTime % prev.patternLength;
-          scheduledNotesRef.current.clear(); // Очищаем при зацикливании
+        if (snapshot.transportMode === 'pattern') {
+          track.notes
+            .filter(note => note.patternId === snapshot.activePatternId)
+            .forEach(note => scheduleNoteAt(note, note.startTime));
+        } else {
+          snapshot.arrangement.forEach(clip => {
+            const clipPattern = snapshot.patterns.find(pattern => pattern.id === clip.patternId);
+            if (!clipPattern) return;
+            track.notes
+              .filter(note => note.patternId === clip.patternId)
+              .forEach(note => scheduleNoteAt(note, clip.startBar + note.startTime));
+          });
         }
-        
-        return { ...prev, currentTime: newTime };
       });
+
+      if (nextTime >= currentTimelineLength) {
+        nextTime = nextTime % currentTimelineLength;
+        scheduledNotesRef.current.clear();
+      }
+
+      playheadRef.current = nextTime;
+      if (now - lastUiUpdate > 1 / 30) {
+        lastUiUpdate = now;
+        setPlayheadTime(nextTime);
+      }
 
       rafRef.current = requestAnimationFrame(scheduleNotes);
     };
 
     rafRef.current = requestAnimationFrame(scheduleNotes);
-  }, [project, getEngine]);
+  }, [project, getEngine, getTimelineLength, quantizeGrid]);
 
   const stopPlayback = useCallback(() => {
     if (rafRef.current) {
@@ -1078,12 +1302,94 @@ function MIDISequencer() {
       rafRef.current = null;
     }
     scheduledNotesRef.current.clear();
-    setProject(prev => prev ? { ...prev, isPlaying: false, currentTime: 0 } : null);
+    isPlayingRef.current = false;
+    playheadRef.current = 0;
+    setPlayheadTime(0);
+    setProject(prev => prev ? { ...prev, isPlaying: false } : null);
   }, []);
 
+  const handleNewProject = useCallback(() => {
+    stopPlayback();
+    createNewProject();
+    setSelectedNotes([]);
+  }, [stopPlayback]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!project) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlayback();
+      }
+
+      if ((e.code === 'Delete' || e.code === 'Backspace') && selectedNotes.length > 0) {
+        e.preventDefault();
+        setProject(prev => prev ? ({
+          ...prev,
+          tracks: prev.tracks.map(track => ({
+            ...track,
+            notes: track.notes.filter(n => !selectedNotes.includes(n.id)),
+          })),
+        }) : prev);
+        setSelectedNotes([]);
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD' && selectedNotes.length > 0) {
+        e.preventDefault();
+        setProject(prev => {
+          if (!prev) return prev;
+          const activePattern = prev.patterns.find(pattern => pattern.id === prev.activePatternId) || prev.patterns[0];
+          return {
+            ...prev,
+            tracks: prev.tracks.map(track => {
+              const duplicates = track.notes
+                .filter(n => selectedNotes.includes(n.id))
+                .map(n => ({
+                  ...n,
+                  id: crypto.randomUUID(),
+                  startTime: Math.min(activePattern.length - quantizeGrid, n.startTime + quantizeGrid),
+                }));
+              return { ...track, notes: [...track.notes, ...duplicates] };
+            }),
+          };
+        });
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [project, selectedNotes, quantizeGrid, togglePlayback]);
+
   // КЛИК ПО ГРИДУ - ДОБАВЛЕНИЕ/УДАЛЕНИЕ НОТ
+  const handleNoteContextDelete = useCallback((noteId: string) => {
+    setProject(prev => prev ? ({
+      ...prev,
+      tracks: prev.tracks.map(track => ({
+        ...track,
+        notes: track.notes.filter(note => note.id !== noteId),
+      })),
+    }) : prev);
+    setSelectedNotes(prev => prev.filter(id => id !== noteId));
+  }, []);
+
+  const handlePlaylistClipDelete = useCallback((clipId: string) => {
+    setProject(prev => prev ? ({
+      ...prev,
+      arrangement: prev.arrangement.filter(clip => clip.id !== clipId),
+    }) : prev);
+  }, []);
+
   const handleGridClick = useCallback((e: React.MouseEvent) => {
-    if (!project || !project.activeTrackId || dragging) return;
+    if (!project || !project.activeTrackId || isDragging) return;
+    const activePattern = getActivePattern(project);
     
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -1091,7 +1397,7 @@ function MIDISequencer() {
 
     const beat = x / zoom;
     const pitch = HIGHEST_NOTE - Math.floor(y / NOTE_HEIGHT);
-    const quantizedBeat = Math.round(beat * 8) / 8;
+    const quantizedBeat = snapToGrid(beat);
 
     setProject(prev => {
       if (!prev) return prev;
@@ -1100,8 +1406,9 @@ function MIDISequencer() {
 
       // Проверяем существующую ноту
       const existingNote = activeTrack.notes.find(n => 
+        n.patternId === activePattern.id &&
         n.pitch === pitch && 
-        Math.abs(n.startTime - quantizedBeat) < 0.125
+        Math.abs(n.startTime - quantizedBeat) < quantizeGrid / 2
       );
 
       if (existingNote) {
@@ -1120,9 +1427,10 @@ function MIDISequencer() {
         id: crypto.randomUUID(),
         pitch,
         startTime: quantizedBeat,
-        duration: 0.25,
+        duration: quantizeGrid,
         velocity: 100,
-        trackId: prev.activeTrackId!
+        trackId: prev.activeTrackId!,
+        patternId: activePattern.id,
       };
       
       const eng = getEngine();
@@ -1137,14 +1445,14 @@ function MIDISequencer() {
         )
       };
     });
-  }, [project, dragging, zoom, getEngine]);
+  }, [project, isDragging, zoom, getEngine, quantizeGrid, snapToGrid, getActivePattern]);
 
   // НАЧАЛО ПЕРЕТАСКИВАНИЯ НОТЫ
   const handleNoteMouseDown = useCallback((note: Note, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     
-    setDragging({
+    dragStateRef.current = {
       id: note.id,
       type: 'move',
       startX: e.clientX,
@@ -1153,7 +1461,9 @@ function MIDISequencer() {
       origPitch: note.pitch,
       origDur: note.duration,
       trackId: note.trackId
-    });
+    };
+    setIsDragging(true);
+    setSelectedNotes(prev => e.shiftKey ? (prev.includes(note.id) ? prev : [...prev, note.id]) : [note.id]);
   }, []);
 
   // НАЧАЛО РАСШИРЕНИЯ НОТЫ
@@ -1161,7 +1471,7 @@ function MIDISequencer() {
     e.stopPropagation();
     e.preventDefault();
     
-    setDragging({
+    dragStateRef.current = {
       id: note.id,
       type: 'resize',
       startX: e.clientX,
@@ -1170,7 +1480,9 @@ function MIDISequencer() {
       origPitch: note.pitch,
       origDur: note.duration,
       trackId: note.trackId
-    });
+    };
+    setIsDragging(true);
+    setSelectedNotes(prev => e.shiftKey ? (prev.includes(note.id) ? prev : [...prev, note.id]) : [note.id]);
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1242,6 +1554,89 @@ function MIDISequencer() {
     });
   }, [project]);
 
+  const duplicatePatternNotes = useCallback(() => {
+    if (!project) return;
+    const activePattern = getActivePattern(project);
+    const offset = activePattern.length;
+    setProject({
+      ...project,
+      tracks: project.tracks.map((track) => ({
+        ...track,
+        notes: [
+          ...track.notes,
+          ...track.notes
+            .filter((n) => n.patternId === activePattern.id && n.startTime + n.duration <= offset)
+            .map((n) => ({
+              ...n,
+              id: crypto.randomUUID(),
+              startTime: n.startTime + offset,
+            })),
+        ],
+      })),
+    });
+  }, [project, getActivePattern]);
+
+  const createPattern = useCallback(() => {
+    if (!project) return;
+    const nextIndex = project.patterns.length + 1;
+    const newPattern: Pattern = {
+      id: crypto.randomUUID(),
+      name: `Pattern ${nextIndex}`,
+      length: MIN_PATTERN_LENGTH,
+    };
+    setProject({
+      ...project,
+      patterns: [...project.patterns, newPattern],
+      activePatternId: newPattern.id,
+      transportMode: 'pattern',
+    });
+    playheadRef.current = 0;
+    setPlayheadTime(0);
+  }, [project]);
+
+  const addPatternToPlaylist = useCallback(() => {
+    if (!project) return;
+    const activePattern = getActivePattern(project);
+    const nextStart = project.arrangement.reduce((maxStart, clip) => {
+      const clipLength = computePatternLength(project.tracks, clip.patternId);
+      const end = clip.startBar + clipLength;
+      return Math.max(maxStart, end);
+    }, 0);
+    const laneUsage = new Set(project.arrangement.filter(clip => clip.startBar === nextStart).map(clip => clip.lane));
+    let lane = 0;
+    while (laneUsage.has(lane) && lane < PLAYLIST_LANES - 1) lane += 1;
+    const clip: PlaylistClip = {
+      id: crypto.randomUUID(),
+      patternId: activePattern.id,
+      startBar: nextStart,
+      lane,
+    };
+    setProject({
+      ...project,
+      arrangement: [...project.arrangement, clip],
+      transportMode: 'song',
+    });
+  }, [project, getActivePattern]);
+
+  const addPatternClipAt = useCallback((patternId: string, startBar: number, lane: number) => {
+    if (!project) return;
+    const safeLane = Math.max(0, Math.min(PLAYLIST_LANES - 1, lane));
+    const safeStartBar = Math.max(0, snapToGrid(startBar));
+    const clip: PlaylistClip = {
+      id: crypto.randomUUID(),
+      patternId,
+      startBar: safeStartBar,
+      lane: safeLane,
+    };
+    setProject({
+      ...project,
+      arrangement: [...project.arrangement, clip],
+      transportMode: 'song',
+      activePatternId: patternId,
+    });
+    setEditorView('playlist');
+  }, [project, snapToGrid]);
+
   const exportProject = () => {
     if (!project) return;
     
@@ -1267,9 +1662,37 @@ function MIDISequencer() {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const imported = JSON.parse(event.target?.result as string);
+        const imported = JSON.parse(event.target?.result as string) as Partial<MIDIProject>;
         if (imported.tracks && imported.bpm) {
-          setProject(imported);
+          const fallbackPatternId = imported.activePatternId || crypto.randomUUID();
+          const patterns = imported.patterns && imported.patterns.length > 0
+            ? imported.patterns
+            : [{ id: fallbackPatternId, name: 'Pattern 1', length: imported.patternLength || MIN_PATTERN_LENGTH }];
+          const upgraded: MIDIProject = {
+            id: imported.id || crypto.randomUUID(),
+            name: imported.name || 'imported_project',
+            bpm: imported.bpm,
+            tracks: imported.tracks.map(track => ({
+              ...track,
+              notes: track.notes.map(note => ({
+                ...note,
+                patternId: note.patternId || patterns[0].id,
+              })),
+            })),
+            isPlaying: false,
+            activeTrackId: imported.activeTrackId || imported.tracks[0]?.id || null,
+            patternLength: imported.patternLength || patterns[0].length,
+            metronomeEnabled: imported.metronomeEnabled ?? true,
+            patterns,
+            activePatternId: imported.activePatternId || patterns[0].id,
+            arrangement: imported.arrangement && imported.arrangement.length > 0
+              ? imported.arrangement
+              : [{ id: crypto.randomUUID(), patternId: patterns[0].id, startBar: 0, lane: 0 }],
+            transportMode: imported.transportMode || 'pattern',
+          };
+          playheadRef.current = 0;
+          setPlayheadTime(0);
+          setProject(normalizeProjectPatterns(upgraded));
         }
       } catch (err) {
         console.error('Failed to import project:', err);
@@ -1377,7 +1800,8 @@ function MIDISequencer() {
     );
   }
 
-  const activeTrack = project.tracks.find(t => t.id === project.activeTrackId);
+  const activePattern = getActivePattern(project);
+  const timelineLength = getTimelineLength(project);
 
   return (
     <div style={{ 
@@ -1462,25 +1886,135 @@ function MIDISequencer() {
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 32, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Pattern</span>
+              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Pattern Selector</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <select
+                  value={project.activePatternId}
+                  onChange={e => {
+                    playheadRef.current = 0;
+                    setPlayheadTime(0);
+                    setProject({ ...project, activePatternId: e.target.value, transportMode: 'pattern' });
+                  }}
+                  style={{
+                    background: 'transparent', border: 'none', color: '#00D1FF',
+                    fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', outline: 'none'
+                  }}
+                >
+                  {project.patterns.map(pattern => (
+                    <option key={pattern.id} value={pattern.id}>{pattern.name}</option>
+                  ))}
+                </select>
+                <button onClick={createPattern} style={{ border: 'none', background: 'rgba(0,209,255,0.15)', color: '#00D1FF', borderRadius: 6, cursor: 'pointer', padding: '2px 6px' }}>+</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 20, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Length</span>
               <select
-                value={project.patternLength}
-                onChange={e => setProject({...project, patternLength: parseInt(e.target.value)})}
+                value={activePattern.length}
+                onChange={e => {
+                  const nextLength = parseInt(e.target.value, 10);
+                  setProject({
+                    ...project,
+                    patternLength: nextLength,
+                    patterns: project.patterns.map(pattern => pattern.id === project.activePatternId ? { ...pattern, length: nextLength } : pattern),
+                  });
+                }}
                 style={{
                   background: 'transparent', border: 'none', color: '#00D1FF',
                   fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', outline: 'none'
                 }}
               >
-                <option value="8">8 BARS</option>
-                <option value="16">16 BARS</option>
-                <option value="32">32 BARS</option>
-                <option value="64">64 BARS</option>
+                {Array.from(new Set([...PATTERN_LENGTH_OPTIONS, activePattern.length]))
+                  .sort((a, b) => a - b)
+                  .map(len => (
+                    <option key={len} value={len}>{len} BARS</option>
+                  ))}
               </select>
             </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 32, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantize</span>
+              <select
+                value={quantizeGrid}
+                onChange={e => setQuantizeGrid(parseFloat(e.target.value))}
+                style={{
+                  background: 'transparent', border: 'none', color: '#00D1FF',
+                  fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', outline: 'none'
+                }}
+              >
+                <option value={0.5}>1/2</option>
+                <option value={0.25}>1/4</option>
+                <option value={0.125}>1/8</option>
+                <option value={0.0625}>1/16</option>
+                <option value={0.03125}>1/32</option>
+              </select>
+            </div>
+
+            <button
+              onClick={duplicatePatternNotes}
+              title="Duplicate all notes to next pattern block"
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(0,209,255,0.15)',
+                border: '1px solid rgba(0,209,255,0.3)',
+                borderRadius: 8,
+                color: '#00D1FF',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                letterSpacing: '1px',
+              }}
+            >
+              DUP PATTERN
+            </button>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+            <button
+              onClick={() => setProject({ ...project, transportMode: 'pattern' })}
+              style={{
+                border: 'none',
+                padding: '6px 10px',
+                cursor: 'pointer',
+                background: project.transportMode === 'pattern' ? 'rgba(0,209,255,0.2)' : 'transparent',
+                color: project.transportMode === 'pattern' ? '#00D1FF' : '#888',
+                fontSize: 10,
+                fontWeight: 700,
+              }}
+            >
+              PATTERN
+            </button>
+            <button
+              onClick={() => setProject({ ...project, transportMode: 'song' })}
+              style={{
+                border: 'none',
+                padding: '6px 10px',
+                cursor: 'pointer',
+                background: project.transportMode === 'song' ? 'rgba(0,209,255,0.2)' : 'transparent',
+                color: project.transportMode === 'song' ? '#00D1FF' : '#888',
+                fontSize: 10,
+                fontWeight: 700,
+              }}
+            >
+              SONG
+            </button>
+          </div>
+          <button
+            onClick={addPatternToPlaylist}
+            style={{ border: '1px solid rgba(0,209,255,0.3)', background: 'rgba(0,209,255,0.1)', color: '#00D1FF', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px' }}
+          >
+            + TO PLAYLIST
+          </button>
+          <button
+            onClick={handleNewProject}
+            style={{ border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: '#ddd', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px' }}
+          >
+            NEW PROJECT
+          </button>
+          <span style={{ fontSize: '9px', color: '#444', letterSpacing: '1px' }}>AUTO-SAVED</span>
           <div style={{ 
             display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: 14, 
             padding: 4, border: '1px solid rgba(255,255,255,0.05)', gap: 4
@@ -1515,6 +2049,36 @@ function MIDISequencer() {
           display: 'flex', flexDirection: 'column', flexShrink: 0 
         }}>
           <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24, overflowY: 'auto', flex: 1 }}>
+            <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: 8 }}>Browser</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {project.patterns.map(pattern => (
+                  <button
+                    key={pattern.id}
+                    onClick={() => setProject({ ...project, activePatternId: pattern.id, transportMode: 'pattern' })}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('application/x-pattern-id', pattern.id);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      padding: '6px 8px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: pattern.id === project.activePatternId ? 'rgba(0,209,255,0.12)' : 'rgba(255,255,255,0.02)',
+                      color: pattern.id === project.activePatternId ? '#00D1FF' : '#a3a3a3',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                    }}
+                  >
+                    <span>{pattern.name}</span>
+                    <span>{pattern.length} bars</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '2px', color: '#666' }}>Track List</h2>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -1604,6 +2168,20 @@ function MIDISequencer() {
             fontSize: '10px', letterSpacing: '1px', fontFamily: 'monospace', color: '#666', flexShrink: 0 
           }}>
             <span>TIMELINE VIEW</span>
+            <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+              <button
+                onClick={() => setEditorView('piano')}
+                style={{ border: 'none', padding: '4px 8px', cursor: 'pointer', background: editorView === 'piano' ? 'rgba(0,209,255,0.18)' : 'transparent', color: editorView === 'piano' ? '#00D1FF' : '#888', fontSize: 10 }}
+              >
+                PIANO
+              </button>
+              <button
+                onClick={() => setEditorView('playlist')}
+                style={{ border: 'none', padding: '4px 8px', cursor: 'pointer', background: editorView === 'playlist' ? 'rgba(0,209,255,0.18)' : 'transparent', color: editorView === 'playlist' ? '#00D1FF' : '#888', fontSize: 10 }}
+              >
+                PLAYLIST
+              </button>
+            </div>
             <div style={{ display: 'flex', gap: 16 }}>
               <button onClick={() => setZoom(z => Math.max(50, z - 20))} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}>Zoom -</button>
               <button onClick={() => setZoom(z => Math.min(600, z + 20))} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}>Zoom +</button>
@@ -1612,6 +2190,7 @@ function MIDISequencer() {
             </div>
           </div>
 
+          {editorView === 'piano' && (
           <div style={{ flex: 1, overflow: 'auto', position: 'relative', userSelect: 'none' }}>
             <div style={{ display: 'flex', minHeight: '100%' }}>
               {/* Piano Keyboard */}
@@ -1643,7 +2222,7 @@ function MIDISequencer() {
                 position: 'relative', flex: 1, 
                 background: 'radial-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)', 
                 backgroundSize: '40px 40px', 
-                width: project.patternLength * zoom, 
+                width: activePattern.length * zoom, 
                 height: TOTAL_NOTES * NOTE_HEIGHT 
               }}>
                 {/* Horizontal grid lines */}
@@ -1656,26 +2235,31 @@ function MIDISequencer() {
                 ))}
                 
                 {/* Vertical grid lines */}
-                {Array.from({ length: project.patternLength * 8 + 1 }).map((_, i) => (
+                {Array.from({ length: activePattern.length * Math.round(1 / quantizeGrid) + 1 }).map((_, i) => (
                   <div key={`v-${i}`} style={{ 
                     position: 'absolute', top: 0, bottom: 0, width: 1, 
-                    left: i * (zoom/8), 
-                    background: i % 32 === 0 ? 'rgba(255,255,255,0.2)' : 
-                               i % 8 === 0 ? 'rgba(255,255,255,0.08)' : 
+                    left: i * (zoom * quantizeGrid), 
+                    background: i % Math.round(4 / quantizeGrid) === 0 ? 'rgba(255,255,255,0.2)' : 
+                               i % Math.round(1 / quantizeGrid) === 0 ? 'rgba(255,255,255,0.08)' : 
                                'rgba(255,255,255,0.02)' 
                   }} />
                 ))}
 
                 {/* Notes */}
                 {project.tracks.map(track => (
-                  track.notes.map(note => {
+                  track.notes.filter(note => note.patternId === activePattern.id).map(note => {
                     const isActive = project.activeTrackId === track.id;
-                    const isDragging = dragging?.id === note.id;
+                    const isDraggingNote = dragStateRef.current?.id === note.id;
                     
                     return (
                       <div 
                         key={note.id} 
                         onMouseDown={(e) => handleNoteMouseDown(note, e)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleNoteContextDelete(note.id);
+                        }}
                         style={{
                           position: 'absolute',
                           left: note.startTime * zoom,
@@ -1685,11 +2269,11 @@ function MIDISequencer() {
                           backgroundColor: track.color,
                           opacity: isActive ? 0.9 : 0.3,
                           borderRadius: 4,
-                          border: `1px solid ${isDragging ? '#FFFFFF' : 'rgba(0,0,0,0.3)'}`,
-                          cursor: isDragging ? 'grabbing' : 'grab',
+                          border: `1px solid ${isDraggingNote ? '#FFFFFF' : 'rgba(0,0,0,0.3)'}`,
+                          cursor: isDraggingNote ? 'grabbing' : 'grab',
                           zIndex: isActive ? 20 : 10,
                           boxShadow: isActive ? `0 0 16px ${track.color}66, inset 0 1px 0 rgba(255,255,255,0.2)` : 'none',
-                          transition: isDragging ? 'none' : 'box-shadow 0.2s',
+                          transition: isDraggingNote ? 'none' : 'box-shadow 0.2s',
                         }}
                       >
                         {/* Resize handle */}
@@ -1704,7 +2288,7 @@ function MIDISequencer() {
                             transition: 'opacity 0.2s'
                           }}
                           onMouseEnter={e => { if (isActive) e.currentTarget.style.opacity = '1'; }}
-                          onMouseLeave={e => { if (isActive && !dragging) e.currentTarget.style.opacity = '0'; }}
+                          onMouseLeave={e => { if (isActive && !isDragging) e.currentTarget.style.opacity = '0'; }}
                         />
                       </div>
                     );
@@ -1716,7 +2300,7 @@ function MIDISequencer() {
                   position: 'absolute', top: 0, bottom: 0, width: 3, 
                   background: '#00D1FF', zIndex: 40, 
                   boxShadow: '0 0 20px #00D1FF', 
-                  left: project.currentTime * zoom 
+                  left: playheadTime * zoom 
                 }}>
                   <div style={{ 
                     position: 'absolute', top: -4, left: -5, 
@@ -1727,10 +2311,185 @@ function MIDISequencer() {
 
                 {/* Clickable area */}
                 <div 
-                  style={{ position: 'absolute', inset: 0, zIndex: 5, cursor: dragging ? 'grabbing' : 'crosshair' }} 
+                  style={{ position: 'absolute', inset: 0, zIndex: 5, cursor: isDragging ? 'grabbing' : 'crosshair' }} 
                   onClick={handleGridClick} 
                 />
               </div>
+            </div>
+          </div>
+          )}
+
+          {/* Playlist */}
+          <div style={{ height: editorView === 'playlist' ? '100%' : 220, borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.35)', padding: '10px 12px', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 10, color: '#8a8a8a', letterSpacing: '1px' }}>PLAYLIST</span>
+              <span style={{ fontSize: 10, color: '#5f5f5f' }}>{project.transportMode.toUpperCase()} • {timelineLength} bars</span>
+            </div>
+            <div
+              style={{
+                position: 'relative',
+                width: PLAYLIST_LABEL_WIDTH + timelineLength * zoom,
+                minHeight: Math.max(PLAYLIST_LANES * PLAYLIST_LANE_HEIGHT + 30, editorView === 'playlist' ? 430 : PLAYLIST_LANES * PLAYLIST_LANE_HEIGHT + 30),
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 8,
+                background: '#111',
+                overflow: 'hidden',
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes('application/x-pattern-id')) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'copy';
+                }
+              }}
+              onDrop={(e) => {
+                const patternId = e.dataTransfer.getData('application/x-pattern-id');
+                if (!patternId) return;
+                e.preventDefault();
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left - PLAYLIST_LABEL_WIDTH;
+                const y = e.clientY - rect.top - 30;
+                const startBar = x / zoom;
+                const lane = Math.floor(y / PLAYLIST_LANE_HEIGHT);
+                addPatternClipAt(patternId, startBar, lane);
+              }}
+            >
+              <div style={{ position: 'absolute', left: 0, top: 0, width: PLAYLIST_LABEL_WIDTH, height: 30, borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#161616', zIndex: 6 }} />
+              <div style={{ position: 'absolute', left: PLAYLIST_LABEL_WIDTH, top: 0, width: timelineLength * zoom, height: 30, borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#141414', zIndex: 5 }}>
+                {Array.from({ length: timelineLength + 1 }).map((_, bar) => (
+                  <div key={`bar-${bar}`} style={{ position: 'absolute', left: bar * zoom, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.18)' }}>
+                    <span style={{ position: 'absolute', top: 7, left: 4, fontSize: 10, color: '#6e6e6e', fontFamily: 'monospace' }}>{bar + 1}</span>
+                  </div>
+                ))}
+                {Array.from({ length: timelineLength * 4 + 1 }).map((_, step) => (
+                  <div
+                    key={`sub-${step}`}
+                    style={{
+                      position: 'absolute',
+                      left: step * (zoom / 4),
+                      top: 16,
+                      bottom: 0,
+                      width: 1,
+                      background: step % 4 === 0 ? 'transparent' : 'rgba(255,255,255,0.05)',
+                    }}
+                  />
+                ))}
+              </div>
+
+              {Array.from({ length: PLAYLIST_LANES }).map((_, lane) => (
+                <div
+                  key={`lane-${lane}`}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    width: PLAYLIST_LABEL_WIDTH,
+                    top: 30 + lane * PLAYLIST_LANE_HEIGHT,
+                    height: PLAYLIST_LANE_HEIGHT,
+                    borderTop: '1px solid rgba(255,255,255,0.05)',
+                    borderRight: '1px solid rgba(255,255,255,0.08)',
+                    borderBottom: '1px solid rgba(0,0,0,0.4)',
+                    background: lane % 2 === 0 ? '#141414' : '#121212',
+                    color: '#5b6670',
+                    fontSize: 9,
+                    padding: '8px 6px',
+                    letterSpacing: '0.5px',
+                    zIndex: 4,
+                  }}
+                >
+                  Track {lane + 1}
+                </div>
+              ))}
+              <div style={{ position: 'absolute', left: PLAYLIST_LABEL_WIDTH, top: 30, width: timelineLength * zoom, height: PLAYLIST_LANES * PLAYLIST_LANE_HEIGHT }}>
+                {Array.from({ length: PLAYLIST_LANES }).map((_, lane) => (
+                  <div
+                    key={`lane-grid-${lane}`}
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: lane * PLAYLIST_LANE_HEIGHT,
+                      height: PLAYLIST_LANE_HEIGHT,
+                      borderTop: '1px solid rgba(255,255,255,0.05)',
+                      borderBottom: '1px solid rgba(0,0,0,0.35)',
+                      background: lane % 2 === 0 ? '#131313' : '#101010',
+                    }}
+                  />
+                ))}
+                {Array.from({ length: timelineLength * 4 + 1 }).map((_, step) => (
+                  <div
+                    key={`timeline-step-${step}`}
+                    style={{
+                      position: 'absolute',
+                      left: step * (zoom / 4),
+                      top: 0,
+                      bottom: 0,
+                      width: 1,
+                      background: step % 4 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.04)',
+                    }}
+                  />
+                ))}
+              </div>
+              {project.arrangement.map(clip => {
+                const pattern = project.patterns.find(item => item.id === clip.patternId);
+                if (!pattern) return null;
+                const clipLength = computePatternLength(project.tracks, clip.patternId);
+                const selected = clip.patternId === project.activePatternId;
+                return (
+                  <div
+                    key={clip.id}
+                    onClick={() => setProject({ ...project, activePatternId: clip.patternId, transportMode: 'song' })}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handlePlaylistClipDelete(clip.id);
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      playlistDragRef.current = {
+                        clipId: clip.id,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        origStartBar: clip.startBar,
+                        origLane: clip.lane,
+                      };
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: PLAYLIST_LABEL_WIDTH + clip.startBar * zoom + 1,
+                      top: 30 + clip.lane * PLAYLIST_LANE_HEIGHT + 4,
+                      width: Math.max(24, clipLength * zoom - 2),
+                      height: PLAYLIST_LANE_HEIGHT - 8,
+                      borderRadius: 4,
+                      border: selected ? '1px solid #00D1FF' : '1px solid rgba(255,255,255,0.2)',
+                      background: selected ? 'linear-gradient(180deg, rgba(0,209,255,0.35), rgba(0,209,255,0.18))' : 'linear-gradient(180deg, rgba(0,209,255,0.22), rgba(0,209,255,0.1))',
+                      color: selected ? '#d8faff' : '#95c6d2',
+                      fontSize: 9,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 6px',
+                      cursor: 'grab',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      zIndex: 6,
+                    }}
+                  >
+                    {pattern.name}
+                  </div>
+                );
+              })}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 30,
+                  bottom: 0,
+                  width: 2,
+                  background: '#00D1FF',
+                  boxShadow: '0 0 12px rgba(0,209,255,0.8)',
+                  left: PLAYLIST_LABEL_WIDTH + playheadTime * zoom,
+                  zIndex: 7,
+                  pointerEvents: 'none',
+                }}
+              />
             </div>
           </div>
 

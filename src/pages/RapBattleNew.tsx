@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save } from 'lucide-react';
-import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, User, Battle, BattleRecording } from '../api/battles';
+import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, BattleRatingResult, User, Battle, BattleRecording } from '../api/battles';
 import { useAuthStore } from '../store/authStore';
 
 // ─────────────────────────────────────────────────────────
@@ -861,6 +861,7 @@ export default function RapBattleNew() {
   const beatAudioRef     = useRef<HTMLAudioElement | null>(null);
   const timerRef         = useRef<number | null>(null);
   const streamRef        = useRef<MediaStream | null>(null);
+  const recordingTimeRef = useRef(0);
 
   const RECORDING_TIME_LIMIT = 30;
 
@@ -917,6 +918,7 @@ export default function RapBattleNew() {
         if (upd.status === 'USER1_TURN')  setCurrentPhase('user1_turn');
         else if (upd.status === 'USER2_TURN') setCurrentPhase('user2_turn');
         else if (upd.status === 'JUDGING')    setCurrentPhase('mutual_judging');
+        else if (upd.status === 'FINISHED')   setCurrentPhase('mutual_judging');
         else if (upd.status === 'CANCELLED')  { setCurrentPhase('waiting'); setCurrentBattle(null); }
       }
     } catch {}
@@ -929,6 +931,36 @@ export default function RapBattleNew() {
     if (opp && String(opp.user.id) === user.id) return 'OPPONENT';
     return null;
   };
+
+  const applyRatingsFromServer = useCallback((data: BattleRatingResult) => {
+    if (data.creatorRating != null) setUser1Rating(data.creatorRating);
+    if (data.opponentRating != null) setUser2Rating(data.opponentRating);
+    if (data.hasRated) setHasRated(true);
+    if (data.bothRated) {
+      setOpponentHasRated(true);
+      setJudgeResult({
+        winner: data.winner,
+        user1Total: data.creatorReceived ?? data.user1Score ?? 0,
+        user2Total: data.opponentReceived ?? data.user2Score ?? 0,
+      });
+      if (data.status === 'FINISHED' && currentBattle) {
+        setCurrentBattle({ ...currentBattle, status: 'FINISHED', winner: data.winner });
+      }
+    }
+  }, [currentBattle]);
+
+  const syncBattleRatings = useCallback(async () => {
+    if (!currentBattle) return;
+    try {
+      const data = await getBattleRatings(currentBattle.id);
+      applyRatingsFromServer(data);
+      if (data.hasRated && !data.bothRated) {
+        setCurrentPhase('waiting_for_opponent_rating');
+      } else if (data.bothRated) {
+        setCurrentPhase('mutual_judging');
+      }
+    } catch {}
+  }, [currentBattle, applyRatingsFromServer]);
 
   const canCurrentUserRecord = () => {
     const role = getCurrentUserRole();
@@ -1016,15 +1048,25 @@ export default function RapBattleNew() {
           try {
             const ext = actualMime.includes('webm')?'webm':actualMime.includes('ogg')?'ogg':actualMime.includes('wav')?'wav':'m4a';
             const file = new File([blob],`recording-${Date.now()}.${ext}`,{type:actualMime});
-            const rec = await saveBattleRecording(currentBattle.id, file, currentBattle.beatUrl||'', recordingTime, recordingQuality, currentRound);
+            const dur = Math.max(1, recordingTimeRef.current || recordingTime);
+            const rec = await saveBattleRecording(currentBattle.id, file, currentBattle.beatUrl||'', dur, recordingQuality, currentRound);
+            setRecordingTime(0);
+            recordingTimeRef.current = 0;
             const role = getCurrentUserRole();
             if (role==='CREATOR') { setUser1Recording(rec); setCurrentPhase('reviewing_recording'); }
             else if (role==='OPPONENT') { setUser2Recording(rec); setCurrentPhase('reviewing_recording'); await updateBattleStatus(currentBattle.id,'JUDGING'); setTimeout(()=>checkBattleStatus(),500); }
           } catch(e:any) { setError(e.message||'Не удалось сохранить запись'); }
         }
       };
-      mr.start(100); setIsRecording(true); setRecordingTime(0);
-      timerRef.current = setInterval(() => { setRecordingTime(p => { if(p>=RECORDING_TIME_LIMIT){stopRecording();return p;} return p+1; }); }, 1000);
+      mr.start(100); setIsRecording(true); setRecordingTime(0); recordingTimeRef.current = 0;
+      timerRef.current = setInterval(() => {
+        setRecordingTime(p => {
+          const next = p >= RECORDING_TIME_LIMIT ? p : p + 1;
+          recordingTimeRef.current = next;
+          if (p >= RECORDING_TIME_LIMIT) stopRecording();
+          return next;
+        });
+      }, 1000);
     } catch { alert('Не удалось получить доступ к микрофону.'); }
   };
 
@@ -1032,7 +1074,6 @@ export default function RapBattleNew() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop(); setIsRecording(false);
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current=null; }
-      setRecordingTime(0);
       if (streamRef.current) { streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
     }
   };
@@ -1051,13 +1092,16 @@ export default function RapBattleNew() {
     const role = getCurrentUserRole();
     if (!role || !currentBattle) return;
     try {
-      try { await submitRating(currentBattle.id, rating); }
-      catch { localStorage.setItem(`battle_rating_${currentBattle.id}_${role==='CREATOR'?'user1':'user2'}`, rating.toString()); }
-      if (role==='CREATOR') setUser1Rating(rating); else setUser2Rating(rating);
-      setHasRated(true);
-      try { await updateBattleStatus(currentBattle.id,'WAITING_FOR_OPPONENT_RATING'); } catch {}
-      setCurrentPhase('waiting_for_opponent_rating');
-      setTimeout(() => { setOpponentHasRated(true); setCurrentPhase('mutual_judging'); }, 3000);
+      const result = await submitRating(currentBattle.id, rating);
+      if (role === 'CREATOR') setUser1Rating(rating);
+      else setUser2Rating(rating);
+      applyRatingsFromServer(result);
+      if (result.bothRated) {
+        setCurrentPhase('mutual_judging');
+      } else {
+        setHasRated(true);
+        setCurrentPhase('waiting_for_opponent_rating');
+      }
     } catch(e:any) { setError(e.message||'Не удалось сохранить оценку'); }
   };
 
@@ -1065,7 +1109,10 @@ export default function RapBattleNew() {
     setCurrentPhase('waiting'); setCurrentBattle(null); setSelectedOpponent(null);
     setBattleTitle(''); setBattleDescription(''); setBeatFile(null); setBeatUrl('');
     setUser1Recording(null); setUser2Recording(null); setRecordedVoice('');
-    setCurrentTurn('user1'); setRecordingTime(0); setJudgeResult(null); setError('');
+    setCurrentTurn('user1'); setRecordingTime(0); recordingTimeRef.current = 0;
+    setJudgeResult(null); setError('');
+    setHasRated(false); setOpponentHasRated(false);
+    setUser1Rating(null); setUser2Rating(null);
   };
 
   useEffect(() => {
@@ -1076,8 +1123,17 @@ export default function RapBattleNew() {
       const i=setInterval(checkBattleStatus,1500); return ()=>clearInterval(i);
     } else if (currentPhase==='user1_turn'||currentPhase==='user2_turn') {
       const i=setInterval(checkBattleStatus,1000); return ()=>clearInterval(i);
+    } else if (currentPhase==='mutual_judging' || currentPhase==='waiting_for_opponent_rating') {
+      const i=setInterval(syncBattleRatings,2000); return ()=>clearInterval(i);
     }
-  }, [currentPhase]);
+  }, [currentPhase, syncBattleRatings]);
+
+  useEffect(() => {
+    if (currentPhase === 'mutual_judging' || currentPhase === 'waiting_for_opponent_rating') {
+      loadBattleRecordings();
+      syncBattleRatings();
+    }
+  }, [currentPhase, currentBattle?.id]);
 
   useEffect(() => {
     if (beatAudioRef.current) { const u=beatUrl||currentBattle?.beatUrl; beatAudioRef.current.src=u||''; beatAudioRef.current.load(); }
@@ -1092,16 +1148,21 @@ export default function RapBattleNew() {
     } catch { setError('Ошибка при передаче хода'); }
   }, [currentBattle]);
 
-  const finishBattle = useCallback(() => {
+  const finishBattle = useCallback(async () => {
     if (!currentBattle) return;
     if (!window.confirm(`Завершить баттл "${currentBattle.title}"? Несохранённые данные будут потеряны.`)) return;
     if (isRecording) stopRecording();
     if (beatAudioRef.current) { beatAudioRef.current.pause(); beatAudioRef.current.currentTime=0; }
+    try {
+      await updateBattleStatus(currentBattle.id, 'CANCELLED');
+    } catch {}
     clearBattleState();
     setCurrentBattle(null); setCurrentPhase('waiting'); setUser1Recording(null);
-    setUser2Recording(null); setBeatUrl(''); setRecordingTime(0); setIsRecording(false);
-    setIsPlayingBeat(false); setHasRated(false); setError(''); setSelectedOpponent(null);
-    setBattleTitle(''); setBattleDescription('');
+    setUser2Recording(null); setBeatUrl(''); setRecordingTime(0); recordingTimeRef.current = 0;
+    setIsRecording(false);
+    setIsPlayingBeat(false); setHasRated(false); setOpponentHasRated(false); setError('');
+    setSelectedOpponent(null);
+    setBattleTitle(''); setBattleDescription(''); setJudgeResult(null);
     loadUserBattles();
   }, [currentBattle, isRecording, clearBattleState]);
 
@@ -1496,8 +1557,10 @@ export default function RapBattleNew() {
     );
 
     if (hasRated && opponentHasRated) {
-      const myScore  = role==='CREATOR'?(user1Rating||0):(user2Rating||0);
-      const oppScore = role==='CREATOR'?(user2Rating||0):(user1Rating||0);
+      const creatorReceived = user2Rating || 0;
+      const opponentReceived = user1Rating || 0;
+      const myReceived  = role === 'CREATOR' ? creatorReceived : opponentReceived;
+      const oppReceived = role === 'CREATOR' ? opponentReceived : creatorReceived;
       return (
         <div>
           <div className="rb-card-hd">
@@ -1505,23 +1568,26 @@ export default function RapBattleNew() {
             <span className="rb-badge rb-badge-purple">Завершено</span>
           </div>
           <div className="rb-score-grid">
-            <div className={`rb-score-cell${myScore>oppScore?' winner':''}`}>
-              <div className="rb-score-num">{myScore}</div>
-              <div className="rb-score-label">Оппонент вам</div>
+            <div className={`rb-score-cell${myReceived > oppReceived ? ' winner' : ''}`}>
+              <div className="rb-score-num">{myReceived}</div>
+              <div className="rb-score-label">Оценка вам</div>
               <div className="rb-score-name">Вы</div>
             </div>
-            <div className={`rb-score-cell${oppScore>myScore?' winner':''}`}>
-              <div className="rb-score-num">{oppScore}</div>
-              <div className="rb-score-label">Вы оппоненту</div>
+            <div className={`rb-score-cell${oppReceived > myReceived ? ' winner' : ''}`}>
+              <div className="rb-score-num">{oppReceived}</div>
+              <div className="rb-score-label">Оценка оппоненту</div>
               <div className="rb-score-name">Оппонент</div>
             </div>
           </div>
           <div className="rb-card rb-centered">
             <span className="rb-section-label">Итог</span>
             <div style={{fontSize:20,fontWeight:700,letterSpacing:'-.02em',marginBottom:20}}>
-              {myScore>oppScore ? 'Вы победили' : myScore<oppScore ? 'Оппонент победил' : 'Ничья'}
+              {myReceived > oppReceived ? 'Вы победили' : myReceived < oppReceived ? 'Оппонент победил' : 'Ничья'}
             </div>
-            <button onClick={()=>setCurrentPhase('finished')} className="rb-btn rb-btn-primary">
+            <button onClick={() => {
+              if (judgeResult) setCurrentPhase('finished');
+              else startNewBattle();
+            }} className="rb-btn rb-btn-primary">
               Завершить
             </button>
           </div>
@@ -1560,10 +1626,13 @@ export default function RapBattleNew() {
 
   // ── FINISHED ──
   const renderFinishedPhase = () => {
-    if (!judgeResult || !currentBattle) return null;
-    const { winner, user1Total, user2Total } = judgeResult;
-    const u1 = currentBattle.participants.find(p=>p.role==='CREATOR')?.user;
+    if (!currentBattle) return null;
+    const u1 = currentBattle.participants.find(p=>p.role==='CREATOR')?.user ?? currentBattle.creator;
     const u2 = currentBattle.participants.find(p=>p.role==='OPPONENT')?.user;
+    const user1Total = judgeResult?.user1Total ?? user2Rating ?? 0;
+    const user2Total = judgeResult?.user2Total ?? user1Rating ?? 0;
+    const winner = judgeResult?.winner
+      ?? (user1Total > user2Total ? 'USER1' : user2Total > user1Total ? 'USER2' : 'DRAW');
     return (
       <div>
         <div className="rb-card-hd">

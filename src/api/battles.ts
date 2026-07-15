@@ -292,11 +292,24 @@ export const getBattleRecordings = async (battleId: string): Promise<BattleRecor
   return response.json();
 };
 
+export interface BattleRatingResult {
+  creatorRating: number | null;
+  opponentRating: number | null;
+  creatorReceived: number | null;
+  opponentReceived: number | null;
+  bothRated: boolean;
+  hasRated: boolean;
+  winner?: 'USER1' | 'USER2' | 'DRAW';
+  user1Score?: number | null;
+  user2Score?: number | null;
+  status: string;
+}
+
 // Submit user rating for battle
 export const submitRating = async (battleId: string, rating: number): Promise<{
   success: boolean;
   message: string;
-}> => {
+} & BattleRatingResult> => {
   const response = await fetch(`${API_BASE}/battles/${battleId}/rate`, {
     method: 'POST',
     headers: getAuthHeaders(),
@@ -308,6 +321,20 @@ export const submitRating = async (battleId: string, rating: number): Promise<{
     throw new Error(error.error || 'Failed to submit rating');
   }
   
+  return response.json();
+};
+
+// Get peer ratings for battle (polling)
+export const getBattleRatings = async (battleId: string): Promise<BattleRatingResult> => {
+  const response = await fetch(`${API_BASE}/battles/${battleId}/ratings`, {
+    headers: getAuthHeaders()
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch ratings');
+  }
+
   return response.json();
 };
 
