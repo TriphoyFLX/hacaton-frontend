@@ -8,6 +8,11 @@ import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { useChatSocket, Message as SocketMessage } from '../hooks/useSocket';
 import ConfirmDialog from '../components/ConfirmDialog';
+import {
+  extractMentionQuery,
+  insertMention,
+  renderTextWithMentions,
+} from '../utils/messageMentions';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -366,13 +371,6 @@ ${FONT_IMPORT}
   color: inherit;
   cursor: default;
 }
-.message-sender {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--accent-dim);
-  margin-bottom: 4px;
-}
 @media (max-width: 520px) {
   .header-block-label {
     display: none;
@@ -501,6 +499,111 @@ ${FONT_IMPORT}
   line-height: 1.5;
   letter-spacing: 0.004em;
   word-break: break-word;
+}
+.message-mention {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  opacity: 0.92;
+}
+.message-bubble.own .message-mention {
+  color: var(--bg);
+}
+.message-bubble.other .message-mention {
+  color: var(--accent);
+}
+.message-mention:hover {
+  opacity: 1;
+}
+.message-sender {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--accent-dim);
+  margin-bottom: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.message-sender:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.mention-suggest {
+  position: absolute;
+  left: 16px;
+  right: 72px;
+  bottom: calc(100% + 8px);
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  z-index: 20;
+}
+.mention-suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.mention-suggest-item:last-child {
+  border-bottom: none;
+}
+.mention-suggest-item:hover,
+.mention-suggest-item.active {
+  background: var(--bg-surface);
+}
+.mention-suggest-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border-mid);
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.mention-suggest-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mention-suggest-meta {
+  min-width: 0;
+}
+.mention-suggest-name {
+  font-weight: 600;
+}
+.mention-suggest-display {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* ── TYPING INDICATOR ── */
@@ -705,8 +808,18 @@ export default function ChatPage() {
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockConfirm, setBlockConfirm] = useState<'block' | 'unblock' | null>(null);
   const [pinning, setPinning] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = useState<Array<{
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+  }>>([]);
+  const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const clearChatUnread = useChatUnreadStore((s) => s.clearChatUnread);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mentionSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markAsReadRef = useRef<(ids: string[]) => void>(() => {});
   const markedReadIds = useRef(new Set<string>());
@@ -1006,6 +1119,7 @@ export default function ChatPage() {
     setNewMessage('');
     setSending(true);
     setSendError(null);
+    clearMentionSuggestions();
 
     const optimisticMessage: PendingMessage = {
       id: clientMessageId,
@@ -1054,22 +1168,135 @@ export default function ChatPage() {
     }
   };
 
-  const handleTypingInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewMessage(e.target.value);
+  const openMentionProfile = (username: string) => {
+    navigate(`/profile/${username}`);
+  };
 
-    // Send typing indicator
+  const clearMentionSuggestions = () => {
+    setMentionSuggestions([]);
+    setMentionRange(null);
+    setMentionIndex(0);
+  };
+
+  const updateMentionSuggestions = (value: string, cursor: number) => {
+    const mention = extractMentionQuery(value, cursor);
+    if (!mention) {
+      clearMentionSuggestions();
+      return;
+    }
+
+    setMentionRange({ start: mention.start, end: mention.end });
+    setMentionIndex(0);
+
+    if (mentionSearchRef.current) clearTimeout(mentionSearchRef.current);
+
+    const chatMembers = (chat?.users || [])
+      .map((cu) => cu.user)
+      .filter((u) => u.id !== user?.id)
+      .filter((u) =>
+        !mention.query ||
+        u.username.toLowerCase().startsWith(mention.query.toLowerCase())
+      )
+      .slice(0, 6);
+
+    if (chatMembers.length > 0 && mention.query.length === 0) {
+      setMentionSuggestions(chatMembers);
+    }
+
+    mentionSearchRef.current = setTimeout(async () => {
+      if (!mention.query) {
+        setMentionSuggestions(chatMembers);
+        return;
+      }
+      try {
+        const users = await chatsApi.searchUsers(mention.query);
+        const filtered = (users as Array<{
+          id: string;
+          username: string;
+          displayName?: string | null;
+          avatar?: string | null;
+        }>)
+          .filter((u) => u.id !== user?.id)
+          .slice(0, 8);
+        setMentionSuggestions(filtered.length > 0 ? filtered : chatMembers);
+      } catch {
+        setMentionSuggestions(chatMembers);
+      }
+    }, 200);
+  };
+
+  const applyMention = (username: string) => {
+    if (!mentionRange) return;
+    const { value, cursor } = insertMention(
+      newMessage,
+      mentionRange.start,
+      mentionRange.end,
+      username
+    );
+    setNewMessage(value);
+    clearMentionSuggestions();
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const handleTypingInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const cursor = e.target.selectionStart ?? value.length;
+    setNewMessage(value);
+    updateMentionSuggestions(value, cursor);
+
     sendChatTyping(true);
 
-    // Clear previous timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set new timeout to stop typing
     typingTimeoutRef.current = setTimeout(() => {
       sendChatTyping(false);
     }, 2000);
   };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (mentionSuggestions.length > 0 && mentionRange) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((prev) =>
+          (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length
+        );
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        applyMention(mentionSuggestions[mentionIndex].username);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearMentionSuggestions();
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (mentionSearchRef.current) clearTimeout(mentionSearchRef.current);
+    };
+  }, []);
 
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('ru-RU', {
@@ -1225,9 +1452,20 @@ export default function ChatPage() {
                   >
                     <div className={`message-bubble ${isOwn ? 'own' : 'other'}`}>
                       {isGroupChat && !isOwn && senderName && (
-                        <div className="message-sender">@{senderName}</div>
+                        <button
+                          type="button"
+                          className="message-sender"
+                          onClick={() => openMentionProfile(senderName)}
+                        >
+                          @{senderName}
+                        </button>
                       )}
-                      <p className="message-text">{message.content}</p>
+                      <p className="message-text">
+                        {renderTextWithMentions({
+                          text: message.content,
+                          onMentionClick: (username) => openMentionProfile(username),
+                        })}
+                      </p>
                       <div className="message-meta">
                         <span className="message-time">{formatTime(message.createdAt)}</span>
                         <span className="message-status">{renderStatus(message)}</span>
@@ -1254,18 +1492,53 @@ export default function ChatPage() {
 
           {/* Input */}
           <div className="chat-input-area">
+            {mentionSuggestions.length > 0 && (
+              <div className="mention-suggest" role="listbox">
+                {mentionSuggestions.map((suggestion, index) => (
+                  <button
+                    key={suggestion.id}
+                    type="button"
+                    className={`mention-suggest-item ${index === mentionIndex ? 'active' : ''}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      applyMention(suggestion.username);
+                    }}
+                  >
+                    <div className="mention-suggest-avatar">
+                      {suggestion.avatar ? (
+                        <img src={suggestion.avatar} alt={suggestion.username} />
+                      ) : (
+                        suggestion.username[0].toUpperCase()
+                      )}
+                    </div>
+                    <div className="mention-suggest-meta">
+                      <div className="mention-suggest-name">@{suggestion.username}</div>
+                      {suggestion.displayName && (
+                        <div className="mention-suggest-display">{suggestion.displayName}</div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             <form onSubmit={handleSendMessage} className="input-form">
               <input
+                ref={inputRef}
                 type="text"
                 value={newMessage}
                 onChange={handleTypingInput}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
-                  }
+                onKeyDown={handleInputKeyDown}
+                onSelect={(e) => {
+                  const target = e.currentTarget;
+                  updateMentionSuggestions(
+                    target.value,
+                    target.selectionStart ?? target.value.length
+                  );
                 }}
-                placeholder={isMessagingBlocked ? 'Сообщения недоступны' : 'Введите сообщение...'}
+                onBlur={() => {
+                  setTimeout(() => clearMentionSuggestions(), 150);
+                }}
+                placeholder={isMessagingBlocked ? 'Сообщения недоступны' : 'Введите сообщение... @user'}
                 className="message-input"
                 disabled={sending || isMessagingBlocked || !canSendMessages}
                 maxLength={4000}
