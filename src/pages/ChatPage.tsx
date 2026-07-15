@@ -544,14 +544,19 @@ ${FONT_IMPORT}
 .message-soundtok {
   margin-top: 2px;
   margin-bottom: 6px;
-  width: min(240px, 70vw);
+  width: min(260px, 72vw);
   border-radius: 14px;
   overflow: hidden;
-  background: #0a0a0a;
-  border: 1px solid var(--border-mid);
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
 }
 .message-bubble.own .message-soundtok {
-  border-color: rgba(11, 11, 11, 0.2);
+  border-color: rgba(11, 11, 11, 0.18);
+}
+.message-soundtok-media {
+  position: relative;
+  background: #000;
 }
 .message-soundtok-video {
   display: block;
@@ -561,44 +566,43 @@ ${FONT_IMPORT}
   object-fit: cover;
   background: #000;
 }
-.message-soundtok-meta {
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.message-soundtok-author-row {
+.message-soundtok-footer {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
+  padding: 10px 12px;
   border: none;
-  background: transparent;
-  padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #161616;
   cursor: pointer;
   text-align: left;
-  color: inherit;
+  color: #fff;
+}
+.message-bubble.own .message-soundtok-footer {
+  background: rgba(11, 11, 11, 0.08);
+  border-top-color: rgba(11, 11, 11, 0.12);
 }
 .message-soundtok-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid var(--border-mid);
-  background: var(--bg-elevated);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  background: #222;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Syne', sans-serif;
   font-size: 13px;
   font-weight: 700;
-  color: var(--accent);
+  color: #f0ede8;
   overflow: hidden;
   flex-shrink: 0;
 }
 .message-bubble.own .message-soundtok-avatar {
-  border-color: rgba(11, 11, 11, 0.18);
-  background: rgba(11, 11, 11, 0.08);
-  color: var(--bg);
+  border-color: rgba(11, 11, 11, 0.35);
+  background: rgba(11, 11, 11, 0.12);
+  color: #0b0b0b;
 }
 .message-soundtok-avatar img {
   width: 100%;
@@ -614,19 +618,19 @@ ${FONT_IMPORT}
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--text-primary);
+  color: #f0ede8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .message-bubble.own .message-soundtok-author-name {
-  color: var(--bg);
+  color: #0b0b0b;
 }
 .message-soundtok-author-username {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: rgba(240, 237, 232, 0.65);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -634,18 +638,24 @@ ${FONT_IMPORT}
 .message-bubble.own .message-soundtok-author-username {
   color: rgba(11, 11, 11, 0.55);
 }
-.message-soundtok-author-row:hover .message-soundtok-author-name {
+.message-soundtok-footer:hover .message-soundtok-author-name {
   text-decoration: underline;
 }
 .message-soundtok-desc {
+  margin: 0;
+  padding: 0 12px 10px;
   font-size: 12px;
   line-height: 1.4;
-  color: inherit;
-  opacity: 0.9;
+  color: rgba(240, 237, 232, 0.85);
+  background: #161616;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.message-bubble.own .message-soundtok-desc {
+  color: rgba(11, 11, 11, 0.75);
+  background: rgba(11, 11, 11, 0.08);
 }
 .message-sender {
   font-family: 'DM Mono', monospace;
@@ -1589,7 +1599,16 @@ export default function ChatPage() {
                 const senderName = 'sender' in message
                   ? message.sender?.username
                   : undefined;
-                
+                const sharedTok = 'soundTok' in message ? message.soundTok : null;
+                const sharedAuthor = sharedTok?.author;
+                const sharedAuthorName =
+                  sharedAuthor?.displayName ||
+                  (sharedAuthor?.username ? `@${sharedAuthor.username}` : 'Автор');
+                const sharedUsername = sharedAuthor?.username
+                  ? `@${sharedAuthor.username}`
+                  : null;
+                const sharedAvatarUrl = resolveMediaUrl(sharedAuthor?.avatar);
+
                 return (
                   <div
                     key={message.id}
@@ -1605,56 +1624,58 @@ export default function ChatPage() {
                           @{senderName}
                         </button>
                       )}
-                      {'soundTok' in message && message.soundTok && (
+                      {sharedTok && (
                         <div className="message-soundtok">
-                          <video
-                            className="message-soundtok-video"
-                            src={resolveMediaUrl(message.soundTok.videoUrl) || undefined}
-                            controls
-                            playsInline
-                            preload="metadata"
-                          />
-                          <div className="message-soundtok-meta">
-                            <button
-                              type="button"
-                              className="message-soundtok-author-row"
-                              onClick={() =>
-                                openMentionProfile(message.soundTok!.author.username)
-                              }
-                            >
-                              <div className="message-soundtok-avatar">
-                                {resolveMediaUrl(message.soundTok.author.avatar) ? (
-                                  <img
-                                    src={resolveMediaUrl(message.soundTok.author.avatar)!}
-                                    alt={message.soundTok.author.username}
-                                  />
-                                ) : (
-                                  message.soundTok.author.username[0]?.toUpperCase() || '?'
-                                )}
-                              </div>
-                              <div className="message-soundtok-author-info">
-                                <div className="message-soundtok-author-name">
-                                  {message.soundTok.author.displayName ||
-                                    `@${message.soundTok.author.username}`}
-                                </div>
-                                <div className="message-soundtok-author-username">
-                                  @{message.soundTok.author.username}
-                                </div>
-                              </div>
-                            </button>
-                            {message.soundTok.description?.trim() && (
-                              <div className="message-soundtok-desc">
-                                {message.soundTok.description}
-                              </div>
-                            )}
+                          <div className="message-soundtok-media">
+                            <video
+                              className="message-soundtok-video"
+                              src={resolveMediaUrl(sharedTok.videoUrl) || undefined}
+                              controls
+                              playsInline
+                              preload="metadata"
+                            />
                           </div>
+                          <button
+                            type="button"
+                            className="message-soundtok-footer"
+                            onClick={() => {
+                              if (sharedAuthor?.username) {
+                                openMentionProfile(sharedAuthor.username);
+                              }
+                            }}
+                          >
+                            <div className="message-soundtok-avatar">
+                              {sharedAvatarUrl ? (
+                                <img
+                                  src={sharedAvatarUrl}
+                                  alt={sharedAuthor?.username || 'author'}
+                                />
+                              ) : (
+                                (sharedAuthor?.username?.[0] || '?').toUpperCase()
+                              )}
+                            </div>
+                            <div className="message-soundtok-author-info">
+                              <div className="message-soundtok-author-name">
+                                {sharedAuthorName}
+                              </div>
+                              {sharedUsername && (
+                                <div className="message-soundtok-author-username">
+                                  {sharedUsername}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                          {sharedTok.description?.trim() && (
+                            <div className="message-soundtok-desc">
+                              {sharedTok.description}
+                            </div>
+                          )}
                         </div>
                       )}
                       {!!message.content &&
                         !(
-                          'soundTok' in message &&
-                          message.soundTok &&
-                          message.content.trim() === (message.soundTok.description || '').trim()
+                          sharedTok &&
+                          message.content.trim() === (sharedTok.description || '').trim()
                         ) && (
                         <p className="message-text">
                           {renderTextWithMentions({
@@ -1664,7 +1685,7 @@ export default function ChatPage() {
                           })}
                         </p>
                       )}
-                      {!message.content && !('soundTok' in message && message.soundTok) && (
+                      {!message.content && !sharedTok && (
                         <p className="message-text"> </p>
                       )}
                       <div className="message-meta">
