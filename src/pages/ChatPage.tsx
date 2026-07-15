@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { useChatSocket, Message as SocketMessage } from '../hooks/useSocket';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { resolveMediaUrl } from '../lib/mediaUrl';
 import {
   extractMentionQuery,
   insertMention,
@@ -539,6 +540,57 @@ ${FONT_IMPORT}
 }
 .message-link:hover {
   opacity: 0.85;
+}
+.message-soundtok {
+  margin-top: 2px;
+  margin-bottom: 6px;
+  width: min(240px, 70vw);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0a0a0a;
+  border: 1px solid var(--border-mid);
+}
+.message-bubble.own .message-soundtok {
+  border-color: rgba(11, 11, 11, 0.2);
+}
+.message-soundtok-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 360px;
+  object-fit: cover;
+  background: #000;
+}
+.message-soundtok-meta {
+  padding: 8px 10px 10px;
+}
+.message-soundtok-author {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--accent-dim);
+  margin-bottom: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.message-bubble.own .message-soundtok-author {
+  color: rgba(11, 11, 11, 0.65);
+}
+.message-soundtok-author:hover {
+  text-decoration: underline;
+}
+.message-soundtok-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: inherit;
+  opacity: 0.9;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .message-sender {
   font-family: 'DM Mono', monospace;
@@ -1498,13 +1550,45 @@ export default function ChatPage() {
                           @{senderName}
                         </button>
                       )}
-                      <p className="message-text">
-                        {renderTextWithMentions({
-                          text: message.content,
-                          onMentionClick: (username) => openMentionProfile(username),
-                          onLinkClick: (url) => openMessageLink(url),
-                        })}
-                      </p>
+                      {'soundTok' in message && message.soundTok && (
+                        <div className="message-soundtok">
+                          <video
+                            className="message-soundtok-video"
+                            src={resolveMediaUrl(message.soundTok.videoUrl) || undefined}
+                            controls
+                            playsInline
+                            preload="metadata"
+                          />
+                          <div className="message-soundtok-meta">
+                            <button
+                              type="button"
+                              className="message-soundtok-author"
+                              onClick={() =>
+                                openMentionProfile(message.soundTok!.author.username)
+                              }
+                            >
+                              @{message.soundTok.author.username}
+                            </button>
+                            {message.soundTok.description && (
+                              <div className="message-soundtok-desc">
+                                {message.soundTok.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {!!message.content && (
+                        <p className="message-text">
+                          {renderTextWithMentions({
+                            text: message.content,
+                            onMentionClick: (username) => openMentionProfile(username),
+                            onLinkClick: (url) => openMessageLink(url),
+                          })}
+                        </p>
+                      )}
+                      {!message.content && !('soundTok' in message && message.soundTok) && (
+                        <p className="message-text"> </p>
+                      )}
                       <div className="message-meta">
                         <span className="message-time">{formatTime(message.createdAt)}</span>
                         <span className="message-status">{renderStatus(message)}</span>

@@ -35,6 +35,7 @@ export interface Chat {
     senderId: string;
     receiverId?: string | null;
     chatId: string;
+    soundTokId?: string | null;
     clientMessageId?: string | null;
     status: 'SENT' | 'DELIVERED' | 'READ';
     readAt?: string | null;
@@ -45,6 +46,18 @@ export interface Chat {
       displayName?: string | null;
       avatar?: string | null;
     };
+    soundTok?: {
+      id: string;
+      description: string;
+      videoUrl: string;
+      authorId: string;
+      author: {
+        id: string;
+        username: string;
+        displayName?: string | null;
+        avatar?: string | null;
+      };
+    } | null;
   }>;
 }
 
@@ -54,6 +67,7 @@ export interface Message {
   senderId: string;
   receiverId?: string | null;
   chatId: string;
+  soundTokId?: string | null;
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: string | null;
@@ -64,6 +78,18 @@ export interface Message {
     displayName?: string | null;
     avatar?: string | null;
   };
+  soundTok?: {
+    id: string;
+    description: string;
+    videoUrl: string;
+    authorId: string;
+    author: {
+      id: string;
+      username: string;
+      displayName?: string | null;
+      avatar?: string | null;
+    };
+  } | null;
 }
 
 export interface PinChatResponse {
@@ -122,11 +148,18 @@ export const chatsApi = {
     return response.data;
   },
 
-  sendMessage: async (chatId: string, content: string, receiverId?: string, clientMessageId?: string) => {
+  sendMessage: async (
+    chatId: string,
+    content: string,
+    receiverId?: string,
+    clientMessageId?: string,
+    soundTokId?: string
+  ) => {
     const response = await api.post(`/chats/${chatId}/messages`, {
       content,
       receiverId,
       clientMessageId,
+      soundTokId,
     });
     return response.data;
   },

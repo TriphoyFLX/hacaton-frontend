@@ -730,6 +730,14 @@ export default function Chats() {
 
   const getPreviewText = (chat: Chat, lastMessage: Chat['messages'][0] | null) => {
     if (!lastMessage) return null;
+    if (lastMessage.soundTok) {
+      const label = lastMessage.soundTok.description?.trim() || 'Видео';
+      if (isGroupChat(chat) && lastMessage.senderId !== user?.id) {
+        const sender = lastMessage.sender?.username || 'участник';
+        return `${sender}: 🎬 ${label}`;
+      }
+      return `🎬 ${label}`;
+    }
     if (isGroupChat(chat) && lastMessage.senderId !== user?.id) {
       const sender = lastMessage.sender?.username || 'участник';
       return `${sender}: ${lastMessage.content}`;

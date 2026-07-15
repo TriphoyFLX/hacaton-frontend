@@ -8,6 +8,7 @@ export interface Message {
   senderId: string;
   receiverId?: string | null;
   chatId: string;
+  soundTokId?: string | null;
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: Date | null;
@@ -19,6 +20,18 @@ export interface Message {
     displayName?: string | null;
     avatar?: string | null;
   };
+  soundTok?: {
+    id: string;
+    description: string;
+    videoUrl: string;
+    authorId: string;
+    author: {
+      id: string;
+      username: string;
+      displayName?: string | null;
+      avatar?: string | null;
+    };
+  } | null;
 }
 
 export interface SocketMessageResponse {
@@ -47,6 +60,7 @@ interface ClientToServerEvents {
     chatId: string;
     clientMessageId: string;
     receiverId?: string | null;
+    soundTokId?: string;
   }, callback: (response: SocketMessageResponse) => void) => void;
   'message:read': (data: { messageIds: string[]; chatId: string }) => void;
   'message:deliver': (data: { messageId: string; chatId: string }) => void;

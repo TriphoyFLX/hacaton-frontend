@@ -49,15 +49,8 @@ function getChatAvatar(chat: Chat, currentUserId?: string): {
   };
 }
 
-function getShareMessage(soundTok: SoundTok, url: string): string {
-  const author = soundTok.author?.username
-    ? `@${soundTok.author.username}`
-    : 'автор';
-  const description = soundTok.description?.trim();
-  if (description) {
-    return `SoundTok от ${author}\n${description}\n${url}`;
-  }
-  return `SoundTok от ${author}\n${url}`;
+function getShareCaption(soundTok: SoundTok): string {
+  return soundTok.description?.trim() || '';
 }
 
 const css = `
@@ -374,9 +367,10 @@ export default function ShareSoundTokModal({
       const clientMessageId = `share_${chat.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await chatsApi.sendMessage(
         chat.id,
-        getShareMessage(soundTok, shareUrl),
+        getShareCaption(soundTok),
         receiverId,
-        clientMessageId
+        clientMessageId,
+        soundTok.id
       );
 
       setSentIds((prev) => new Set(prev).add(chat.id));
@@ -420,7 +414,7 @@ export default function ShareSoundTokModal({
           <Link2 size={15} />
         </button>
 
-        <div className="st-share-section">Отправить в чат</div>
+        <div className="st-share-section">Отправить видео в чат</div>
         <input
           className="st-share-search"
           value={query}
