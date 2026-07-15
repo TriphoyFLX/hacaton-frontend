@@ -580,8 +580,8 @@ ${FONT_IMPORT}
   color: #fff;
 }
 .message-bubble.own .message-soundtok-footer {
-  background: rgba(11, 11, 11, 0.08);
-  border-top-color: rgba(11, 11, 11, 0.12);
+  background: #161616;
+  border-top-color: rgba(255, 255, 255, 0.08);
 }
 .message-soundtok-avatar {
   width: 34px;
@@ -600,9 +600,9 @@ ${FONT_IMPORT}
   flex-shrink: 0;
 }
 .message-bubble.own .message-soundtok-avatar {
-  border-color: rgba(11, 11, 11, 0.35);
-  background: rgba(11, 11, 11, 0.12);
-  color: #0b0b0b;
+  border-color: rgba(255, 255, 255, 0.75);
+  background: #222;
+  color: #f0ede8;
 }
 .message-soundtok-avatar img {
   width: 100%;
@@ -623,9 +623,6 @@ ${FONT_IMPORT}
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.message-bubble.own .message-soundtok-author-name {
-  color: #0b0b0b;
-}
 .message-soundtok-author-username {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
@@ -634,9 +631,6 @@ ${FONT_IMPORT}
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.message-bubble.own .message-soundtok-author-username {
-  color: rgba(11, 11, 11, 0.55);
 }
 .message-soundtok-footer:hover .message-soundtok-author-name {
   text-decoration: underline;
@@ -652,10 +646,6 @@ ${FONT_IMPORT}
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-.message-bubble.own .message-soundtok-desc {
-  color: rgba(11, 11, 11, 0.75);
-  background: rgba(11, 11, 11, 0.08);
 }
 .message-sender {
   font-family: 'DM Mono', monospace;
