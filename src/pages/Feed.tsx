@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { postsApi, Post } from '../api/posts';
+import { API_ORIGIN } from '../api/client';
 import {
   Image, Video, Music, Heart, MessageCircle, Share2,
   MoreHorizontal, TrendingUp, Clock, Bookmark, Send,
@@ -942,7 +943,6 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
 // ── Post Card ──
 function PostCard({ post, index }: { post: Post; index: number }) {
   const navigate = useNavigate();
-  const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
@@ -956,7 +956,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
     if (!Array.isArray(mediaList) || mediaList.length === 0) return null;
     const media = mediaList[0];
     if (!media?.url) return null;
-    const fullUrl = `http://localhost:5000${media.url}`;
+    const fullUrl = media.url.startsWith('http') ? media.url : `${API_ORIGIN}${media.url}`;
 
     switch (media.type) {
       case 'IMAGE':
@@ -1050,9 +1050,9 @@ function PostCard({ post, index }: { post: Post; index: number }) {
 
       <div className="post-card-footer">
         <div className="post-footer-row">
-          <button className={`stat-btn ${liked ? 'liked' : ''}`} onClick={() => setLiked(v => !v)}>
+          <button className="stat-btn" disabled title="Лайки для постов скоро появятся">
             <Heart size={15} />
-            <span className="stat-count">{formatCount(likes + (liked ? 1 : 0))}</span>
+            <span className="stat-count">{formatCount(likes)}</span>
           </button>
           <button className="stat-btn">
             <MessageCircle size={15} />
@@ -1102,15 +1102,7 @@ export default function Feed() {
     setLoading(true);
     try {
       const data = await postsApi.getPosts();
-      setPosts(
-        (data ?? []).map((post: Post) => ({
-          ...post,
-          likes: Math.floor(Math.random() * 3200) + 50,
-          comments: Math.floor(Math.random() * 480) + 4,
-          shares: Math.floor(Math.random() * 120) + 1,
-          views: Math.floor(Math.random() * 24000) + 500,
-        }))
-      );
+      setPosts(data ?? []);
     } catch {
       setPosts([]);
     } finally {
