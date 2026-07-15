@@ -562,24 +562,79 @@ ${FONT_IMPORT}
   background: #000;
 }
 .message-soundtok-meta {
-  padding: 8px 10px 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.message-soundtok-author {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--accent-dim);
-  margin-bottom: 4px;
+.message-soundtok-author-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
   border: none;
-  background: none;
+  background: transparent;
   padding: 0;
   cursor: pointer;
   text-align: left;
+  color: inherit;
 }
-.message-bubble.own .message-soundtok-author {
-  color: rgba(11, 11, 11, 0.65);
+.message-soundtok-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  overflow: hidden;
+  flex-shrink: 0;
 }
-.message-soundtok-author:hover {
+.message-bubble.own .message-soundtok-avatar {
+  border-color: rgba(11, 11, 11, 0.18);
+  background: rgba(11, 11, 11, 0.08);
+  color: var(--bg);
+}
+.message-soundtok-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.message-soundtok-author-info {
+  min-width: 0;
+  flex: 1;
+}
+.message-soundtok-author-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.message-bubble.own .message-soundtok-author-name {
+  color: var(--bg);
+}
+.message-soundtok-author-username {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.message-bubble.own .message-soundtok-author-username {
+  color: rgba(11, 11, 11, 0.55);
+}
+.message-soundtok-author-row:hover .message-soundtok-author-name {
   text-decoration: underline;
 }
 .message-soundtok-desc {
@@ -1562,14 +1617,32 @@ export default function ChatPage() {
                           <div className="message-soundtok-meta">
                             <button
                               type="button"
-                              className="message-soundtok-author"
+                              className="message-soundtok-author-row"
                               onClick={() =>
                                 openMentionProfile(message.soundTok!.author.username)
                               }
                             >
-                              @{message.soundTok.author.username}
+                              <div className="message-soundtok-avatar">
+                                {resolveMediaUrl(message.soundTok.author.avatar) ? (
+                                  <img
+                                    src={resolveMediaUrl(message.soundTok.author.avatar)!}
+                                    alt={message.soundTok.author.username}
+                                  />
+                                ) : (
+                                  message.soundTok.author.username[0]?.toUpperCase() || '?'
+                                )}
+                              </div>
+                              <div className="message-soundtok-author-info">
+                                <div className="message-soundtok-author-name">
+                                  {message.soundTok.author.displayName ||
+                                    `@${message.soundTok.author.username}`}
+                                </div>
+                                <div className="message-soundtok-author-username">
+                                  @{message.soundTok.author.username}
+                                </div>
+                              </div>
                             </button>
-                            {message.soundTok.description && (
+                            {message.soundTok.description?.trim() && (
                               <div className="message-soundtok-desc">
                                 {message.soundTok.description}
                               </div>
@@ -1577,7 +1650,12 @@ export default function ChatPage() {
                           </div>
                         </div>
                       )}
-                      {!!message.content && (
+                      {!!message.content &&
+                        !(
+                          'soundTok' in message &&
+                          message.soundTok &&
+                          message.content.trim() === (message.soundTok.description || '').trim()
+                        ) && (
                         <p className="message-text">
                           {renderTextWithMentions({
                             text: message.content,
