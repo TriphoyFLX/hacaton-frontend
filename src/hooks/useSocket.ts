@@ -48,7 +48,7 @@ interface ClientToServerEvents {
     receiverId: string;
   }, callback: (response: SocketMessageResponse) => void) => void;
   'message:read': (data: { messageIds: string[]; chatId: string }) => void;
-  'message:deliver': (data: { messageId: string }) => void;
+  'message:deliver': (data: { messageId: string; chatId: string }) => void;
   'chat:join': (chatId: string) => void;
   'chat:leave': (chatId: string) => void;
   'chat:typing': (data: { chatId: string; isTyping: boolean }) => void;
@@ -77,6 +77,7 @@ interface UseSocketReturn {
     content: string;
     chatId: string;
     receiverId: string;
+    clientMessageId: string;
   }) => Promise<SocketMessageResponse>;
   markAsRead: (messageIds: string[], chatId: string) => void;
   sendTyping: (chatId: string, isTyping: boolean) => void;
@@ -93,15 +94,12 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const optionsRef = useRef(options);
 
-  // Keep options ref up to date
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
 
-  // Initialize socket
   useEffect(() => {
     if (!token) {
-      // Disconnect if token is removed
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -123,9 +121,7 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
 
     socketRef.current = socket;
 
-    // Connection events
     socket.on('connect', () => {
-      console.log('[Socket] Connected');
       setIsConnected(true);
       setIsReconnecting(false);
       setReconnectAttempts(0);
@@ -133,132 +129,112 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('[Socket] Disconnected:', reason);
       setIsConnected(false);
       optionsRef.current.onDisconnect?.(reason);
 
-      // Reconnecting on specific errors
       if (reason === 'io server disconnect' || reason === 'transport close') {
         setIsReconnecting(true);
       }
     });
 
-    socket.on('connect_error', (error) => {
-      console.error('[Socket] Connection error:', error.message);
-      setReconnectAttempts(prev => prev + 1);
-      
-      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        setIsReconnecting(false);
-      }
+    socket.on('connect_error', () => {
+      setReconnectAttempts((prev) => {
+        const next = prev + 1;
+        if (next >= MAX_RECONNECT_ATTEMPTS) {
+          setIsReconnecting(false);
+        }
+        return next;
+      });
     });
 
-    // Message events
     socket.on('message:new', (message) => {
-      console.log('[Socket] New message:', message.id);
       optionsRef.current.onMessage?.(message);
     });
 
     socket.on('message:delivered', (data) => {
-      console.log('[Socket] Message delivered:', data);
       optionsRef.current.onMessageDelivered?.(data);
     });
 
     socket.on('message:status', (data) => {
-      console.log('[Socket] Message status:', data);
       optionsRef.current.onMessageRead?.(data);
     });
 
-    // Typing events
     socket.on('chat:typing', (data) => {
       optionsRef.current.onTyping?.(data);
     });
 
-    // User status events
     socket.on('user:online', (data) => {
       optionsRef.current.onUserOnline?.(data);
     });
 
-    // Error events
     socket.on('error', (error) => {
-      console.error('[Socket] Error:', error);
       optionsRef.current.onError?.(error);
     });
 
-    // Cleanup on unmount
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, reconnectAttempts]);
+  }, [token]);
 
-  // Join chat room
   const joinChat = useCallback((chatId: string) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit('chat:join', chatId);
     }
   }, []);
 
-  // Leave chat room
   const leaveChat = useCallback((chatId: string) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit('chat:leave', chatId);
     }
   }, []);
 
-  // Send message with acknowledgment
   const sendMessage = useCallback(
-    (data: { content: string; chatId: string; receiverId: string }): Promise<SocketMessageResponse> => {
+    (data: {
+      content: string;
+      chatId: string;
+      receiverId: string;
+      clientMessageId: string;
+    }): Promise<SocketMessageResponse> => {
       return new Promise((resolve) => {
         if (!socketRef.current?.connected) {
           resolve({
             success: false,
             error: 'Not connected to server',
+            clientMessageId: data.clientMessageId,
           });
           return;
         }
 
-        const clientMessageId = `${data.chatId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        // Set timeout for acknowledgment
         const timeout = setTimeout(() => {
           resolve({
             success: false,
             error: 'Server timeout',
-            clientMessageId,
+            clientMessageId: data.clientMessageId,
           });
         }, 10000);
 
-        socketRef.current.emit(
-          'message:send',
-          {
-            ...data,
-            clientMessageId,
-          },
-          (response: SocketMessageResponse) => {
-            clearTimeout(timeout);
-            resolve(response);
-          }
-        );
+        socketRef.current.emit('message:send', data, (response: SocketMessageResponse) => {
+          clearTimeout(timeout);
+          resolve(response);
+        });
       });
     },
     []
   );
 
-  // Mark messages as read
   const markAsRead = useCallback((messageIds: string[], chatId: string) => {
     if (socketRef.current?.connected && messageIds.length > 0) {
       socketRef.current.emit('message:read', { messageIds, chatId });
     }
   }, []);
 
-  // Send typing indicator
   const sendTyping = useCallback((chatId: string, isTyping: boolean) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit('chat:typing', { chatId, isTyping });
     }
   }, []);
 
-  // Subscribe to user status
   const subscribeToUser = useCallback((userId: string) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit('user:subscribe', userId);
@@ -279,24 +255,32 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
   };
 }
 
-// Hook for managing a specific chat's socket state
 export function useChatSocket(
   chatId: string | undefined,
   token: string | null,
+  otherUserId: string | undefined,
   options: {
     onMessage?: (message: Message) => void;
+    onMessageDelivered?: (data: { clientMessageId: string; messageId: string }) => void;
+    onMessageRead?: (data: { messageId: string; status: string; readAt?: Date }) => void;
     onTyping?: (isTyping: boolean, userId: string) => void;
     onOtherUserOnline?: (isOnline: boolean) => void;
+    onError?: (error: { message: string; code: string }) => void;
   } = {}
 ) {
-  const { socket, isConnected, joinChat, leaveChat, sendMessage, markAsRead, sendTyping, subscribeToUser } = useSocket(
+  const { isConnected, joinChat, leaveChat, sendMessage, markAsRead, sendTyping, subscribeToUser } = useSocket(
     token,
     {
       onMessage: (message) => {
-        // Only handle messages for this chat
         if (message.chatId === chatId) {
           options.onMessage?.(message);
         }
+      },
+      onMessageDelivered: (data) => {
+        options.onMessageDelivered?.(data);
+      },
+      onMessageRead: (data) => {
+        options.onMessageRead?.(data);
       },
       onTyping: (data) => {
         if (data.chatId === chatId) {
@@ -304,13 +288,16 @@ export function useChatSocket(
         }
       },
       onUserOnline: (data) => {
-        // Could check if this is the other user in the chat
-        options.onOtherUserOnline?.(data.isOnline);
+        if (otherUserId && data.userId === otherUserId) {
+          options.onOtherUserOnline?.(data.isOnline);
+        }
+      },
+      onError: (error) => {
+        options.onError?.(error);
       },
     }
   );
 
-  // Auto join/leave chat
   useEffect(() => {
     if (!chatId || !isConnected) return;
 
@@ -321,12 +308,17 @@ export function useChatSocket(
     };
   }, [chatId, isConnected, joinChat, leaveChat]);
 
+  useEffect(() => {
+    if (!otherUserId || !isConnected) return;
+    subscribeToUser(otherUserId);
+  }, [otherUserId, isConnected, subscribeToUser]);
+
   const sendChatMessage = useCallback(
-    async (content: string, receiverId: string) => {
+    async (content: string, receiverId: string, clientMessageId: string) => {
       if (!chatId) {
-        return { success: false, error: 'No chat selected' };
+        return { success: false, error: 'No chat selected', clientMessageId };
       }
-      return sendMessage({ content, chatId, receiverId });
+      return sendMessage({ content, chatId, receiverId, clientMessageId });
     },
     [chatId, sendMessage]
   );

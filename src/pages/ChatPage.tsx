@@ -110,6 +110,31 @@ ${FONT_IMPORT}
   color: var(--red);
   border: 1px solid rgba(192, 57, 43, 0.3);
 }
+.connection-status.reconnecting {
+  background: rgba(232, 228, 220, 0.08);
+  color: var(--accent-dim);
+  border: 1px solid var(--border-mid);
+}
+.error-toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: var(--red-dim);
+  border: 1px solid rgba(192, 57, 43, 0.4);
+  color: #f5a9a3;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  max-width: 90%;
+  text-align: center;
+  animation: toast-in 0.25s ease;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 
 /* ── MESSAGE STATUS ── */
 .message-meta {
@@ -563,8 +588,11 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markAsReadRef = useRef<(ids: string[]) => void>(() => {});
+  const markedReadIds = useRef(new Set<string>());
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef(new Set<string>());
@@ -582,15 +610,12 @@ export default function ChatPage() {
 
   // Handle new message from socket
   const handleNewMessage = (message: SocketMessage) => {
-    // Check if already processed
     if (processedMessageIds.current.has(message.id)) return;
-    
-    // Check if this is our own message that we already optimistically added
+
     if (message.clientMessageId && processedClientIds.current.has(message.clientMessageId)) {
-      // Replace pending message with confirmed one
-      setMessages(prev => 
-        prev.map(m => 
-          m.id === message.clientMessageId 
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === message.clientMessageId
             ? { ...message, createdAt: new Date(message.createdAt).toISOString() } as Message
             : m
         )
@@ -599,24 +624,49 @@ export default function ChatPage() {
       return;
     }
 
-    // New message from other user
     processedMessageIds.current.add(message.id);
     setMessages(prev => [...prev, { ...message, createdAt: new Date(message.createdAt).toISOString() } as Message]);
-    
-    // Auto-mark as read if we're in the chat
+
     if (message.senderId !== user?.id) {
-      markChatAsRead([message.id]);
+      markAsReadRef.current([message.id]);
     }
   };
 
-  // Handle typing indicator
+  const handleMessageDelivered = (data: { clientMessageId: string; messageId: string }) => {
+    setMessages(prev =>
+      prev.map(m => {
+        if (data.clientMessageId && m.clientMessageId === data.clientMessageId) {
+          return { ...m, id: data.messageId, status: 'DELIVERED' } as Message;
+        }
+        if (m.id === data.messageId) {
+          return { ...m, status: 'DELIVERED' } as Message;
+        }
+        return m;
+      })
+    );
+  };
+
+  const handleMessageRead = (data: { messageId: string; status: string }) => {
+    if (data.status !== 'READ') return;
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === data.messageId ? { ...m, status: 'READ' } as Message : m
+      )
+    );
+  };
+
   const handleTyping = (isTyping: boolean, userId: string) => {
     if (userId !== user?.id) {
       setOtherUserTyping(isTyping);
       if (isTyping) {
-        setTimeout(() => setOtherUserTyping(false), 3000);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => setOtherUserTyping(false), 3000);
       }
     }
+  };
+
+  const handleSocketError = (error: { message: string }) => {
+    setSendError(error.message);
   };
 
   // WebSocket connection
@@ -625,11 +675,18 @@ export default function ChatPage() {
     sendChatMessage,
     markChatAsRead,
     sendChatTyping,
-  } = useChatSocket(chatId, token, {
+  } = useChatSocket(chatId, token, otherUser?.id, {
     onMessage: handleNewMessage,
+    onMessageDelivered: handleMessageDelivered,
+    onMessageRead: handleMessageRead,
     onTyping: handleTyping,
     onOtherUserOnline: setOtherUserOnline,
+    onError: handleSocketError,
   });
+
+  useEffect(() => {
+    markAsReadRef.current = markChatAsRead;
+  }, [markChatAsRead]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -675,21 +732,63 @@ export default function ChatPage() {
     return () => {
       processedMessageIds.current.clear();
       processedClientIds.current.clear();
+      markedReadIds.current.clear();
     };
   }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId || !user?.id || messages.length === 0) return;
+
+    const unreadIds = messages
+      .filter((m): m is Message => m.status !== 'PENDING' && m.receiverId === user.id && m.status !== 'READ')
+      .map(m => m.id)
+      .filter(id => !markedReadIds.current.has(id));
+
+    if (unreadIds.length === 0) return;
+
+    unreadIds.forEach(id => markedReadIds.current.add(id));
+
+    if (isConnected) {
+      markChatAsRead(unreadIds);
+    } else {
+      chatsApi.markAsRead(chatId, unreadIds).catch(console.error);
+    }
+  }, [chatId, user?.id, isConnected, messages, markChatAsRead]);
+
+  useEffect(() => {
+    if (!sendError) return;
+    const timer = setTimeout(() => setSendError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [sendError]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, []);
+
+  const confirmSentMessage = (clientMessageId: string, serverMessage: Message) => {
+    processedMessageIds.current.add(serverMessage.id);
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === clientMessageId
+          ? { ...serverMessage, createdAt: new Date(serverMessage.createdAt).toISOString() }
+          : m
+      )
+    );
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !chatId || !otherUser || sending) return;
 
     const content = newMessage.trim();
-    const clientMessageId = `${chatId}_${Date.now()}_${Math.random()}`;
-    
-    // Clear input immediately (optimistic UI)
+    const clientMessageId = `${chatId}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
     setNewMessage('');
     setSending(true);
+    setSendError(null);
 
-    // Create optimistic message
     const optimisticMessage: PendingMessage = {
       id: clientMessageId,
       content,
@@ -701,26 +800,39 @@ export default function ChatPage() {
       clientMessageId,
     };
 
-    // Track and add optimistic message
     processedClientIds.current.add(clientMessageId);
     setMessages(prev => [...prev, optimisticMessage]);
 
     try {
-      // Send via socket
-      const result = await sendChatMessage(content, otherUser.id);
+      let sent = false;
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to send');
+      if (isConnected) {
+        const result = await sendChatMessage(content, otherUser.id, clientMessageId);
+        if (result.success && result.message) {
+          confirmSentMessage(clientMessageId, {
+            ...result.message,
+            createdAt: new Date(result.message.createdAt).toISOString(),
+          } as Message);
+          sent = true;
+        } else if (result.error && !result.error.includes('timeout')) {
+          throw new Error(result.error);
+        }
       }
-      // If successful, the server will broadcast and we'll receive via socket
+
+      if (!sent) {
+        const serverMessage = await chatsApi.sendMessage(chatId, content, otherUser.id, clientMessageId);
+        confirmSentMessage(clientMessageId, serverMessage);
+      }
     } catch (error) {
-      console.error('Failed to send message:', error);
-      // Mark as failed - remove from messages
       setMessages(prev => prev.filter(m => m.id !== clientMessageId));
-      // Restore input
+      processedClientIds.current.delete(clientMessageId);
       setNewMessage(content);
+      setSendError(
+        error instanceof Error ? error.message : 'Не удалось отправить сообщение'
+      );
     } finally {
       setSending(false);
+      sendChatTyping(false);
     }
   };
 
@@ -778,14 +890,18 @@ export default function ChatPage() {
       {/* Connection Status */}
       <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
         {isConnected ? (
-          <span>Online</span>
+          <span>В сети</span>
         ) : (
           <>
             <WifiOff size={12} />
-            <span>Offline</span>
+            <span>Офлайн · отправка через API</span>
           </>
         )}
       </div>
+
+      {sendError && (
+        <div className="error-toast">{sendError}</div>
+      )}
 
       {loading ? (
         <div className="chat-loading">
@@ -880,13 +996,20 @@ export default function ChatPage() {
                 type="text"
                 value={newMessage}
                 onChange={handleTypingInput}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
                 placeholder="Введите сообщение..."
                 className="message-input"
-                disabled={sending || !isConnected}
+                disabled={sending}
+                maxLength={4000}
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim() || sending || !isConnected}
+                disabled={!newMessage.trim() || sending}
                 className="send-btn"
               >
                 {sending ? (
