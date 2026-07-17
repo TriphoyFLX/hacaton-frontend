@@ -3,10 +3,11 @@ import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
   Download, Upload, Repeat, Sliders, Activity, Volume2,
   MoreVertical, X, Check, Save, Headphones, Waves, Settings,
-  Radio, Zap, Wind, Speaker, Undo2
+  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw
 } from 'lucide-react';
 import DesktopOnlyGate from '../components/DesktopOnlyGate';
 import { getAuthUserId } from '../lib/authToken';
+import { midiProjectsApi, type MidiProjectSummary } from '../api/midiProjects';
 
 // ================= TYPES =================
 interface Note {
@@ -61,6 +62,22 @@ const LEGACY_PROJECT_STORAGE_KEY = 'aura_pro_sequencer_v2';
 function getProjectStorageKey(): string {
   const userId = getAuthUserId();
   return userId ? `${PROJECT_STORAGE_PREFIX}:${userId}` : `${PROJECT_STORAGE_PREFIX}:guest`;
+}
+
+function getProjectDraftStorageKey(projectId: string): string {
+  return `${PROJECT_STORAGE_PREFIX}:draft:${getAuthUserId() || 'guest'}:${projectId}`;
+}
+
+function readProjectDraft(projectId: string): Partial<MIDIProject> | null {
+  const key = getProjectDraftStorageKey(projectId);
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Partial<MIDIProject>;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
 }
 
 /** Load a saved project for the current user, migrating the old shared save once */
@@ -1247,9 +1264,57 @@ class AudioEngine {
   }
 }
 
+function hydrateMidiProject(raw: Partial<MIDIProject>, serverId?: string): MIDIProject {
+  const fallbackPatternId = crypto.randomUUID();
+  const tracks = (raw.tracks ?? []).map(track => normalizeTrack({
+    ...track,
+    id: track.id || crypto.randomUUID(),
+    notes: (track.notes ?? []).map(note => ({
+      ...note,
+      patternId: note.patternId ?? (raw.activePatternId || fallbackPatternId),
+    })),
+  }));
+  const patterns = raw.patterns && raw.patterns.length > 0
+    ? raw.patterns.map(pattern => {
+        const needed = computePatternLength(tracks, pattern.id, 1);
+        let length = Math.max(pattern.length || MIN_PATTERN_LENGTH, needed);
+        if (length === 5 && needed <= 4) length = 4;
+        return { ...pattern, length: Math.max(MIN_PATTERN_LENGTH, length) };
+      })
+    : [{ id: raw.activePatternId || fallbackPatternId, name: 'Pattern 1', length: MIN_PATTERN_LENGTH }];
+
+  return normalizeProjectPatterns({
+    id: serverId || raw.id || crypto.randomUUID(),
+    name: raw.name || 'Untitled project',
+    bpm: raw.bpm || 124,
+    tracks,
+    isPlaying: false,
+    activeTrackId: raw.activeTrackId || tracks[0]?.id || null,
+    patternLength: patterns[0]?.length || MIN_PATTERN_LENGTH,
+    metronomeEnabled: raw.metronomeEnabled ?? true,
+    patterns,
+    activePatternId: raw.activePatternId || patterns[0].id,
+    arrangement: (raw.arrangement && raw.arrangement.length > 0
+      ? raw.arrangement
+      : [{ id: crypto.randomUUID(), patternId: patterns[0].id, startBar: 0, lane: 0 }]
+    ).map(clip => normalizePlaylistClip(clip as PlaylistClip, tracks, patterns)),
+    transportMode: raw.transportMode || 'pattern',
+  });
+}
+
+function projectForStorage(project: MIDIProject): Record<string, unknown> {
+  return JSON.parse(JSON.stringify({ ...project, isPlaying: false })) as Record<string, unknown>;
+}
+
 // ================= ГЛАВНЫЙ КОМПОНЕНТ =================
 function MIDISequencer() {
   const [project, setProject] = useState<MIDIProject | null>(null);
+  const [projects, setProjects] = useState<MidiProjectSummary[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectActionLoading, setProjectActionLoading] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [libraryError, setLibraryError] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [playheadTime, setPlayheadTime] = useState(0);
   const [zoom, setZoom] = useState(48); // px per beat — 5 bars ≈ fits on screen, zoom to enlarge
   const [editorView, setEditorView] = useState<'piano' | 'playlist'>('piano');
@@ -1270,6 +1335,8 @@ function MIDISequencer() {
   const clipClipboardRef = useRef<PlaylistClip[]>([]);
   const playheadRef = useRef(0);
   const isPlayingRef = useRef(false);
+  const latestProjectRef = useRef<MIDIProject | null>(null);
+  const initialLibraryLoadStartedRef = useRef(false);
 
   const pushHistory = useCallback((snapshot: MIDIProject) => {
     const clone: MIDIProject = JSON.parse(JSON.stringify({ ...snapshot, isPlaying: false }));
@@ -1332,67 +1399,101 @@ function MIDISequencer() {
     return eng;
   }, [getEngine]);
 
-  useEffect(() => {
-    const saved = readSavedProject();
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Partial<MIDIProject>;
-        const fallbackPatternId = crypto.randomUUID();
-        const tracks = (parsed.tracks ?? []).map(track => normalizeTrack({
-          ...track,
-          id: track.id || crypto.randomUUID(),
-          notes: (track.notes ?? []).map(note => ({
-            ...note,
-            patternId: note.patternId ?? (parsed.activePatternId || fallbackPatternId),
-          })),
-        }));
-        const patterns = parsed.patterns && parsed.patterns.length > 0
-          ? parsed.patterns.map(pattern => {
-              const needed = computePatternLength(tracks, pattern.id, 1);
-              // 4 bars → markers 1..5; trim old empty 5th bar
-              let length = Math.max(pattern.length || MIN_PATTERN_LENGTH, needed);
-              if (length === 5 && needed <= 4) length = 4;
-              return { ...pattern, length: Math.max(MIN_PATTERN_LENGTH, length) };
-            })
-          : [{ id: parsed.activePatternId || fallbackPatternId, name: 'Pattern 1', length: MIN_PATTERN_LENGTH }];
-        const projectSafe = normalizeProjectPatterns({
-          id: parsed.id || crypto.randomUUID(),
-          name: parsed.name || 'midnight_studio_v1',
-          bpm: parsed.bpm || 124,
-          tracks,
-          isPlaying: false,
-          activeTrackId: parsed.activeTrackId || tracks[0]?.id || null,
-          patternLength: patterns[0]?.length || MIN_PATTERN_LENGTH,
-          metronomeEnabled: parsed.metronomeEnabled ?? true,
-          patterns,
-          activePatternId: parsed.activePatternId || patterns[0].id,
-          arrangement: (parsed.arrangement && parsed.arrangement.length > 0
-            ? parsed.arrangement
-            : [{ id: crypto.randomUUID(), patternId: patterns[0].id, startBar: 0, lane: 0 }]
-          ).map(clip => normalizePlaylistClip(clip as PlaylistClip, tracks, patterns)),
-          transportMode: parsed.transportMode || 'pattern',
-        });
-        playheadRef.current = 0;
-        setPlayheadTime(0);
-        setProject(projectSafe);
-      } catch (e) {
-        console.error('Failed to load project:', e);
+  const loadProjectLibrary = useCallback(async () => {
+    setProjectsLoading(true);
+    setLibraryError('');
+    try {
+      let list = (await midiProjectsApi.list()).data;
+
+      // Move the previous browser-only project into the account library once.
+      const localSave = readSavedProject();
+      if (localSave) {
+        try {
+          const migrated = hydrateMidiProject(JSON.parse(localSave) as Partial<MIDIProject>);
+          const created = (await midiProjectsApi.create(migrated.name, projectForStorage(migrated))).data;
+          localStorage.removeItem(getProjectStorageKey());
+          list = [{
+            id: created.id,
+            name: created.name,
+            createdAt: created.createdAt,
+            updatedAt: created.updatedAt,
+          }, ...list];
+        } catch (error) {
+          console.error('Failed to migrate local MIDI project:', error);
+        }
       }
+
+      setProjects(list);
+    } catch (error) {
+      console.error('Failed to load MIDI projects:', error);
+      setLibraryError('Не удалось загрузить проекты. Проверьте соединение и повторите.');
+    } finally {
+      setProjectsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!project) return;
-    const save = () => {
-      try {
-        localStorage.setItem(getProjectStorageKey(), JSON.stringify(project));
-      } catch (e) {
-        console.error('Save failed:', e);
-      }
-    };
-    const timer = window.setTimeout(save, 400);
-    return () => window.clearTimeout(timer);
+    if (initialLibraryLoadStartedRef.current) return;
+    initialLibraryLoadStartedRef.current = true;
+    void loadProjectLibrary();
+  }, [loadProjectLibrary]);
+
+  useEffect(() => {
+    latestProjectRef.current = project;
   }, [project]);
+
+  const saveProjectNow = useCallback(async (projectToSave?: MIDIProject) => {
+    const current = projectToSave || latestProjectRef.current;
+    if (!current) return false;
+    setSaveStatus('saving');
+    const normalized = { ...current, name: current.name.trim() || 'Без названия' };
+    const payload = projectForStorage(normalized);
+    const serializedPayload = JSON.stringify(payload);
+    try {
+      const saved = (await midiProjectsApi.save(
+        current.id,
+        normalized.name,
+        payload,
+      )).data;
+      if (localStorage.getItem(getProjectDraftStorageKey(current.id)) === serializedPayload) {
+        localStorage.removeItem(getProjectDraftStorageKey(current.id));
+      }
+      setSaveStatus('saved');
+      setProjects(previous => previous.map(item => (
+        item.id === saved.id
+          ? { ...item, name: saved.name, updatedAt: saved.updatedAt }
+          : item
+      )));
+      return true;
+    } catch (error) {
+      console.error('Failed to save MIDI project:', error);
+      setSaveStatus('error');
+      return false;
+    }
+  }, []);
+
+  // Immediate local safety draft protects edits if the tab closes before the API request finishes.
+  useEffect(() => {
+    if (!project) return;
+    try {
+      localStorage.setItem(
+        getProjectDraftStorageKey(project.id),
+        JSON.stringify(projectForStorage(project)),
+      );
+    } catch {
+      // Server autosave still works if browser storage is unavailable.
+    }
+  }, [project]);
+
+  // Debounced server autosave. Explicit Save uses the same function immediately.
+  useEffect(() => {
+    if (!project) return;
+    setSaveStatus('saving');
+    const timer = window.setTimeout(() => {
+      void saveProjectNow(project);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [project, saveProjectNow]);
 
   // Restore one-shot buffers from IndexedDB after reload / HMR
   useEffect(() => {
@@ -1432,27 +1533,12 @@ function MIDISequencer() {
   }, [project?.tracks, project?.activePatternId]);
 
   useEffect(() => {
-    const save = () => {
-      const p = project;
-      if (!p) return;
-      try {
-        localStorage.setItem(getProjectStorageKey(), JSON.stringify(p));
-      } catch {
-        // ignore
-      }
+    const saveWhenHidden = () => {
+      if (document.visibilityState === 'hidden') void saveProjectNow();
     };
-    window.addEventListener('beforeunload', save);
-    window.addEventListener('pagehide', save);
-    const onVis = () => {
-      if (document.visibilityState === 'hidden') save();
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      window.removeEventListener('beforeunload', save);
-      window.removeEventListener('pagehide', save);
-      document.removeEventListener('visibilitychange', onVis);
-    };
-  }, [project]);
+    document.addEventListener('visibilitychange', saveWhenHidden);
+    return () => document.removeEventListener('visibilitychange', saveWhenHidden);
+  }, [saveProjectNow]);
 
   // ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ДЛЯ ПЕРЕТАСКИВАНИЯ
   useEffect(() => {
@@ -1584,14 +1670,12 @@ function MIDISequencer() {
     };
   }, [snapToGrid, zoom]);
 
-  const createNewProject = () => {
+  const buildNewProject = (name: string): MIDIProject => {
     const trackId = crypto.randomUUID();
     const patternId = crypto.randomUUID();
-    playheadRef.current = 0;
-    setPlayheadTime(0);
-    setProject({
+    return {
       id: crypto.randomUUID(),
-      name: "midnight_studio_v1",
+      name,
       bpm: 124,
       tracks: [{
         id: trackId,
@@ -1621,7 +1705,64 @@ function MIDISequencer() {
         lengthBeats: patternBeats(MIN_PATTERN_LENGTH),
       }],
       transportMode: 'pattern',
-    });
+    };
+  };
+
+  const createNewProject = async () => {
+    const name = newProjectName.trim() || `Новый проект ${projects.length + 1}`;
+    setProjectActionLoading(true);
+    setLibraryError('');
+    try {
+      const draft = buildNewProject(name);
+      const created = (await midiProjectsApi.create(name, projectForStorage(draft))).data;
+      playheadRef.current = 0;
+      setPlayheadTime(0);
+      setProject(hydrateMidiProject(created.data as Partial<MIDIProject>, created.id));
+      setNewProjectName('');
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Failed to create MIDI project:', error);
+      setLibraryError('Не удалось создать проект.');
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
+  const openProject = async (id: string) => {
+    setProjectActionLoading(true);
+    setLibraryError('');
+    try {
+      const stored = (await midiProjectsApi.get(id)).data;
+      const localDraft = readProjectDraft(id);
+      const data = localDraft
+        ? localDraft
+        : stored.data as Partial<MIDIProject>;
+      playheadRef.current = 0;
+      setPlayheadTime(0);
+      historyRef.current = [];
+      setProject(hydrateMidiProject(data, stored.id));
+      setSaveStatus(localDraft ? 'saving' : 'saved');
+    } catch (error) {
+      console.error('Failed to open MIDI project:', error);
+      setLibraryError('Не удалось открыть проект.');
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
+  const deleteProject = async (item: MidiProjectSummary) => {
+    if (!window.confirm(`Удалить проект «${item.name}»? Это действие нельзя отменить.`)) return;
+    setProjectActionLoading(true);
+    try {
+      await midiProjectsApi.remove(item.id);
+      localStorage.removeItem(getProjectDraftStorageKey(item.id));
+      setProjects(previous => previous.filter(projectItem => projectItem.id !== item.id));
+    } catch (error) {
+      console.error('Failed to delete MIDI project:', error);
+      setLibraryError('Не удалось удалить проект.');
+    } finally {
+      setProjectActionLoading(false);
+    }
   };
 
   const togglePlayback = useCallback(() => {
@@ -1792,12 +1933,14 @@ function MIDISequencer() {
     setProject(prev => prev ? { ...prev, isPlaying: false } : null);
   }, [getEngine]);
 
-  const handleNewProject = useCallback(() => {
+  const returnToProjects = useCallback(async () => {
     stopPlayback();
-    createNewProject();
+    if (project) await saveProjectNow({ ...project, isPlaying: false });
     setSelectedNotes([]);
     setSelectedClipIds([]);
-  }, [stopPlayback]);
+    setProject(null);
+    await loadProjectLibrary();
+  }, [project, stopPlayback, saveProjectNow, loadProjectLibrary]);
 
   // КЛИК ПО ГРИДУ - ДОБАВЛЕНИЕ/УДАЛЕНИЕ НОТ
   const handleNoteContextDelete = useCallback((noteId: string) => {
@@ -2422,43 +2565,27 @@ function MIDISequencer() {
     if (!file) return;
     
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const imported = JSON.parse(event.target?.result as string) as Partial<MIDIProject>;
         if (imported.tracks && imported.bpm) {
-          const fallbackPatternId = imported.activePatternId || crypto.randomUUID();
-          const patterns = imported.patterns && imported.patterns.length > 0
-            ? imported.patterns
-            : [{ id: fallbackPatternId, name: 'Pattern 1', length: imported.patternLength || MIN_PATTERN_LENGTH }];
-          const upgraded: MIDIProject = {
-            id: imported.id || crypto.randomUUID(),
-            name: imported.name || 'imported_project',
-            bpm: imported.bpm,
-            tracks: imported.tracks.map(track => ({
-              ...track,
-              notes: track.notes.map(note => ({
-                ...note,
-                patternId: note.patternId || patterns[0].id,
-              })),
-            })),
-            isPlaying: false,
-            activeTrackId: imported.activeTrackId || imported.tracks[0]?.id || null,
-            patternLength: imported.patternLength || patterns[0].length,
-            metronomeEnabled: imported.metronomeEnabled ?? true,
-            patterns,
-            activePatternId: imported.activePatternId || patterns[0].id,
-            arrangement: (imported.arrangement && imported.arrangement.length > 0
-              ? imported.arrangement
-              : [{ id: crypto.randomUUID(), patternId: patterns[0].id, startBar: 0, lane: 0 }]
-            ).map(clip => normalizePlaylistClip(clip as PlaylistClip, imported.tracks!, patterns)),
-            transportMode: imported.transportMode || 'pattern',
-          };
+          setProjectActionLoading(true);
+          const upgraded = hydrateMidiProject(imported);
+          const created = (await midiProjectsApi.create(
+            upgraded.name,
+            projectForStorage(upgraded),
+          )).data;
           playheadRef.current = 0;
           setPlayheadTime(0);
-          setProject(normalizeProjectPatterns(upgraded));
+          setProject(hydrateMidiProject(created.data as Partial<MIDIProject>, created.id));
+          setSaveStatus('saved');
         }
       } catch (err) {
         console.error('Failed to import project:', err);
+        setLibraryError('Не удалось импортировать проект.');
+      } finally {
+        setProjectActionLoading(false);
+        e.target.value = '';
       }
     };
     reader.readAsText(file);
@@ -2466,97 +2593,145 @@ function MIDISequencer() {
 
   if (!project) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        minHeight: '100vh', 
+      <div style={{
+        minHeight: '100vh',
         background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        color: '#F5F5F7',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        padding: '56px 7vw',
+        boxSizing: 'border-box',
       }}>
-        <div style={{ textAlign: 'center', maxWidth: 500 }}>
-          <div style={{ 
-            width: 120, 
-            height: 120, 
-            background: 'linear-gradient(135deg, #00D1FF, #BD00FF)', 
-            borderRadius: '2rem', 
-            margin: '0 auto 32px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            boxShadow: '0 0 60px rgba(0,209,255,0.3), 0 0 120px rgba(189,0,255,0.2)',
-          }}>
-            <Speaker style={{ color: 'white', width: 60, height: 60 }} />
-          </div>
-          <h1 style={{ 
-            fontSize: '64px', 
-            fontWeight: '800', 
-            marginBottom: '16px',
-            background: 'linear-gradient(135deg, #00D1FF, #BD00FF)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            letterSpacing: '-2px'
-          }}>
-            AURA PRO
-          </h1>
-          <p style={{ 
-            color: '#888', 
-            marginBottom: '48px', 
-            fontSize: '14px', 
-            textTransform: 'uppercase', 
-            letterSpacing: '4px',
-            fontWeight: '300'
-          }}>
-            Advanced MIDI Sequencer
-          </p>
-          
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginBottom: 48 }}>
-            <button 
-              onClick={createNewProject}
-              style={{ 
-                padding: '16px 32px', 
-                background: 'linear-gradient(135deg, #00D1FF, #BD00FF)', 
-                color: 'white', 
-                fontWeight: 'bold', 
-                borderRadius: '16px', 
-                border: 'none', 
-                cursor: 'pointer',
-                fontSize: '14px',
-                letterSpacing: '1px',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-                boxShadow: '0 8px 32px rgba(0,209,255,0.3)'
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, marginBottom: 44 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+                <div style={{
+                  width: 46, height: 46, borderRadius: 14,
+                  background: 'linear-gradient(135deg, #00D1FF, #BD00FF)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 0 30px rgba(0,209,255,0.25)',
+                }}>
+                  <Speaker size={24} color="white" />
+                </div>
+                <h1 style={{ margin: 0, fontSize: 34, letterSpacing: '-1px' }}>MIDI проекты</h1>
+              </div>
+              <p style={{ margin: 0, color: '#888' }}>Выберите проект или создайте новый. Изменения сохраняются автоматически.</p>
+            </div>
+            <button
+              onClick={() => void loadProjectLibrary()}
+              disabled={projectsLoading}
+              title="Обновить список"
+              style={{
+                width: 42, height: 42, borderRadius: 12, cursor: 'pointer',
+                border: '1px solid rgba(255,255,255,0.12)', color: '#aaa',
+                background: 'rgba(255,255,255,0.05)',
               }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
             >
-              New Session
+              <RefreshCw size={17} />
             </button>
-            
-            <label style={{ 
-              padding: '16px 32px', 
-              background: 'rgba(255,255,255,0.05)', 
-              color: 'white', 
-              fontWeight: 'bold', 
-              borderRadius: '16px', 
-              border: '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer',
-              fontSize: '14px',
-              letterSpacing: '1px',
-              transition: 'background 0.2s'
+          </div>
+
+          <div style={{
+            display: 'flex', gap: 12, padding: 18, marginBottom: 28,
+            borderRadius: 18, border: '1px solid rgba(255,255,255,0.09)',
+            background: 'rgba(255,255,255,0.04)',
+          }}>
+            <input
+              value={newProjectName}
+              onChange={event => setNewProjectName(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && !projectActionLoading) void createNewProject();
+              }}
+              maxLength={100}
+              placeholder="Название нового проекта"
+              style={{
+                flex: 1, minWidth: 0, padding: '13px 16px', borderRadius: 12,
+                border: '1px solid rgba(255,255,255,0.1)', outline: 'none',
+                background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: 14,
+              }}
+            />
+            <button
+              onClick={() => void createNewProject()}
+              disabled={projectActionLoading}
+              style={{
+                padding: '0 22px', borderRadius: 12, border: 'none',
+                background: 'linear-gradient(135deg, #00D1FF, #BD00FF)',
+                color: 'white', fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              <Plus size={16} style={{ verticalAlign: 'middle', marginRight: 7 }} />
+              Создать
+            </button>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 7, padding: '0 18px',
+              borderRadius: 12, border: '1px solid rgba(255,255,255,0.12)',
+              background: 'rgba(255,255,255,0.05)', cursor: 'pointer',
+              color: '#ccc', fontSize: 13, fontWeight: 600,
             }}>
-              <input 
-                type="file" 
-                accept=".json" 
-                onChange={importProject} 
-                style={{ display: 'none' }} 
-              />
-              Import Project
+              <Upload size={16} /> Импорт
+              <input type="file" accept=".json" onChange={importProject} style={{ display: 'none' }} />
             </label>
           </div>
-          
-          <div style={{ color: '#555', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase' }}>
-            Press Space to Play • Click to Add Notes • Drag to Move
+
+          {libraryError && (
+            <div style={{ color: '#ff8d8d', marginBottom: 20, fontSize: 13 }}>{libraryError}</div>
+          )}
+
+          {projectsLoading ? (
+            <div style={{ padding: 70, textAlign: 'center', color: '#777' }}>Загрузка проектов…</div>
+          ) : projects.length === 0 ? (
+            <div style={{
+              padding: '70px 24px', textAlign: 'center', borderRadius: 20,
+              border: '1px dashed rgba(255,255,255,0.12)', color: '#777',
+            }}>
+              <FolderOpen size={42} style={{ marginBottom: 14, opacity: 0.55 }} />
+              <div style={{ color: '#ccc', fontWeight: 700, marginBottom: 8 }}>Проектов пока нет</div>
+              Введите название выше и создайте первый бит.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+              {projects.map(item => (
+                <div
+                  key={item.id}
+                  onClick={() => !projectActionLoading && void openProject(item.id)}
+                  style={{
+                    padding: 20, borderRadius: 18, cursor: projectActionLoading ? 'wait' : 'pointer',
+                    border: '1px solid rgba(255,255,255,0.09)',
+                    background: 'linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025))',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 12, display: 'flex',
+                      alignItems: 'center', justifyContent: 'center',
+                      background: 'rgba(0,209,255,0.12)', color: '#00D1FF',
+                    }}>
+                      <Music size={19} />
+                    </div>
+                    <button
+                      onClick={event => {
+                        event.stopPropagation();
+                        void deleteProject(item);
+                      }}
+                      title="Удалить проект"
+                      style={{ border: 'none', background: 'none', color: '#666', cursor: 'pointer' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 24, fontWeight: 750, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.name}
+                  </div>
+                  <div style={{ marginTop: 7, color: '#707070', fontSize: 12 }}>
+                    Изменён {new Date(item.updatedAt).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ marginTop: 34, color: '#555', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+            Автосохранение включено • Проекты привязаны к вашему аккаунту
           </div>
         </div>
       </div>
@@ -2580,16 +2755,19 @@ function MIDISequencer() {
       {/* Header */}
       <div style={{ 
         display: 'flex', 
+        flexWrap: 'wrap',
         alignItems: 'center', 
         justifyContent: 'space-between', 
-        padding: '0 24px', 
-        height: 64, 
+        padding: '8px 16px', 
+        minHeight: 64, 
+        rowGap: 8,
+        columnGap: 16,
         borderBottom: '1px solid rgba(255,255,255,0.05)', 
         background: 'rgba(0,0,0,0.6)',
         backdropFilter: 'blur(20px)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 48 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', rowGap: 8, columnGap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ 
               width: 36, 
               height: 36, 
@@ -2598,21 +2776,27 @@ function MIDISequencer() {
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(0,209,255,0.3)'
+              boxShadow: '0 0 20px rgba(0,209,255,0.3)',
+              flexShrink: 0
             }}>
               <Activity size={18} style={{ color: 'white' }} />
             </div>
-            <span style={{ 
-              fontSize: '11px', 
-              fontWeight: 'bold', 
-              textTransform: 'uppercase', 
-              letterSpacing: '2px' 
-            }}>
-              {project.name}
-            </span>
+            <input
+              value={project.name}
+              onChange={event => setProject({ ...project, name: event.target.value.slice(0, 100) })}
+              onBlur={() => {
+                if (!project.name.trim()) setProject({ ...project, name: 'Без названия' });
+              }}
+              title="Название проекта"
+              style={{
+                width: 120, background: 'transparent', border: 'none', outline: 'none',
+                color: '#F5F5F7', fontSize: 11, fontWeight: 'bold',
+                textTransform: 'uppercase', letterSpacing: 2,
+              }}
+            />
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: 32, paddingLeft: 32, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', rowGap: 8, columnGap: 16, paddingLeft: 16, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Tempo</span>
               <input 
@@ -2635,7 +2819,7 @@ function MIDISequencer() {
               />
             </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 32, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Metronome</span>
               <button 
                 onClick={() => setProject({...project, metronomeEnabled: !project.metronomeEnabled})}
@@ -2649,7 +2833,7 @@ function MIDISequencer() {
               </button>
             </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 32, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Pattern Selector</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <select
@@ -2672,7 +2856,7 @@ function MIDISequencer() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 20, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Length</span>
               <select
                 value={activePattern.length}
@@ -2705,7 +2889,7 @@ function MIDISequencer() {
               </select>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 32, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantize</span>
               <select
                 value={quantizeGrid}
@@ -2735,6 +2919,7 @@ function MIDISequencer() {
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 letterSpacing: '1px',
+                whiteSpace: 'nowrap',
               }}
             >
               DUP PATTERN
@@ -2742,7 +2927,7 @@ function MIDISequencer() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', rowGap: 8, columnGap: 10 }}>
           <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
             <button
               onClick={() => setProject({ ...project, transportMode: 'pattern' })}
@@ -2775,38 +2960,50 @@ function MIDISequencer() {
           </div>
           <button
             onClick={addPatternToPlaylist}
-            style={{ border: '1px solid rgba(0,209,255,0.3)', background: 'rgba(0,209,255,0.1)', color: '#00D1FF', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px' }}
+            style={{ border: '1px solid rgba(0,209,255,0.3)', background: 'rgba(0,209,255,0.1)', color: '#00D1FF', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px', whiteSpace: 'nowrap' }}
           >
             + TO PLAYLIST
           </button>
           <button
-            onClick={handleNewProject}
-            style={{ border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: '#ddd', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px' }}
+            onClick={() => void saveProjectNow(project)}
+            disabled={saveStatus === 'saving'}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid rgba(0,209,255,0.3)', background: 'rgba(0,209,255,0.1)', color: '#00D1FF', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px', whiteSpace: 'nowrap' }}
           >
-            NEW PROJECT
+            <Save size={13} /> СОХРАНИТЬ
           </button>
-          <span style={{ fontSize: '9px', color: '#444', letterSpacing: '1px' }}>AUTO-SAVED</span>
+          <span
+            title={saveStatus === 'error' ? 'Ошибка сохранения' : saveStatus === 'saving' ? 'Сохранение…' : 'Сохранено'}
+            style={{
+              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+              background: saveStatus === 'error' ? '#ff6666' : saveStatus === 'saving' ? '#f0b429' : '#52d68a',
+              boxShadow: `0 0 8px ${saveStatus === 'error' ? '#ff6666' : saveStatus === 'saving' ? '#f0b429' : '#52d68a'}`,
+            }}
+          />
           <div style={{ 
-            display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: 14, 
-            padding: 4, border: '1px solid rgba(255,255,255,0.05)', gap: 4
+            display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: 12, 
+            padding: 3, border: '1px solid rgba(255,255,255,0.05)', gap: 3
           }}>
-            <button onClick={stopPlayback} style={{ padding: '10px', background: 'none', border: 'none', borderRadius: 10, cursor: 'pointer', color: '#999' }}>
-              <Square size={16} />
+            <button onClick={stopPlayback} style={{ padding: '8px', background: 'none', border: 'none', borderRadius: 9, cursor: 'pointer', color: '#999' }}>
+              <Square size={15} />
             </button>
             <button onClick={togglePlayback} style={{ 
-              padding: '10px 20px', 
+              padding: '8px 16px', 
               background: project.isPlaying ? 'linear-gradient(135deg, #FF4500, #FFA500)' : 'linear-gradient(135deg, #00D1FF, #BD00FF)',
-              border: 'none', borderRadius: 10, cursor: 'pointer', color: 'white',
+              border: 'none', borderRadius: 9, cursor: 'pointer', color: 'white',
               boxShadow: project.isPlaying ? '0 4px 20px rgba(255,69,0,0.3)' : '0 4px 20px rgba(0,209,255,0.3)'
             }}>
-              {project.isPlaying ? <Pause size={18} /> : <Play size={18} />}
+              {project.isPlaying ? <Pause size={16} /> : <Play size={16} />}
             </button>
           </div>
           
-          <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.05)' }} />
+          <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.05)' }} />
           
-          <button onClick={() => setProject(null)} style={{ padding: '8px', background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}>
-            <X size={20} />
+          <button
+            onClick={() => void returnToProjects()}
+            title="Вернуться к проектам"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#ccc', cursor: 'pointer', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}
+          >
+            <ArrowLeft size={14} /> ПРОЕКТЫ
           </button>
         </div>
       </div>
