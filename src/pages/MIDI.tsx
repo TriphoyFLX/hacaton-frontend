@@ -44,6 +44,14 @@ interface PlaylistClip {
   sampleSeconds?: number;
 }
 
+interface TrackEq {
+  enabled: boolean;
+  /** Gain in dB, -12..+12 */
+  low: number;
+  mid: number;
+  high: number;
+}
+
 interface Track {
   id: string;
   name: string;
@@ -59,10 +67,40 @@ interface Track {
   sampleDuration?: number;
   reverbSend: number;
   delaySend: number;
+  eq?: TrackEq;
+}
+
+const EQ_GAIN_LIMIT = 12;
+const EQ_BANDS = [
+  { key: 'low' as const, label: 'LOW', hint: '200 Hz' },
+  { key: 'mid' as const, label: 'MID', hint: '1 kHz' },
+  { key: 'high' as const, label: 'HIGH', hint: '3.5 kHz' },
+];
+const EQ_PRESETS: { id: string; name: string; low: number; mid: number; high: number }[] = [
+  { id: 'flat', name: 'Флэт', low: 0, mid: 0, high: 0 },
+  { id: 'bass', name: 'Мощный бас', low: 9, mid: -2, high: 1 },
+  { id: 'bright', name: 'Яркий верх', low: -1, mid: 1, high: 8 },
+  { id: 'vocal', name: 'Вокал', low: -3, mid: 5, high: 2 },
+  { id: 'lofi', name: 'Lo-Fi', low: 4, mid: -6, high: -8 },
+];
+
+function clampEqGain(value: unknown): number {
+  const num = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  return Math.max(-EQ_GAIN_LIMIT, Math.min(EQ_GAIN_LIMIT, num));
+}
+
+function normalizeTrackEq(eq: Partial<TrackEq> | undefined): TrackEq {
+  return {
+    enabled: Boolean(eq?.enabled),
+    low: clampEqGain(eq?.low),
+    mid: clampEqGain(eq?.mid),
+    high: clampEqGain(eq?.high),
+  };
 }
 
 const PROJECT_STORAGE_PREFIX = 'aura_pro_sequencer_v2';
 const LEGACY_PROJECT_STORAGE_KEY = 'aura_pro_sequencer_v2';
+const MAX_SAMPLE_BYTES = 3 * 1024 * 1024;
 
 /** Per-user save key so projects don't leak between accounts on the same browser */
 function getProjectStorageKey(): string {
@@ -72,6 +110,10 @@ function getProjectStorageKey(): string {
 
 function getProjectDraftStorageKey(projectId: string): string {
   return `${PROJECT_STORAGE_PREFIX}:draft:${getAuthUserId() || 'guest'}:${projectId}`;
+}
+
+function getSampleServerMarkerKey(sampleId: string): string {
+  return `${PROJECT_STORAGE_PREFIX}:sample-server:${sampleId}`;
 }
 
 function readProjectDraft(projectId: string): Partial<MIDIProject> | null {
@@ -912,6 +954,7 @@ function normalizeTrack(track: Partial<Track> & Pick<Track, 'id' | 'notes'>): Tr
     sampleDuration: track.sampleDuration,
     reverbSend: typeof track.reverbSend === 'number' ? track.reverbSend : 0.2,
     delaySend: typeof track.delaySend === 'number' ? track.delaySend : 0.3,
+    eq: normalizeTrackEq(track.eq),
   };
 }
 
@@ -1048,13 +1091,13 @@ class AudioEngine {
     }
   }
 
-  async loadSample(file: File): Promise<{ id: string; duration: number }> {
+  async loadSample(file: File, persistedId?: string): Promise<{ id: string; duration: number }> {
     // Keep separate copies: decodeAudioData may detach its input buffer
     const original = await file.arrayBuffer();
     const forDecode = original.slice(0);
     const forStore = original.slice(0);
     const audioBuffer = await this.ctx.decodeAudioData(forDecode);
-    const id = crypto.randomUUID();
+    const id = persistedId || crypto.randomUUID();
     this.samples.set(id, audioBuffer);
     await saveSampleToDb(id, forStore);
     // Verify write — if this fails, sample won't survive refresh
@@ -1069,10 +1112,13 @@ class AudioEngine {
     const cached = this.samples.get(id);
     if (cached) return cached;
     try {
-      const raw = await loadSampleFromDb(id);
+      let raw = await loadSampleFromDb(id);
       if (!raw || raw.byteLength === 0) {
-        console.warn('Sample not in IndexedDB or empty:', id);
-        return null;
+        // Project may have been opened in a different browser/device.
+        const response = await midiProjectsApi.downloadSample(id);
+        raw = response.data;
+        if (!raw || raw.byteLength === 0) return null;
+        await saveSampleToDb(id, raw.slice(0));
       }
       const audioBuffer = await this.ctx.decodeAudioData(raw.slice(0));
       this.samples.set(id, audioBuffer);
@@ -1090,6 +1136,7 @@ class AudioEngine {
     volume: number,
     durationSec?: number,
     pitch: number = SAMPLE_ROOT_PITCH,
+    eq?: TrackEq,
   ) {
     const now = this.ctx.currentTime + time;
     const mainGain = this.ctx.createGain();
@@ -1112,7 +1159,7 @@ class AudioEngine {
     mainGain.gain.exponentialRampToValueAtTime(0.001, now + playDuration + 0.02);
 
     source.connect(mainGain);
-    mainGain.connect(this.masterGain);
+    mainGain.connect(this.eqInput(eq));
     this.trackSource(source, mainGain);
     source.start(now);
     source.stop(now + playDuration + 0.05);
@@ -1140,6 +1187,36 @@ class AudioEngine {
     source.start(now, safeOffset, playDuration + 0.02);
   }
 
+  /**
+   * Per-voice 3-band EQ (low shelf 200Hz / peak 1kHz / high shelf 3.5kHz).
+   * Returns the node to route track output into; masterGain when EQ is off.
+   */
+  eqInput(eq?: TrackEq): AudioNode {
+    if (!eq || !eq.enabled || (eq.low === 0 && eq.mid === 0 && eq.high === 0)) {
+      return this.masterGain;
+    }
+    const low = this.ctx.createBiquadFilter();
+    low.type = 'lowshelf';
+    low.frequency.value = 200;
+    low.gain.value = eq.low;
+
+    const mid = this.ctx.createBiquadFilter();
+    mid.type = 'peaking';
+    mid.frequency.value = 1000;
+    mid.Q.value = 0.9;
+    mid.gain.value = eq.mid;
+
+    const high = this.ctx.createBiquadFilter();
+    high.type = 'highshelf';
+    high.frequency.value = 3500;
+    high.gain.value = eq.high;
+
+    low.connect(mid);
+    mid.connect(high);
+    high.connect(this.masterGain);
+    return low;
+  }
+
   playMetronome(time: number, isDownbeat: boolean) {
     const now = this.ctx.currentTime + time;
     const osc = this.ctx.createOscillator();
@@ -1165,7 +1242,7 @@ class AudioEngine {
       const safeVol = Number.isFinite(vol) ? vol : velocity * 0.8;
       const buffer = track.customSample ? this.samples.get(track.customSample) : undefined;
       if (buffer) {
-        this.playSampleBuffer(buffer, time, safeVol * 0.9, noteSeconds, pitch);
+        this.playSampleBuffer(buffer, time, safeVol * 0.9, noteSeconds, pitch, track.eq);
         return;
       }
       if (track.customSample) {
@@ -1174,13 +1251,14 @@ class AudioEngine {
         void this.ensureSample(track.customSample).then((restored) => {
           if (!restored) return;
           const delay = Math.max(0, scheduledAt - this.ctx.currentTime);
-          this.playSampleBuffer(restored, delay, safeVol * 0.9, noteSeconds, pitch);
+          this.playSampleBuffer(restored, delay, safeVol * 0.9, noteSeconds, pitch, track.eq);
         });
         return;
       }
     }
 
     const safeVol = Number.isFinite(vol) ? vol : velocity * 0.8;
+    const trackOut = this.eqInput(track.eq);
     const mainGain = this.ctx.createGain();
     mainGain.gain.setValueAtTime(0, now);
     mainGain.gain.linearRampToValueAtTime(safeVol * 0.4, now + 0.005);
@@ -1276,7 +1354,7 @@ class AudioEngine {
         this.trackSource(hhNoise, mainGain);
         hhNoise.start(now);
         hhNoise.stop(now + 0.1);
-        mainGain.connect(this.masterGain);
+        mainGain.connect(trackOut);
         return;
       default:
         osc1.type = 'sine';
@@ -1294,7 +1372,7 @@ class AudioEngine {
     osc1.stop(now + duration + 0.1);
     osc2.stop(now + duration + 0.1);
 
-    mainGain.connect(this.masterGain);
+    mainGain.connect(trackOut);
     
     if (track.delaySend > 0) {
       const delaySendGain = this.ctx.createGain();
@@ -1371,6 +1449,7 @@ function MIDISequencer() {
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [quantizeGrid, setQuantizeGrid] = useState(0.5); // 8 cells per bar (1/8 note)
+  const [eqPanelOpen, setEqPanelOpen] = useState(false);
   
   const engineRef = useRef<AudioEngine | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -1549,15 +1628,39 @@ function MIDISequencer() {
     if (!project) return;
     let cancelled = false;
     const eng = getEngine();
-    const sampleIds = [
-      ...project.tracks.filter(t => t.customSample).map(t => t.customSample!),
-      ...project.arrangement.filter(c => c.type === 'audio' && c.sampleId).map(c => c.sampleId!),
-    ];
-    if (sampleIds.length === 0) return;
+    const sampleEntries = [
+      ...project.tracks
+        .filter(t => t.customSample)
+        .map(t => ({ id: t.customSample!, name: t.name })),
+      ...project.arrangement
+        .filter(c => c.type === 'audio' && c.sampleId)
+        .map(c => ({ id: c.sampleId!, name: c.name || 'audio-loop' })),
+    ].filter((entry, index, all) => all.findIndex(item => item.id === entry.id) === index);
+    if (sampleEntries.length === 0) return;
 
     void (async () => {
-      for (const id of sampleIds) {
+      for (const { id, name } of sampleEntries) {
         if (cancelled) return;
+        // Migrate pre-server UUID samples once while their local bytes still exist.
+        if (
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+          && !localStorage.getItem(getSampleServerMarkerKey(id))
+        ) {
+          const localBytes = await loadSampleFromDb(id);
+          if (localBytes && localBytes.byteLength <= MAX_SAMPLE_BYTES) {
+            try {
+              const migrationFile = new File([localBytes], `${name}.wav`, { type: 'audio/wav' });
+              await midiProjectsApi.uploadSample(project.id, migrationFile, id);
+              try {
+                localStorage.setItem(getSampleServerMarkerKey(id), '1');
+              } catch {
+                // Marker is optional.
+              }
+            } catch (error) {
+              console.warn('Legacy sample server migration failed:', id, error);
+            }
+          }
+        }
         const buf = await eng.ensureSample(id);
         if (!buf) {
           // Do NOT strip the sample id — keep it so a later retry / re-upload can fix it
@@ -2380,7 +2483,7 @@ function MIDISequencer() {
         if (trackSnap.customSample) {
           const buf = await eng.ensureSample(trackSnap.customSample);
           if (buf) {
-            eng.playSampleBuffer(buf, 0, (trackSnap.volume || 0.9) * 0.9, noteSeconds, pitchSnap);
+            eng.playSampleBuffer(buf, 0, (trackSnap.volume || 0.9) * 0.9, noteSeconds, pitchSnap, trackSnap.eq);
           }
           // No synth fallback — missing sample stays silent until restored/re-uploaded
         } else {
@@ -2439,6 +2542,22 @@ function MIDISequencer() {
     setSelectedNotes(prev => e.shiftKey ? (prev.includes(note.id) ? prev : [...prev, note.id]) : [note.id]);
   }, [project, pushHistory]);
 
+  const uploadAndLoadSample = useCallback(async (file: File) => {
+    if (!project) throw new Error('No active project');
+    if (file.size > MAX_SAMPLE_BYTES) {
+      throw new Error('SAMPLE_TOO_LARGE');
+    }
+    const eng = await ensureAudio();
+    const uploaded = (await midiProjectsApi.uploadSample(project.id, file)).data;
+    const loaded = await eng.loadSample(file, uploaded.id);
+    try {
+      localStorage.setItem(getSampleServerMarkerKey(uploaded.id), '1');
+    } catch {
+      // Marker is only an optimization; server persistence already succeeded.
+    }
+    return { eng, ...loaded };
+  }, [project, ensureAudio]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !project) return;
@@ -2454,8 +2573,7 @@ function MIDISequencer() {
     }
 
     try {
-      const eng = await ensureAudio();
-      const { id: sid, duration: sampleDuration } = await eng.loadSample(file);
+      const { eng, id: sid, duration: sampleDuration } = await uploadAndLoadSample(file);
       const tid = crypto.randomUUID();
 
       const newTrack: Track = {
@@ -2493,9 +2611,13 @@ function MIDISequencer() {
       );
     } catch (e) {
       console.error('Failed to import audio sample', e);
-      window.alert('Не удалось сохранить сэмпл. Попробуй другой файл или другой браузер.');
+      window.alert(
+        e instanceof Error && e.message === 'SAMPLE_TOO_LARGE'
+          ? 'Файл слишком большой. Максимальный размер сэмпла — 3 МБ.'
+          : 'Не удалось загрузить сэмпл на сервер. Попробуйте другой файл.',
+      );
     }
-  }, [project, ensureAudio, commitProject]);
+  }, [project, uploadAndLoadSample, commitProject]);
 
   const addDefaultTrack = (type: InstrumentType) => {
     if (!project) return;
@@ -2634,14 +2756,14 @@ function MIDISequencer() {
   /** Drop mp3/wav loops onto the playlist: each file becomes an audio clip */
   const addAudioClipsAt = useCallback(async (files: File[], startBar: number, lane: number) => {
     if (!project || files.length === 0) return;
-    const eng = getEngine();
-    await eng.resume();
     const bps = project.bpm / 60;
     const newClips: PlaylistClip[] = [];
+    const tooLarge: string[] = [];
+    const failed: string[] = [];
     let laneCursor = Math.max(0, Math.min(PLAYLIST_LANES - 1, lane));
     for (const file of files) {
       try {
-        const { id: sampleId, duration } = await eng.loadSample(file);
+        const { id: sampleId, duration } = await uploadAndLoadSample(file);
         const lengthBeats = Math.max(quantizeMinBeat(), Math.round(duration * bps / quantizeMinBeat()) * quantizeMinBeat());
         newClips.push({
           id: crypto.randomUUID(),
@@ -2658,7 +2780,18 @@ function MIDISequencer() {
         laneCursor = Math.min(PLAYLIST_LANES - 1, laneCursor + 1);
       } catch (error) {
         console.error('Failed to load dropped audio file:', file.name, error);
+        if (error instanceof Error && error.message === 'SAMPLE_TOO_LARGE') {
+          tooLarge.push(file.name);
+        } else {
+          failed.push(file.name);
+        }
       }
+    }
+    if (tooLarge.length > 0) {
+      window.alert(`Файлы больше 3 МБ не добавлены:\n${tooLarge.join('\n')}`);
+    }
+    if (failed.length > 0) {
+      window.alert(`Не удалось загрузить на сервер:\n${failed.join('\n')}`);
     }
     if (newClips.length === 0) return;
     commitProject(prev => ({
@@ -2668,7 +2801,7 @@ function MIDISequencer() {
     }));
     setSelectedClipIds(newClips.map(c => c.id));
     setEditorView('playlist');
-  }, [project, getEngine, commitProject]);
+  }, [project, uploadAndLoadSample, commitProject]);
 
   const exportProject = () => {
     if (!project) return;
@@ -3200,8 +3333,99 @@ function MIDISequencer() {
                 }}>
                   <Upload size={14} />
                 </label>
+                <button
+                  onClick={() => setEqPanelOpen(open => !open)}
+                  title="Обработка активного трека (эквалайзер)"
+                  style={{
+                    padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                    background: eqPanelOpen || project.tracks.find(t => t.id === project.activeTrackId)?.eq?.enabled
+                      ? 'rgba(0,209,255,0.15)' : 'rgba(255,255,255,0.05)',
+                    border: eqPanelOpen ? '1px solid rgba(0,209,255,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    color: eqPanelOpen ? '#00D1FF' : '#aaa',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    fontSize: 9, fontWeight: 700, letterSpacing: 1,
+                  }}
+                >
+                  <Sliders size={13} /> FX
+                </button>
               </div>
             </div>
+
+            {eqPanelOpen && (() => {
+              const activeTrack = project.tracks.find(t => t.id === project.activeTrackId);
+              if (!activeTrack) return null;
+              const eq = normalizeTrackEq(activeTrack.eq);
+              const updateEq = (patch: Partial<TrackEq>) => {
+                setProject(prev => prev ? {
+                  ...prev,
+                  tracks: prev.tracks.map(t => t.id === activeTrack.id
+                    ? { ...t, eq: { ...normalizeTrackEq(t.eq), ...patch } }
+                    : t),
+                } : prev);
+              };
+              const activePreset = EQ_PRESETS.find(p => p.low === eq.low && p.mid === eq.mid && p.high === eq.high);
+              return (
+                <div style={{ border: '1px solid rgba(0,209,255,0.25)', borderRadius: 12, padding: 12, background: 'rgba(0,209,255,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#00D1FF', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
+                      EQ • {activeTrack.name}
+                    </div>
+                    <button
+                      onClick={() => updateEq({ enabled: !eq.enabled })}
+                      style={{
+                        border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 10px',
+                        fontSize: 9, fontWeight: 700, letterSpacing: 1,
+                        background: eq.enabled ? 'rgba(82,214,138,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: eq.enabled ? '#52d68a' : '#888',
+                      }}
+                    >
+                      {eq.enabled ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+
+                  <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, color: '#777', marginBottom: 6 }}>Пресеты</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                    {EQ_PRESETS.map(preset => (
+                      <button
+                        key={preset.id}
+                        onClick={() => updateEq({ enabled: true, low: preset.low, mid: preset.mid, high: preset.high })}
+                        style={{
+                          border: activePreset?.id === preset.id ? '1px solid rgba(0,209,255,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                          background: activePreset?.id === preset.id ? 'rgba(0,209,255,0.18)' : 'rgba(255,255,255,0.04)',
+                          color: activePreset?.id === preset.id ? '#00D1FF' : '#bbb',
+                          borderRadius: 7, cursor: 'pointer', padding: '5px 9px', fontSize: 10,
+                        }}
+                      >
+                        {preset.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {EQ_BANDS.map(band => (
+                    <div key={band.key} style={{ marginBottom: 10, opacity: eq.enabled ? 1 : 0.45 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                        <span>{band.label} <span style={{ color: '#555' }}>{band.hint}</span></span>
+                        <span style={{ color: eq[band.key] > 0 ? '#52d68a' : eq[band.key] < 0 ? '#ff9d66' : '#777', fontFamily: 'monospace' }}>
+                          {eq[band.key] > 0 ? '+' : ''}{eq[band.key]} dB
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-EQ_GAIN_LIMIT}
+                        max={EQ_GAIN_LIMIT}
+                        step={1}
+                        value={eq[band.key]}
+                        onChange={e => updateEq({ enabled: true, [band.key]: Number(e.target.value) })}
+                        style={{ width: '100%', accentColor: '#00D1FF' }}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 9, color: '#666' }}>
+                    Действует на выбранный трек при проигрывании нот и сэмплов.
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {project.tracks.map(track => (
