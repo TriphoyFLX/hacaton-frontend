@@ -32,10 +32,16 @@ interface PlaylistClip {
   /** Position on the playlist timeline (in bars) */
   startBar: number;
   lane: number;
-  /** Offset into the pattern (beats) */
+  /** Offset into the pattern/audio (beats) */
   offsetBeats: number;
   /** Visible/playable length of this clip (beats) */
   lengthBeats: number;
+  /** 'audio' clips play a dropped mp3/wav loop instead of a pattern */
+  type?: 'pattern' | 'audio';
+  sampleId?: string;
+  name?: string;
+  /** Natural duration of the audio file in seconds */
+  sampleSeconds?: number;
 }
 
 interface Track {
@@ -846,6 +852,20 @@ function normalizePlaylistClip(
   tracks: Track[],
   patterns: Pattern[],
 ): PlaylistClip {
+  if (clip.type === 'audio') {
+    return {
+      id: clip.id,
+      patternId: '',
+      startBar: Math.max(0, clip.startBar ?? 0),
+      lane: Math.max(0, clip.lane ?? 0),
+      offsetBeats: Math.max(0, clip.offsetBeats ?? 0),
+      lengthBeats: Math.max(quantizeMinBeat(), clip.lengthBeats ?? BEATS_PER_BAR),
+      type: 'audio',
+      sampleId: clip.sampleId,
+      name: clip.name || 'Audio',
+      sampleSeconds: clip.sampleSeconds,
+    };
+  }
   const full = getPatternFullBeats(tracks, clip.patternId, patterns);
   const offsetBeats = Math.max(0, Math.min(full - quantizeMinBeat(), clip.offsetBeats ?? 0));
   const maxLen = Math.max(quantizeMinBeat(), full - offsetBeats);
@@ -861,6 +881,14 @@ function normalizePlaylistClip(
     offsetBeats,
     lengthBeats,
   };
+}
+
+/** Max playable beats for a clip window (pattern length or audio duration at given BPM) */
+function getClipFullBeats(clip: PlaylistClip, tracks: Track[], patterns: Pattern[], bpm: number): number {
+  if (clip.type === 'audio') {
+    return clip.sampleSeconds ? Math.max(quantizeMinBeat(), clip.sampleSeconds * (bpm / 60)) : Infinity;
+  }
+  return getPatternFullBeats(tracks, clip.patternId, patterns);
 }
 
 function quantizeMinBeat() {
@@ -1089,6 +1117,27 @@ class AudioEngine {
     source.start(now);
     source.stop(now + playDuration + 0.05);
     return playDuration;
+  }
+
+  /** Play an audio loop clip at original speed from offsetSec for durationSec */
+  playClip(buffer: AudioBuffer, time: number, volume: number, offsetSec: number, durationSec: number) {
+    const now = this.ctx.currentTime + time;
+    const safeOffset = Math.max(0, Math.min(buffer.duration, offsetSec));
+    const playDuration = Math.max(0.02, Math.min(buffer.duration - safeOffset, durationSec));
+    const mainGain = this.ctx.createGain();
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+
+    mainGain.gain.setValueAtTime(0, now);
+    mainGain.gain.linearRampToValueAtTime(volume, now + 0.004);
+    const releaseStart = now + Math.max(0.01, playDuration - 0.015);
+    mainGain.gain.setValueAtTime(volume, releaseStart);
+    mainGain.gain.linearRampToValueAtTime(0.0001, now + playDuration + 0.01);
+
+    source.connect(mainGain);
+    mainGain.connect(this.masterGain);
+    this.trackSource(source, mainGain);
+    source.start(now, safeOffset, playDuration + 0.02);
   }
 
   playMetronome(time: number, isDownbeat: boolean) {
@@ -1500,17 +1549,19 @@ function MIDISequencer() {
     if (!project) return;
     let cancelled = false;
     const eng = getEngine();
-    const sampleTracks = project.tracks.filter(t => t.customSample);
-    if (sampleTracks.length === 0) return;
+    const sampleIds = [
+      ...project.tracks.filter(t => t.customSample).map(t => t.customSample!),
+      ...project.arrangement.filter(c => c.type === 'audio' && c.sampleId).map(c => c.sampleId!),
+    ];
+    if (sampleIds.length === 0) return;
 
     void (async () => {
-      for (const track of sampleTracks) {
+      for (const id of sampleIds) {
         if (cancelled) return;
-        const id = track.customSample!;
         const buf = await eng.ensureSample(id);
         if (!buf) {
-          // Do NOT strip customSample — keep id so a later retry / re-upload can fix it
-          console.warn('One-shot not restored yet (will retry on play):', track.name, id);
+          // Do NOT strip the sample id — keep it so a later retry / re-upload can fix it
+          console.warn('Sample not restored yet (will retry on play):', id);
         }
       }
     })();
@@ -1628,7 +1679,7 @@ function MIDISequencer() {
             }
 
             if (clip.id !== dragging.clipId) return clip;
-            const full = getPatternFullBeats(prev.tracks, clip.patternId, prev.patterns);
+            const full = getClipFullBeats(clip, prev.tracks, prev.patterns, prev.bpm);
 
             if (dragging.type === 'move') {
               const startBar = Math.max(0, snapToGrid(dragging.origStartBar * BEATS_PER_BAR + beatDelta) / BEATS_PER_BAR);
@@ -1773,11 +1824,14 @@ function MIDISequencer() {
     } else {
       void (async () => {
         const eng = await ensureAudio();
-        await Promise.all(
-          project.tracks
+        await Promise.all([
+          ...project.tracks
             .filter(t => t.customSample)
-            .map(t => eng.ensureSample(t.customSample!))
-        );
+            .map(t => eng.ensureSample(t.customSample!)),
+          ...project.arrangement
+            .filter(c => c.type === 'audio' && c.sampleId)
+            .map(c => eng.ensureSample(c.sampleId!)),
+        ]);
         startPlayback();
       })();
     }
@@ -1875,6 +1929,7 @@ function MIDISequencer() {
             .forEach(note => scheduleNoteAt(note, note.startTime));
         } else {
           snapshot.arrangement.forEach(clip => {
+            if (clip.type === 'audio') return;
             const clipPattern = snapshot.patterns.find(pattern => pattern.id === clip.patternId);
             if (!clipPattern) return;
             const offset = clip.offsetBeats ?? 0;
@@ -1892,6 +1947,37 @@ function MIDISequencer() {
           });
         }
       });
+
+      // Audio loop clips (dropped mp3/wav) — song mode only
+      if (snapshot.transportMode === 'song') {
+        snapshot.arrangement.forEach(clip => {
+          if (clip.type !== 'audio' || !clip.sampleId) return;
+          const absoluteStart = clip.startBar * BEATS_PER_BAR;
+          const crossesLoop = wrappedWindow && absoluteStart < windowStart;
+          const clipCycle = crossesLoop ? cycle + 1 : cycle;
+          const clipKey = `clip-${clip.id}-c${clipCycle}-${Math.round(absoluteStart * 1000)}`;
+          const isInWindow = wrappedWindow
+            ? (absoluteStart >= windowStart || absoluteStart < normalizedWindowEnd)
+            : (absoluteStart >= windowStart && absoluteStart < windowEnd);
+          if (!isInWindow || scheduledNotesRef.current.has(clipKey)) return;
+          scheduledNotesRef.current.add(clipKey);
+          const beatsUntilClip = crossesLoop
+            ? absoluteStart + currentTimelineLength - windowStart
+            : absoluteStart - windowStart;
+          const delay = beatsUntilClip / bps;
+          if (delay < 0 || delay >= lookahead + 0.05) return;
+          const offsetSec = (clip.offsetBeats ?? 0) / bps;
+          const durationSec = clip.lengthBeats / bps;
+          const cached = eng.samples.get(clip.sampleId);
+          if (cached) {
+            eng.playClip(cached, delay, 0.9, offsetSec, durationSec);
+          } else {
+            void eng.ensureSample(clip.sampleId).then(buffer => {
+              if (buffer && isPlayingRef.current) eng.playClip(buffer, 0, 0.9, offsetSec, durationSec);
+            });
+          }
+        });
+      }
 
       if (nextTime >= currentTimelineLength) {
         const loops = Math.floor(nextTime / currentTimelineLength);
@@ -2013,10 +2099,9 @@ function MIDISequencer() {
     const leftLen = splitAt - clipStart;
     const rightLen = clipEnd - splitAt;
     const rightClip: PlaylistClip = {
+      ...clip,
       id: crypto.randomUUID(),
-      patternId: clip.patternId,
       startBar: splitAt / BEATS_PER_BAR,
-      lane: clip.lane,
       offsetBeats: clip.offsetBeats + leftLen,
       lengthBeats: rightLen,
     };
@@ -2091,7 +2176,11 @@ function MIDISequencer() {
       }
       return [clip.id];
     });
-    setProject(prev => prev ? { ...prev, activePatternId: clip.patternId, transportMode: 'song' } : prev);
+    setProject(prev => prev ? {
+      ...prev,
+      activePatternId: clip.type === 'audio' ? prev.activePatternId : clip.patternId,
+      transportMode: 'song',
+    } : prev);
   }, []);
 
   const beginPlaylistDrag = useCallback((
@@ -2541,6 +2630,45 @@ function MIDISequencer() {
     setSelectedClipIds([clip.id]);
     setEditorView('playlist');
   }, [project, commitProject]);
+
+  /** Drop mp3/wav loops onto the playlist: each file becomes an audio clip */
+  const addAudioClipsAt = useCallback(async (files: File[], startBar: number, lane: number) => {
+    if (!project || files.length === 0) return;
+    const eng = getEngine();
+    await eng.resume();
+    const bps = project.bpm / 60;
+    const newClips: PlaylistClip[] = [];
+    let laneCursor = Math.max(0, Math.min(PLAYLIST_LANES - 1, lane));
+    for (const file of files) {
+      try {
+        const { id: sampleId, duration } = await eng.loadSample(file);
+        const lengthBeats = Math.max(quantizeMinBeat(), Math.round(duration * bps / quantizeMinBeat()) * quantizeMinBeat());
+        newClips.push({
+          id: crypto.randomUUID(),
+          patternId: '',
+          startBar: Math.max(0, Math.floor(startBar)),
+          lane: laneCursor,
+          offsetBeats: 0,
+          lengthBeats,
+          type: 'audio',
+          sampleId,
+          name: file.name.replace(/\.[a-z0-9]+$/i, ''),
+          sampleSeconds: duration,
+        });
+        laneCursor = Math.min(PLAYLIST_LANES - 1, laneCursor + 1);
+      } catch (error) {
+        console.error('Failed to load dropped audio file:', file.name, error);
+      }
+    }
+    if (newClips.length === 0) return;
+    commitProject(prev => ({
+      ...prev,
+      arrangement: [...prev.arrangement, ...newClips],
+      transportMode: 'song',
+    }));
+    setSelectedClipIds(newClips.map(c => c.id));
+    setEditorView('playlist');
+  }, [project, getEngine, commitProject]);
 
   const exportProject = () => {
     if (!project) return;
@@ -3483,20 +3611,30 @@ function MIDISequencer() {
                 if (e.target === e.currentTarget) setSelectedClipIds([]);
               }}
               onDragOver={(e) => {
-                if (e.dataTransfer.types.includes('application/x-pattern-id')) {
+                if (e.dataTransfer.types.includes('application/x-pattern-id') || e.dataTransfer.types.includes('Files')) {
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'copy';
                 }
               }}
               onDrop={(e) => {
-                const patternId = e.dataTransfer.getData('application/x-pattern-id');
-                if (!patternId) return;
-                e.preventDefault();
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left - PLAYLIST_LABEL_WIDTH;
                 const y = e.clientY - rect.top - 30;
                 const startBar = Math.max(0, Math.floor(x / (zoom * BEATS_PER_BAR)));
                 const lane = Math.floor(y / PLAYLIST_LANE_HEIGHT);
+
+                const audioFiles = Array.from(e.dataTransfer.files || []).filter(file =>
+                  file.type.startsWith('audio/') || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(file.name)
+                );
+                if (audioFiles.length > 0) {
+                  e.preventDefault();
+                  void addAudioClipsAt(audioFiles, startBar, lane);
+                  return;
+                }
+
+                const patternId = e.dataTransfer.getData('application/x-pattern-id');
+                if (!patternId) return;
+                e.preventDefault();
                 addPatternClipAt(patternId, startBar, lane);
               }}
             >
@@ -3579,11 +3717,13 @@ function MIDISequencer() {
                 ))}
               </div>
               {project.arrangement.map(clip => {
+                const isAudioClip = clip.type === 'audio';
                 const pattern = project.patterns.find(item => item.id === clip.patternId);
-                if (!pattern) return null;
+                if (!isAudioClip && !pattern) return null;
                 const clipBeatLen = clip.lengthBeats ?? getPatternFullBeats(project.tracks, clip.patternId, project.patterns);
                 const selected = selectedClipIds.includes(clip.id);
                 const barsLabel = (clipBeatLen / BEATS_PER_BAR).toFixed(clipBeatLen % BEATS_PER_BAR === 0 ? 0 : 1);
+                const accent = isAudioClip ? '#B7F36B' : '#00D1FF';
                 return (
                   <div
                     key={clip.id}
@@ -3593,14 +3733,14 @@ function MIDISequencer() {
                       // Plain click after drag still refreshes single-select if needed:
                       if (!e.ctrlKey && !e.metaKey && !selectedClipIds.includes(clip.id)) {
                         selectPlaylistClip(clip, e);
-                      } else if (!e.ctrlKey && !e.metaKey && selectedClipIds.length === 1) {
+                      } else if (!e.ctrlKey && !e.metaKey && selectedClipIds.length === 1 && !isAudioClip) {
                         setProject(prev => prev ? { ...prev, activePatternId: clip.patternId, transportMode: 'song' } : prev);
                       }
                     }}
                     onDoubleClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      openClipPattern(clip);
+                      if (!isAudioClip) openClipPattern(clip);
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -3621,10 +3761,12 @@ function MIDISequencer() {
                       width: Math.max(24, clipBeatLen * zoom - 2),
                       height: PLAYLIST_LANE_HEIGHT - 8,
                       borderRadius: 4,
-                      border: selected ? '1px solid #00D1FF' : '1px solid rgba(255,255,255,0.2)',
-                      boxShadow: selected ? '0 0 0 1px rgba(0,209,255,0.35)' : 'none',
-                      background: selected ? 'linear-gradient(180deg, rgba(0,209,255,0.38), rgba(0,209,255,0.18))' : 'linear-gradient(180deg, rgba(0,209,255,0.22), rgba(0,209,255,0.1))',
-                      color: selected ? '#d8faff' : '#95c6d2',
+                      border: selected ? `1px solid ${accent}` : '1px solid rgba(255,255,255,0.2)',
+                      boxShadow: selected ? `0 0 0 1px ${isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)'}` : 'none',
+                      background: isAudioClip
+                        ? (selected ? 'linear-gradient(180deg, rgba(183,243,107,0.38), rgba(183,243,107,0.16))' : 'linear-gradient(180deg, rgba(183,243,107,0.22), rgba(183,243,107,0.09))')
+                        : (selected ? 'linear-gradient(180deg, rgba(0,209,255,0.38), rgba(0,209,255,0.18))' : 'linear-gradient(180deg, rgba(0,209,255,0.22), rgba(0,209,255,0.1))'),
+                      color: isAudioClip ? (selected ? '#eaffd0' : '#b3d68f') : (selected ? '#d8faff' : '#95c6d2'),
                       fontSize: 9,
                       display: 'flex',
                       alignItems: 'center',
@@ -3645,11 +3787,12 @@ function MIDISequencer() {
                         bottom: 0,
                         width: 7,
                         cursor: 'ew-resize',
-                        background: selected ? 'rgba(0,209,255,0.35)' : 'rgba(255,255,255,0.08)',
+                        background: selected ? (isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)') : 'rgba(255,255,255,0.08)',
                       }}
                     />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
-                      {pattern.name}
+                      {isAudioClip && <Waves size={9} style={{ verticalAlign: 'middle', marginRight: 4 }} />}
+                      {isAudioClip ? (clip.name || 'Audio') : pattern!.name}
                       <span style={{ opacity: 0.55, marginLeft: 6 }}>{barsLabel}b</span>
                     </span>
                     <div
@@ -3661,7 +3804,7 @@ function MIDISequencer() {
                         bottom: 0,
                         width: 7,
                         cursor: 'ew-resize',
-                        background: selected ? 'rgba(0,209,255,0.35)' : 'rgba(255,255,255,0.08)',
+                        background: selected ? (isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)') : 'rgba(255,255,255,0.08)',
                       }}
                     />
                   </div>
