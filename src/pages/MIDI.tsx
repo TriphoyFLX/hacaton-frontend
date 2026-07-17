@@ -42,6 +42,12 @@ interface PlaylistClip {
   name?: string;
   /** Natural duration of the audio file in seconds */
   sampleSeconds?: number;
+  /** Recorded from the microphone (vocal take) */
+  isVocal?: boolean;
+  /** Playback volume 0..2 for audio clips */
+  gain?: number;
+  /** Per-clip EQ (vocal/audio processing) */
+  eq?: TrackEq;
 }
 
 interface TrackEq {
@@ -82,6 +88,13 @@ const EQ_PRESETS: { id: string; name: string; low: number; mid: number; high: nu
   { id: 'bright', name: 'Яркий верх', low: -1, mid: 1, high: 8 },
   { id: 'vocal', name: 'Вокал', low: -3, mid: 5, high: 2 },
   { id: 'lofi', name: 'Lo-Fi', low: 4, mid: -6, high: -8 },
+];
+const VOCAL_PRESETS: { id: string; name: string; low: number; mid: number; high: number }[] = [
+  { id: 'flat', name: 'Флэт', low: 0, mid: 0, high: 0 },
+  { id: 'clean', name: 'Чистый вокал', low: -4, mid: 3, high: 4 },
+  { id: 'warm', name: 'Тёплый', low: 3, mid: 1, high: -2 },
+  { id: 'radio', name: 'Радио', low: -8, mid: 6, high: -3 },
+  { id: 'air', name: 'Воздух', low: -2, mid: 0, high: 9 },
 ];
 
 function clampEqGain(value: unknown): number {
@@ -906,6 +919,11 @@ function normalizePlaylistClip(
       sampleId: clip.sampleId,
       name: clip.name || 'Audio',
       sampleSeconds: clip.sampleSeconds,
+      isVocal: Boolean(clip.isVocal),
+      gain: typeof clip.gain === 'number' && Number.isFinite(clip.gain)
+        ? Math.max(0, Math.min(2, clip.gain))
+        : 0.9,
+      eq: normalizeTrackEq(clip.eq),
     };
   }
   const full = getPatternFullBeats(tracks, clip.patternId, patterns);
@@ -1167,7 +1185,7 @@ class AudioEngine {
   }
 
   /** Play an audio loop clip at original speed from offsetSec for durationSec */
-  playClip(buffer: AudioBuffer, time: number, volume: number, offsetSec: number, durationSec: number) {
+  playClip(buffer: AudioBuffer, time: number, volume: number, offsetSec: number, durationSec: number, eq?: TrackEq) {
     const now = this.ctx.currentTime + time;
     const safeOffset = Math.max(0, Math.min(buffer.duration, offsetSec));
     const playDuration = Math.max(0.02, Math.min(buffer.duration - safeOffset, durationSec));
@@ -1182,7 +1200,7 @@ class AudioEngine {
     mainGain.gain.linearRampToValueAtTime(0.0001, now + playDuration + 0.01);
 
     source.connect(mainGain);
-    mainGain.connect(this.masterGain);
+    mainGain.connect(this.eqInput(eq));
     this.trackSource(source, mainGain);
     source.start(now, safeOffset, playDuration + 0.02);
   }
@@ -1450,6 +1468,12 @@ function MIDISequencer() {
   const [isDragging, setIsDragging] = useState(false);
   const [quantizeGrid, setQuantizeGrid] = useState(0.5); // 8 cells per bar (1/8 note)
   const [eqPanelOpen, setEqPanelOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [vocalPanelClipId, setVocalPanelClipId] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const recordStartBeatRef = useRef(0);
+  const pendingRecordPlayRef = useRef(false);
   
   const engineRef = useRef<AudioEngine | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -2071,12 +2095,13 @@ function MIDISequencer() {
           if (delay < 0 || delay >= lookahead + 0.05) return;
           const offsetSec = (clip.offsetBeats ?? 0) / bps;
           const durationSec = clip.lengthBeats / bps;
+          const clipGain = clip.gain ?? 0.9;
           const cached = eng.samples.get(clip.sampleId);
           if (cached) {
-            eng.playClip(cached, delay, 0.9, offsetSec, durationSec);
+            eng.playClip(cached, delay, clipGain, offsetSec, durationSec, clip.eq);
           } else {
             void eng.ensureSample(clip.sampleId).then(buffer => {
-              if (buffer && isPlayingRef.current) eng.playClip(buffer, 0, 0.9, offsetSec, durationSec);
+              if (buffer && isPlayingRef.current) eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, clip.eq);
             });
           }
         });
@@ -2802,6 +2827,114 @@ function MIDISequencer() {
     setSelectedClipIds(newClips.map(c => c.id));
     setEditorView('playlist');
   }, [project, uploadAndLoadSample, commitProject]);
+
+  const stopVocalRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    recordStreamRef.current?.getTracks().forEach(track => track.stop());
+    recordStreamRef.current = null;
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+  }, []);
+
+  const startVocalRecording = useCallback(async () => {
+    if (!project || isRecording) return;
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+    } catch (error) {
+      console.error('Microphone access denied:', error);
+      window.alert('Нет доступа к микрофону. Разрешите доступ в настройках браузера.');
+      return;
+    }
+
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+      .find(type => MediaRecorder.isTypeSupported(type)) || '';
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks: Blob[] = [];
+    recordStartBeatRef.current = playheadRef.current;
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+    recorder.onstop = () => {
+      void (async () => {
+        stopPlayback();
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        if (blob.size === 0) return;
+        if (blob.size > MAX_SAMPLE_BYTES) {
+          window.alert('Запись получилась больше 3 МБ — сократите дубль.');
+          return;
+        }
+        const extension = (recorder.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
+        const takeNumber = (project?.arrangement.filter(c => c.isVocal).length ?? 0) + 1;
+        const file = new File([blob], `vocal-take-${takeNumber}.${extension}`, { type: blob.type });
+        try {
+          const { id: sampleId, duration } = await uploadAndLoadSample(file);
+          const bps = (project?.bpm ?? 124) / 60;
+          const lengthBeats = Math.max(quantizeMinBeat(), duration * bps);
+          const startBar = Math.floor(recordStartBeatRef.current / BEATS_PER_BAR);
+          const usedLanes = new Set((project?.arrangement ?? []).map(c => c.lane));
+          let lane = PLAYLIST_LANES - 1;
+          for (let i = 0; i < PLAYLIST_LANES; i++) {
+            if (!usedLanes.has(i)) { lane = i; break; }
+          }
+          const clip: PlaylistClip = {
+            id: crypto.randomUUID(),
+            patternId: '',
+            startBar,
+            lane,
+            offsetBeats: 0,
+            lengthBeats,
+            type: 'audio',
+            sampleId,
+            name: `Вокал ${takeNumber}`,
+            sampleSeconds: duration,
+            isVocal: true,
+            gain: 1,
+            eq: { enabled: false, low: 0, mid: 0, high: 0 },
+          };
+          commitProject(prev => ({
+            ...prev,
+            arrangement: [...prev.arrangement, clip],
+            transportMode: 'song',
+          }));
+          setSelectedClipIds([clip.id]);
+          setEditorView('playlist');
+          setVocalPanelClipId(clip.id);
+        } catch (error) {
+          console.error('Failed to save vocal recording:', error);
+          window.alert('Не удалось сохранить запись.');
+        }
+      })();
+    };
+
+    mediaRecorderRef.current = recorder;
+    recordStreamRef.current = stream;
+    recorder.start();
+    setIsRecording(true);
+    // Play the song under the take so vocals line up with the beat.
+    // Playback itself starts from an effect so it picks up the fresh transportMode.
+    pendingRecordPlayRef.current = true;
+    setProject(prev => prev ? { ...prev, transportMode: 'song' } : prev);
+  }, [project, isRecording, stopPlayback, uploadAndLoadSample, commitProject]);
+
+  useEffect(() => {
+    if (!pendingRecordPlayRef.current) return;
+    if (!isRecording || !project || project.transportMode !== 'song') return;
+    pendingRecordPlayRef.current = false;
+    if (!project.isPlaying) togglePlayback();
+  }, [isRecording, project, togglePlayback]);
+
+  // Release the microphone if the editor unmounts mid-recording
+  useEffect(() => () => {
+    recordStreamRef.current?.getTracks().forEach(track => track.stop());
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
 
   const exportProject = () => {
     if (!project) return;
@@ -3790,6 +3923,27 @@ function MIDISequencer() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 10, color: '#8a8a8a', letterSpacing: '1px' }}>PLAYLIST</span>
+                <button
+                  type="button"
+                  onClick={() => { if (isRecording) { stopVocalRecording(); } else { void startVocalRecording(); } }}
+                  title={isRecording ? 'Остановить запись' : 'Записать вокал с микрофона (с позиции плейхеда)'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 9, fontWeight: 700, letterSpacing: 1,
+                    padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                    border: isRecording ? '1px solid rgba(255,70,70,0.6)' : '1px solid rgba(255,255,255,0.15)',
+                    background: isRecording ? 'rgba(255,70,70,0.2)' : 'rgba(255,255,255,0.04)',
+                    color: isRecording ? '#ff6b6b' : '#bbb',
+                  }}
+                >
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: isRecording ? '#ff4646' : '#c0392b',
+                    boxShadow: isRecording ? '0 0 8px #ff4646' : 'none',
+                    animation: isRecording ? 'pulse 1s infinite' : 'none',
+                  }} />
+                  {isRecording ? 'STOP' : 'REC'}
+                </button>
                 <div style={{ display: 'flex', gap: 4 }}>
                   {[
                     { label: 'Split', title: 'Split at playhead (S)', onClick: splitSelectedClip },
@@ -3947,7 +4101,8 @@ function MIDISequencer() {
                 const clipBeatLen = clip.lengthBeats ?? getPatternFullBeats(project.tracks, clip.patternId, project.patterns);
                 const selected = selectedClipIds.includes(clip.id);
                 const barsLabel = (clipBeatLen / BEATS_PER_BAR).toFixed(clipBeatLen % BEATS_PER_BAR === 0 ? 0 : 1);
-                const accent = isAudioClip ? '#B7F36B' : '#00D1FF';
+                const isVocalClip = isAudioClip && clip.isVocal;
+                const accent = isVocalClip ? '#FF8A8A' : isAudioClip ? '#B7F36B' : '#00D1FF';
                 return (
                   <div
                     key={clip.id}
@@ -3964,7 +4119,11 @@ function MIDISequencer() {
                     onDoubleClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (!isAudioClip) openClipPattern(clip);
+                      if (isAudioClip) {
+                        setVocalPanelClipId(clip.id);
+                      } else {
+                        openClipPattern(clip);
+                      }
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -3986,11 +4145,13 @@ function MIDISequencer() {
                       height: PLAYLIST_LANE_HEIGHT - 8,
                       borderRadius: 4,
                       border: selected ? `1px solid ${accent}` : '1px solid rgba(255,255,255,0.2)',
-                      boxShadow: selected ? `0 0 0 1px ${isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)'}` : 'none',
-                      background: isAudioClip
-                        ? (selected ? 'linear-gradient(180deg, rgba(183,243,107,0.38), rgba(183,243,107,0.16))' : 'linear-gradient(180deg, rgba(183,243,107,0.22), rgba(183,243,107,0.09))')
-                        : (selected ? 'linear-gradient(180deg, rgba(0,209,255,0.38), rgba(0,209,255,0.18))' : 'linear-gradient(180deg, rgba(0,209,255,0.22), rgba(0,209,255,0.1))'),
-                      color: isAudioClip ? (selected ? '#eaffd0' : '#b3d68f') : (selected ? '#d8faff' : '#95c6d2'),
+                      boxShadow: selected ? `0 0 0 1px ${isVocalClip ? 'rgba(255,138,138,0.35)' : isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)'}` : 'none',
+                      background: isVocalClip
+                        ? (selected ? 'linear-gradient(180deg, rgba(255,138,138,0.38), rgba(255,138,138,0.16))' : 'linear-gradient(180deg, rgba(255,138,138,0.22), rgba(255,138,138,0.09))')
+                        : isAudioClip
+                          ? (selected ? 'linear-gradient(180deg, rgba(183,243,107,0.38), rgba(183,243,107,0.16))' : 'linear-gradient(180deg, rgba(183,243,107,0.22), rgba(183,243,107,0.09))')
+                          : (selected ? 'linear-gradient(180deg, rgba(0,209,255,0.38), rgba(0,209,255,0.18))' : 'linear-gradient(180deg, rgba(0,209,255,0.22), rgba(0,209,255,0.1))'),
+                      color: isVocalClip ? (selected ? '#ffe3e3' : '#e0a3a3') : isAudioClip ? (selected ? '#eaffd0' : '#b3d68f') : (selected ? '#d8faff' : '#95c6d2'),
                       fontSize: 9,
                       display: 'flex',
                       alignItems: 'center',
@@ -4049,6 +4210,156 @@ function MIDISequencer() {
               />
             </div>
           </div>
+
+          {/* Vocal / audio clip processing panel */}
+          {vocalPanelClipId && (() => {
+            const clip = project.arrangement.find(c => c.id === vocalPanelClipId);
+            if (!clip || clip.type !== 'audio') return null;
+            const clipEq: TrackEq = clip.eq ?? { enabled: false, low: 0, mid: 0, high: 0 };
+            const clipGain = clip.gain ?? 0.9;
+            const patchClip = (patch: Partial<PlaylistClip>) => {
+              commitProject(prev => ({
+                ...prev,
+                arrangement: prev.arrangement.map(c => c.id === clip.id ? { ...c, ...patch } : c),
+              }));
+            };
+            const previewClip = () => {
+              const eng = getEngine();
+              void eng.resume();
+              const bps = (project.bpm || 124) / 60;
+              const offsetSec = (clip.offsetBeats ?? 0) / bps;
+              const durationSec = Math.min(clip.lengthBeats / bps, 8);
+              if (!clip.sampleId) return;
+              void eng.ensureSample(clip.sampleId).then(buffer => {
+                if (buffer) eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, { ...clipEq, enabled: clipEq.enabled });
+              });
+            };
+            return (
+              <div
+                onClick={() => setVocalPanelClipId(null)}
+                style={{
+                  position: 'fixed', inset: 0, zIndex: 300,
+                  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    width: 380, maxWidth: '92vw', padding: 20, borderRadius: 14,
+                    background: '#151515', border: '1px solid rgba(255,255,255,0.12)',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+                    display: 'flex', flexDirection: 'column', gap: 14,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: 11, letterSpacing: 1.5, color: clip.isVocal ? '#ff8a8a' : '#b7f36b', fontWeight: 700, textTransform: 'uppercase' }}>
+                        {clip.isVocal ? 'Обработка вокала' : 'Обработка аудио'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>{clip.name || 'Audio clip'}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVocalPanelClipId(null)}
+                      style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 16, padding: 4 }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Volume */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                      <span>Громкость</span>
+                      <span>{Math.round(clipGain * 100)}%</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={2} step={0.01} value={clipGain}
+                      onChange={e => patchClip({ gain: Number(e.target.value) })}
+                      style={{ width: '100%', accentColor: '#00D1FF' }}
+                    />
+                  </div>
+
+                  {/* EQ enable + presets */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>Эквалайзер</span>
+                    <button
+                      type="button"
+                      onClick={() => patchClip({ eq: { ...clipEq, enabled: !clipEq.enabled } })}
+                      style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: 1, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+                        border: clipEq.enabled ? '1px solid rgba(0,209,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                        background: clipEq.enabled ? 'rgba(0,209,255,0.15)' : 'rgba(255,255,255,0.04)',
+                        color: clipEq.enabled ? '#7fdcf0' : '#777',
+                      }}
+                    >
+                      {clipEq.enabled ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {VOCAL_PRESETS.map(preset => {
+                      const active = clipEq.low === preset.low && clipEq.mid === preset.mid && clipEq.high === preset.high;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => patchClip({ eq: { enabled: true, low: preset.low, mid: preset.mid, high: preset.high } })}
+                          style={{
+                            fontSize: 9, padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
+                            border: active ? '1px solid rgba(255,138,138,0.6)' : '1px solid rgba(255,255,255,0.12)',
+                            background: active ? 'rgba(255,138,138,0.15)' : 'rgba(255,255,255,0.04)',
+                            color: active ? '#ffb3b3' : '#999',
+                          }}
+                        >
+                          {preset.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* EQ bands */}
+                  {EQ_BANDS.map(band => (
+                    <div key={band.key}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#777', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                        <span>{band.label}</span>
+                        <span>{clipEq[band.key] > 0 ? '+' : ''}{clipEq[band.key]} dB</span>
+                      </div>
+                      <input
+                        type="range" min={-EQ_GAIN_LIMIT} max={EQ_GAIN_LIMIT} step={1}
+                        value={clipEq[band.key]}
+                        onChange={e => patchClip({ eq: { ...clipEq, enabled: true, [band.key]: Number(e.target.value) } })}
+                        style={{ width: '100%', accentColor: clip.isVocal ? '#ff8a8a' : '#b7f36b' }}
+                      />
+                    </div>
+                  ))}
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button
+                      type="button"
+                      onClick={previewClip}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                        border: '1px solid rgba(0,209,255,0.4)', background: 'rgba(0,209,255,0.12)', color: '#7fdcf0',
+                      }}
+                    >
+                      ▶ Прослушать
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVocalPanelClipId(null)}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                        border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#bbb',
+                      }}
+                    >
+                      Готово
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Bottom Mixer */}
           <div style={{ 
