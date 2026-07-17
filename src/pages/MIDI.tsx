@@ -6,6 +6,7 @@ import {
   Radio, Zap, Wind, Speaker, Undo2
 } from 'lucide-react';
 import DesktopOnlyGate from '../components/DesktopOnlyGate';
+import { getAuthUserId } from '../lib/authToken';
 
 // ================= TYPES =================
 interface Note {
@@ -51,6 +52,36 @@ interface Track {
   sampleDuration?: number;
   reverbSend: number;
   delaySend: number;
+}
+
+const PROJECT_STORAGE_PREFIX = 'aura_pro_sequencer_v2';
+const LEGACY_PROJECT_STORAGE_KEY = 'aura_pro_sequencer_v2';
+
+/** Per-user save key so projects don't leak between accounts on the same browser */
+function getProjectStorageKey(): string {
+  const userId = getAuthUserId();
+  return userId ? `${PROJECT_STORAGE_PREFIX}:${userId}` : `${PROJECT_STORAGE_PREFIX}:guest`;
+}
+
+/** Load a saved project for the current user, migrating the old shared save once */
+function readSavedProject(): string | null {
+  const key = getProjectStorageKey();
+  const scoped = localStorage.getItem(key);
+  if (scoped) return scoped;
+
+  // One-time migration: the first account that opens the editor takes over the
+  // legacy shared save, after which other accounts start from scratch.
+  const legacy = localStorage.getItem(LEGACY_PROJECT_STORAGE_KEY);
+  if (legacy && key !== LEGACY_PROJECT_STORAGE_KEY) {
+    try {
+      localStorage.setItem(key, legacy);
+      localStorage.removeItem(LEGACY_PROJECT_STORAGE_KEY);
+    } catch {
+      // storage full — still return the legacy data for this session
+    }
+    return legacy;
+  }
+  return null;
 }
 
 const SAMPLE_DB_NAME = 'aura_midi_samples';
@@ -1302,7 +1333,7 @@ function MIDISequencer() {
   }, [getEngine]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('aura_pro_sequencer_v2');
+    const saved = readSavedProject();
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Partial<MIDIProject>;
@@ -1354,7 +1385,7 @@ function MIDISequencer() {
     if (!project) return;
     const save = () => {
       try {
-        localStorage.setItem('aura_pro_sequencer_v2', JSON.stringify(project));
+        localStorage.setItem(getProjectStorageKey(), JSON.stringify(project));
       } catch (e) {
         console.error('Save failed:', e);
       }
@@ -1405,7 +1436,7 @@ function MIDISequencer() {
       const p = project;
       if (!p) return;
       try {
-        localStorage.setItem('aura_pro_sequencer_v2', JSON.stringify(p));
+        localStorage.setItem(getProjectStorageKey(), JSON.stringify(p));
       } catch {
         // ignore
       }
