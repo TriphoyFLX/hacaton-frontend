@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Eye, EyeOff, UserPlus, Calendar } from 'lucide-react';
+import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import OAuthButtons from './OAuthButtons';
+import EmailVerifyStep from './EmailVerifyStep';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -408,11 +410,11 @@ export default function Register() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const navigate = useNavigate();
   const register = useAuthStore((state) => state.register);
   const token = useAuthStore((state) => state.token);
 
-  // Редирект если уже авторизован
   useEffect(() => {
     if (token) {
       navigate('/dashboard');
@@ -428,13 +430,12 @@ export default function Register() {
       return;
     }
 
-    // Валидация возраста (минимум 13 лет)
     if (birthDate) {
       const birth = new Date(birthDate);
       const today = new Date();
       let age = today.getFullYear() - birth.getFullYear();
       const monthDiff = today.getMonth() - birth.getMonth();
-      
+
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
         age--;
       }
@@ -453,7 +454,11 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await register(username, email, password, birthDate);
+      const result = await register(username, email, password, birthDate);
+      if (result.requiresVerification) {
+        setPendingEmail(result.email);
+        return;
+      }
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Ошибка регистрации');
@@ -466,167 +471,161 @@ export default function Register() {
     <div className="register-root">
       <style>{css}</style>
 
-      {/* Ambient Background */}
       <div className="register-ambient">
-  <div className="ambient-orb ambient-orb-1" />
-  <div className="ambient-orb ambient-orb-2" />
-  <div className="ambient-orb ambient-orb-3" />
-</div>
-<div className="register-noise" />
-<div className="register-grid-bg" />
-
-<div className="register-card">
-  {/* Header */}
-  <div className="register-header">
-    <div className="register-brand">
-      <div className="brand-logo">
-        <img src="/soundlab.svg" alt="SoundLab" />
+        <div className="ambient-orb ambient-orb-1" />
+        <div className="ambient-orb ambient-orb-2" />
+        <div className="ambient-orb ambient-orb-3" />
       </div>
-      <span className="brand-name">SoundLab</span>
-    </div>
-    <div className="register-subtitle">Создание аккаунта</div>
-  </div>
+      <div className="register-noise" />
+      <div className="register-grid-bg" />
 
-        {/* Error */}
-        {error && (
-          <div className="register-error">
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="register-form">
-          {/* Username */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="username">Имя пользователя</label>
-            <div className="input-wrap">
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="form-input"
-                placeholder="Придумайте имя"
-                minLength={3}
-                maxLength={30}
-                autoComplete="username"
-                required
-              />
+      <div className="register-card">
+        <div className="register-header">
+          <div className="register-brand">
+            <div className="brand-logo">
+              <img src="/soundlab.svg" alt="SoundLab" />
             </div>
-            <span className="form-hint">От 3 до 30 символов</span>
+            <span className="brand-name">SoundLab</span>
           </div>
-
-          {/* Email */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="email">Email</label>
-            <div className="input-wrap">
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-input"
-                placeholder="your@email.com"
-                autoComplete="email"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="password">Пароль</label>
-            <div className="input-wrap">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-input"
-                placeholder="Минимум 8 символов"
-                minLength={8}
-                autoComplete="new-password"
-                required
-              />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(v => !v)}
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <span className="form-hint">Минимум 8 символов</span>
-          </div>
-
-          {/* Birth Date */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="birthdate">Дата рождения</label>
-            <div className="input-wrap">
-              <input
-                id="birthdate"
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="form-input"
-                max={new Date().toISOString().split('T')[0]}
-                required
-              />
-            </div>
-            <span className="form-hint">Вам должно быть не менее 13 лет</span>
-          </div>
-
-          {/* Terms Checkbox */}
-          <div className="checkbox-group">
-            <input
-              type="checkbox"
-              id="terms"
-              checked={agreedToTerms}
-              onChange={(e) => setAgreedToTerms(e.target.checked)}
-              className="checkbox-input"
-              required
-            />
-            <label htmlFor="terms" className="checkbox-label">
-              Я согласен с{' '}
-              <button type="button" className="checkbox-link" onClick={() => navigate('/terms')}>
-                Условиями использования
-              </button>
-              {' '}и{' '}
-              <button type="button" className="checkbox-link" onClick={() => navigate('/privacy')}>
-                Политикой конфиденциальности
-              </button>
-            </label>
-          </div>
-
-          {/* Submit */}
-          <button type="submit" disabled={loading} className="submit-btn">
-            {loading ? (
-              <>
-                <div className="btn-spinner" />
-                Создание...
-              </>
-            ) : (
-              <>
-                <UserPlus size={16} />
-                Создать аккаунт
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <div className="register-footer">
-          <p className="footer-text">
-            Уже есть аккаунт?{' '}
-            <button
-              onClick={() => navigate('/login')}
-              className="footer-link"
-            >
-              Войти
-            </button>
-          </p>
+          <div className="register-subtitle">Создание аккаунта</div>
         </div>
+
+        {pendingEmail ? (
+          <EmailVerifyStep email={pendingEmail} onBack={() => setPendingEmail(null)} />
+        ) : (
+          <>
+            {error && <div className="register-error">{error}</div>}
+
+            <form onSubmit={handleSubmit} className="register-form">
+              <div className="form-group">
+                <label className="form-label" htmlFor="username">Имя пользователя</label>
+                <div className="input-wrap">
+                  <input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="form-input"
+                    placeholder="Придумайте имя"
+                    minLength={3}
+                    maxLength={30}
+                    autoComplete="username"
+                    required
+                  />
+                </div>
+                <span className="form-hint">От 3 до 30 символов</span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="email">Email</label>
+                <div className="input-wrap">
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="form-input"
+                    placeholder="your@email.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+                <span className="form-hint">На почту придёт код подтверждения</span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="password">Пароль</label>
+                <div className="input-wrap">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="form-input"
+                    placeholder="Минимум 8 символов"
+                    minLength={8}
+                    autoComplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(v => !v)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <span className="form-hint">Минимум 8 символов</span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="birthdate">Дата рождения</label>
+                <div className="input-wrap">
+                  <input
+                    id="birthdate"
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    className="form-input"
+                    max={new Date().toISOString().split('T')[0]}
+                    required
+                  />
+                </div>
+                <span className="form-hint">Вам должно быть не менее 13 лет</span>
+              </div>
+
+              <div className="checkbox-group">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="checkbox-input"
+                  required
+                />
+                <label htmlFor="terms" className="checkbox-label">
+                  Я согласен с{' '}
+                  <button type="button" className="checkbox-link" onClick={() => navigate('/terms')}>
+                    Условиями использования
+                  </button>
+                  {' '}и{' '}
+                  <button type="button" className="checkbox-link" onClick={() => navigate('/privacy')}>
+                    Политикой конфиденциальности
+                  </button>
+                </label>
+              </div>
+
+              <button type="submit" disabled={loading} className="submit-btn">
+                {loading ? (
+                  <>
+                    <div className="btn-spinner" />
+                    Создание...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={16} />
+                    Создать аккаунт
+                  </>
+                )}
+              </button>
+            </form>
+
+            <OAuthButtons />
+
+            <div className="register-footer">
+              <p className="footer-text">
+                Уже есть аккаунт?{' '}
+                <button
+                  onClick={() => navigate('/login')}
+                  className="footer-link"
+                >
+                  Войти
+                </button>
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

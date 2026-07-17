@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
+import AuthCallback from './components/AuthCallback';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Dashboard from './components/Dashboard';
@@ -23,7 +24,8 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        
+        <Route path="/auth/callback" element={<AuthCallback />} />
+
         <Route path="/" element={
           <ProtectedRoute>
             <Layout />

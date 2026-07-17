@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
+import OAuthButtons from './OAuthButtons';
+import EmailVerifyStep from './EmailVerifyStep';
+import { authApi } from '../api/auth';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -321,16 +324,29 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const login = useAuthStore((state) => state.login);
   const token = useAuthStore((state) => state.token);
 
-  // Редирект если уже авторизован
   useEffect(() => {
     if (token) {
       navigate('/dashboard');
     }
   }, [token, navigate]);
+
+  useEffect(() => {
+    const err = searchParams.get('error');
+    if (!err) return;
+    const map: Record<string, string> = {
+      google_denied: 'Вход через Google отменён',
+      google_failed: 'Не удалось войти через Google',
+      vk_denied: 'Вход через VK отменён',
+      vk_failed: 'Не удалось войти через VK',
+    };
+    setError(map[err] || 'Ошибка входа через соцсеть');
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -338,7 +354,16 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (result.requiresVerification && result.email) {
+        try {
+          await authApi.resendCode(result.email);
+        } catch {
+          // ignore — user can resend manually
+        }
+        setPendingEmail(result.email);
+        return;
+      }
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Неверный email или пароль');
@@ -351,7 +376,6 @@ export default function Login() {
     <div className="login-root">
       <style>{css}</style>
 
-      {/* Ambient Background */}
       <div className="login-ambient">
         <div className="ambient-orb ambient-orb-1" />
         <div className="ambient-orb ambient-orb-2" />
@@ -360,7 +384,7 @@ export default function Login() {
       <div className="login-noise" />
       <div className="login-grid-bg" />
 
-            <div className="login-card">
+      <div className="login-card">
         <div className="login-header">
           <div className="login-brand">
             <div className="brand-logo">
@@ -371,82 +395,83 @@ export default function Login() {
           <div className="login-subtitle">Вход в аккаунт</div>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="login-error">
-            {error}
-          </div>
-        )}
+        {pendingEmail ? (
+          <EmailVerifyStep email={pendingEmail} onBack={() => setPendingEmail(null)} />
+        ) : (
+          <>
+            {error && <div className="login-error">{error}</div>}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label className="form-label" htmlFor="email">Email</label>
-            <div className="input-wrap">
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-input"
-                placeholder="your@email.com"
-                autoComplete="email"
-                required
-              />
-            </div>
-          </div>
+            <form onSubmit={handleSubmit} className="login-form">
+              <div className="form-group">
+                <label className="form-label" htmlFor="email">Email</label>
+                <div className="input-wrap">
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="form-input"
+                    placeholder="your@email.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+              </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="password">Пароль</label>
-            <div className="input-wrap">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-input"
-                placeholder="Введите пароль"
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(v => !v)}
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              <div className="form-group">
+                <label className="form-label" htmlFor="password">Пароль</label>
+                <div className="input-wrap">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="form-input"
+                    placeholder="Введите пароль"
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(v => !v)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={loading} className="submit-btn">
+                {loading ? (
+                  <>
+                    <div className="btn-spinner" />
+                    Вход...
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={16} />
+                    Войти
+                  </>
+                )}
               </button>
+            </form>
+
+            <OAuthButtons />
+
+            <div className="login-footer">
+              <p className="footer-text">
+                Нет аккаунта?{' '}
+                <button
+                  onClick={() => navigate('/register')}
+                  className="footer-link"
+                >
+                  Создать
+                </button>
+              </p>
             </div>
-          </div>
-
-          <button type="submit" disabled={loading} className="submit-btn">
-            {loading ? (
-              <>
-                <div className="btn-spinner" />
-                Вход...
-              </>
-            ) : (
-              <>
-                <LogIn size={16} />
-                Войти
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <div className="login-footer">
-          <p className="footer-text">
-            Нет аккаунта?{' '}
-            <button
-              onClick={() => navigate('/register')}
-              className="footer-link"
-            >
-              Создать
-            </button>
-          </p>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

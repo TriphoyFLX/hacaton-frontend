@@ -15,13 +15,19 @@ interface User {
   birthDate: string;
   createdAt: string;
   role?: string;
+  emailVerified?: boolean;
+  displayName?: string | null;
+  avatar?: string | null;
 }
 
 interface AuthState {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string, birthDate: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ requiresVerification?: boolean; email?: string }>;
+  register: (username: string, email: string, password: string, birthDate: string) => Promise<{ requiresVerification: boolean; email: string }>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  resendCode: (email: string) => Promise<void>;
+  setSession: (user: User, token: string) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
@@ -45,18 +51,49 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
 
+      setSession: (user, token) => {
+        syncAuthStorage(user, token);
+        set({ user, token });
+      },
+
       login: async (email: string, password: string) => {
-        const response = await authApi.login(email, password);
+        try {
+          const response = await authApi.login(email, password);
+          const { user, token } = response.data;
+          syncAuthStorage(user, token);
+          set({ user, token });
+          return {};
+        } catch (err: any) {
+          if (err.response?.data?.requiresVerification) {
+            return {
+              requiresVerification: true,
+              email: err.response.data.email || email,
+            };
+          }
+          throw err;
+        }
+      },
+
+      register: async (username: string, email: string, password: string, birthDate: string) => {
+        const response = await authApi.register(username, email, password, birthDate);
+        if (response.data.requiresVerification) {
+          return { requiresVerification: true, email: response.data.email || email };
+        }
+        const { user, token } = response.data;
+        syncAuthStorage(user, token);
+        set({ user, token });
+        return { requiresVerification: false, email };
+      },
+
+      verifyEmail: async (email: string, code: string) => {
+        const response = await authApi.verifyEmail(email, code);
         const { user, token } = response.data;
         syncAuthStorage(user, token);
         set({ user, token });
       },
 
-      register: async (username: string, email: string, password: string, birthDate: string) => {
-        const response = await authApi.register(username, email, password, birthDate);
-        const { user, token } = response.data;
-        syncAuthStorage(user, token);
-        set({ user, token });
+      resendCode: async (email: string) => {
+        await authApi.resendCode(email);
       },
 
       logout: () => {
