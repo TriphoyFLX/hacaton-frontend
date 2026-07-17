@@ -817,7 +817,7 @@ export default function AI() {
   };
 
   // Удаление трека из истории
-  const deleteFromHistory = (id: number) => {
+  const deleteFromHistory = (id: number | string) => {
     const updated = history.filter(t => t.id !== id);
     setHistory(updated);
     try {
