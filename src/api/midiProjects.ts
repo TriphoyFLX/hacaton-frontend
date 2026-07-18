@@ -29,11 +29,21 @@ export const midiProjectsApi = {
   remove: (id: string) => api.delete(`/midi-projects/${id}`),
   uploadSample: (projectId: string, file: File, sampleId?: string) => {
     const form = new FormData();
-    form.append('sample', file);
+    form.append('sample', file, file.name);
     if (sampleId) form.append('sampleId', sampleId);
     return api.post<MidiSampleUpload>(`/midi-projects/${projectId}/samples`, form, {
-      // Override default JSON content-type so multipart boundary is set correctly
-      headers: { 'Content-Type': undefined as unknown as string },
+      timeout: 120_000,
+      transformRequest: [
+        (data, headers) => {
+          // Axios must not serialize FormData or force JSON content-type
+          if (headers && typeof (headers as { delete?: (k: string) => void }).delete === 'function') {
+            (headers as { delete: (k: string) => void }).delete('Content-Type');
+          } else if (headers) {
+            delete (headers as Record<string, unknown>)['Content-Type'];
+          }
+          return data;
+        },
+      ],
     });
   },
   downloadSample: (sampleId: string) =>

@@ -5,6 +5,7 @@ export const API_ORIGIN = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '')
 
 export const api = axios.create({
   baseURL: `${API_ORIGIN}/api`,
+  timeout: 60_000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,11 +18,13 @@ api.interceptors.request.use((config) => {
   }
   // FormData must keep its multipart boundary — never force application/json
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
-    if (typeof config.headers?.set === 'function') {
-      config.headers.set('Content-Type', false as unknown as string);
-    } else if (config.headers) {
-      delete (config.headers as Record<string, unknown>)['Content-Type'];
-      delete (config.headers as Record<string, unknown>)['content-type'];
+    const headers = config.headers as { delete?: (k: string) => void; set?: (k: string, v: unknown) => void } & Record<string, unknown>;
+    if (typeof headers.delete === 'function') {
+      headers.delete('Content-Type');
+      headers.delete('content-type');
+    } else {
+      delete headers['Content-Type'];
+      delete headers['content-type'];
     }
   }
   return config;
