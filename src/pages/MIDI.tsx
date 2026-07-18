@@ -3,7 +3,7 @@ import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
   Download, Upload, Repeat, Sliders, Activity, Volume2,
   MoreVertical, X, Check, Save, Headphones, Waves, Settings,
-  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff
+  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff, Pencil
 } from 'lucide-react';
 import DesktopOnlyGate from '../components/DesktopOnlyGate';
 import { getAuthUserId } from '../lib/authToken';
@@ -1493,6 +1493,8 @@ function MIDISequencer() {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectActionLoading, setProjectActionLoading] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
   const [libraryError, setLibraryError] = useState('');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [playheadTime, setPlayheadTime] = useState(0);
@@ -2038,9 +2040,52 @@ function MIDISequencer() {
       await midiProjectsApi.remove(item.id);
       localStorage.removeItem(getProjectDraftStorageKey(item.id));
       setProjects(previous => previous.filter(projectItem => projectItem.id !== item.id));
+      if (renamingProjectId === item.id) {
+        setRenamingProjectId(null);
+        setRenameDraft('');
+      }
     } catch (error) {
       console.error('Failed to delete MIDI project:', error);
       setLibraryError('Не удалось удалить проект.');
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
+  const beginRenameProject = (item: MidiProjectSummary) => {
+    setRenamingProjectId(item.id);
+    setRenameDraft(item.name);
+    setLibraryError('');
+  };
+
+  const cancelRenameProject = () => {
+    setRenamingProjectId(null);
+    setRenameDraft('');
+  };
+
+  const saveRenameProject = async (item: MidiProjectSummary) => {
+    const nextName = renameDraft.trim().slice(0, 100);
+    if (!nextName) {
+      setLibraryError('Название не может быть пустым.');
+      return;
+    }
+    if (nextName === item.name) {
+      cancelRenameProject();
+      return;
+    }
+    setProjectActionLoading(true);
+    setLibraryError('');
+    try {
+      const updated = (await midiProjectsApi.rename(item.id, nextName)).data;
+      setProjects(previous => previous.map(p => (
+        p.id === item.id
+          ? { ...p, name: updated.name, updatedAt: updated.updatedAt }
+          : p
+      )));
+      cancelRenameProject();
+    } catch (error) {
+      console.error('Failed to rename MIDI project:', error);
+      setLibraryError('Не удалось переименовать проект.');
     } finally {
       setProjectActionLoading(false);
     }
@@ -3306,211 +3351,354 @@ function MIDISequencer() {
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap');
           .midi-lib {
-            --ml-bg: #000000;
-            --ml-surface: #111113;
-            --ml-elevated: #1c1c1e;
-            --ml-line: rgba(255,255,255,0.09);
+            --ml-bg: #050505;
+            --ml-surface: #0e0e0f;
+            --ml-elevated: #171718;
+            --ml-hover: #1f1f21;
+            --ml-line: rgba(255,255,255,0.1);
+            --ml-line-strong: rgba(255,255,255,0.18);
             --ml-text: #f5f5f7;
-            --ml-muted: #86868b;
-            --ml-blue: #0a84ff;
+            --ml-muted: #8e8e93;
+            --ml-dim: #636366;
             --ml-red: #ff453a;
             min-height: 100vh;
-            background: var(--ml-bg);
+            background:
+              linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+              var(--ml-bg);
+            background-size: 48px 48px, 48px 48px, auto;
             color: var(--ml-text);
             font-family: 'Instrument Sans', ui-sans-serif, sans-serif;
-            padding: clamp(40px, 8vh, 88px) clamp(20px, 6vw, 72px) 64px;
+            padding: clamp(28px, 4vh, 56px) clamp(20px, 4vw, 56px) 56px;
             box-sizing: border-box;
             -webkit-font-smoothing: antialiased;
           }
-          .midi-lib-inner { max-width: 720px; margin: 0 auto; }
+          .midi-lib-shell {
+            max-width: 1280px; margin: 0 auto;
+            display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+            gap: clamp(24px, 3vw, 48px); align-items: start;
+          }
+          .midi-lib-side {
+            position: sticky; top: 28px;
+            border: 1px solid var(--ml-line); border-radius: 18px;
+            background: var(--ml-surface); padding: 28px 26px 24px;
+          }
           .midi-lib-brand {
-            font-size: 13px; font-weight: 600; letter-spacing: 0.18em;
-            text-transform: uppercase; color: var(--ml-muted); margin: 0 0 18px;
+            font-size: 12px; font-weight: 600; letter-spacing: 0.2em;
+            text-transform: uppercase; color: var(--ml-muted); margin: 0 0 20px;
           }
           .midi-lib-title {
-            margin: 0; font-size: clamp(40px, 7vw, 64px); font-weight: 700;
+            margin: 0; font-size: clamp(36px, 4vw, 52px); font-weight: 700;
             letter-spacing: -0.045em; line-height: 1.02;
           }
           .midi-lib-lead {
-            margin: 14px 0 0; font-size: 17px; line-height: 1.45;
-            color: var(--ml-muted); max-width: 34ch; font-weight: 400;
+            margin: 12px 0 0; font-size: 15px; line-height: 1.5;
+            color: var(--ml-muted); font-weight: 400;
           }
-          .midi-lib-toolbar {
-            display: flex; gap: 10px; align-items: stretch;
-            margin: 40px 0 28px; flex-wrap: wrap;
+          .midi-lib-stats {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            margin: 28px 0 0;
+          }
+          .midi-lib-stat {
+            border: 1px solid var(--ml-line); border-radius: 12px;
+            padding: 14px 14px 12px; background: var(--ml-elevated);
+          }
+          .midi-lib-stat-label {
+            font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--ml-dim); margin: 0 0 6px;
+          }
+          .midi-lib-stat-value {
+            margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.03em;
+          }
+          .midi-lib-create {
+            margin-top: 28px; padding-top: 22px;
+            border-top: 1px solid var(--ml-line);
+            display: flex; flex-direction: column; gap: 10px;
+          }
+          .midi-lib-create-label {
+            font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--ml-dim); margin: 0;
           }
           .midi-lib-input {
-            flex: 1; min-width: 180px; height: 44px; padding: 0 14px;
+            width: 100%; height: 44px; padding: 0 14px; box-sizing: border-box;
             border-radius: 10px; border: 1px solid var(--ml-line);
-            background: var(--ml-surface); color: var(--ml-text);
+            background: #09090a; color: var(--ml-text);
             font: inherit; font-size: 15px; outline: none;
           }
-          .midi-lib-input::placeholder { color: #636366; }
-          .midi-lib-input:focus { border-color: rgba(10,132,255,0.55); }
+          .midi-lib-input::placeholder { color: var(--ml-dim); }
+          .midi-lib-input:focus { border-color: var(--ml-line-strong); }
+          .midi-lib-actions { display: flex; gap: 8px; flex-wrap: wrap; }
           .midi-lib-btn {
-            height: 44px; padding: 0 16px; border-radius: 10px;
+            height: 42px; padding: 0 14px; border-radius: 10px;
             border: 1px solid var(--ml-line); background: var(--ml-elevated);
-            color: var(--ml-text); font: inherit; font-size: 14px; font-weight: 600;
+            color: var(--ml-text); font: inherit; font-size: 13px; font-weight: 600;
             cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
             white-space: nowrap;
           }
-          .midi-lib-btn:disabled { opacity: 0.45; cursor: default; }
-          .midi-lib-btn:hover:not(:disabled) { background: #2c2c2e; }
+          .midi-lib-btn:disabled { opacity: 0.4; cursor: default; }
+          .midi-lib-btn:hover:not(:disabled) { background: var(--ml-hover); border-color: var(--ml-line-strong); }
           .midi-lib-btn-primary {
-            background: var(--ml-blue); border-color: var(--ml-blue); color: #fff;
+            background: #f5f5f7; border-color: #f5f5f7; color: #111;
+            flex: 1; justify-content: center;
           }
-          .midi-lib-btn-primary:hover:not(:disabled) { background: #0077ed; }
-          .midi-lib-btn-icon {
-            width: 44px; padding: 0; justify-content: center;
+          .midi-lib-btn-primary:hover:not(:disabled) { background: #fff; border-color: #fff; }
+          .midi-lib-btn-icon { width: 42px; padding: 0; justify-content: center; }
+          .midi-lib-main { min-width: 0; }
+          .midi-lib-main-head {
+            display: flex; align-items: flex-end; justify-content: space-between;
+            gap: 16px; margin-bottom: 18px;
           }
+          .midi-lib-main-title {
+            margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
+          }
+          .midi-lib-main-sub { margin: 4px 0 0; font-size: 13px; color: var(--ml-muted); }
           .midi-lib-error {
-            margin: 0 0 18px; padding: 12px 14px; border-radius: 10px;
-            border: 1px solid rgba(255,69,58,0.35); background: rgba(255,69,58,0.08);
-            color: #ff6961; font-size: 13px;
+            margin: 0 0 16px; padding: 12px 14px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.16); background: var(--ml-elevated);
+            color: #d1d1d6; font-size: 13px;
           }
-          .midi-lib-list {
+          .midi-lib-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 12px;
+          }
+          .midi-lib-card {
             border: 1px solid var(--ml-line); border-radius: 14px;
-            overflow: hidden; background: var(--ml-surface);
+            background: var(--ml-surface); padding: 18px;
+            display: flex; flex-direction: column; gap: 18px; min-height: 148px;
+            transition: background 0.12s ease, border-color 0.12s ease;
           }
-          .midi-lib-row {
-            display: grid; grid-template-columns: 1fr auto auto;
-            gap: 16px; align-items: center;
-            padding: 16px 18px;
-            border-bottom: 1px solid var(--ml-line);
-            transition: background 0.12s ease;
+          .midi-lib-card:hover { background: var(--ml-elevated); border-color: var(--ml-line-strong); }
+          .midi-lib-card-top {
+            display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
           }
-          .midi-lib-row:last-child { border-bottom: none; }
-          .midi-lib-row:hover { background: var(--ml-elevated); }
-          .midi-lib-row:focus-visible { outline: 2px solid var(--ml-blue); outline-offset: -2px; }
-          .midi-lib-row-name {
-            font-size: 16px; font-weight: 600; letter-spacing: -0.02em;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          .midi-lib-card-mark {
+            width: 36px; height: 36px; border-radius: 9px;
+            border: 1px solid var(--ml-line); background: #0a0a0b;
+            display: flex; align-items: center; justify-content: center; color: #d1d1d6;
           }
-          .midi-lib-row-meta {
-            font-size: 13px; color: var(--ml-muted); white-space: nowrap;
-          }
-          .midi-lib-del {
-            width: 36px; height: 36px; border-radius: 8px; border: none;
+          .midi-lib-card-tools { display: flex; gap: 4px; }
+          .midi-lib-icon-btn {
+            width: 34px; height: 34px; border-radius: 8px; border: 1px solid transparent;
             background: transparent; color: var(--ml-muted); cursor: pointer;
             display: flex; align-items: center; justify-content: center;
           }
-          .midi-lib-del:hover { color: var(--ml-red); background: rgba(255,69,58,0.1); }
+          .midi-lib-icon-btn:hover {
+            color: var(--ml-text); border-color: var(--ml-line); background: #0a0a0b;
+          }
+          .midi-lib-icon-btn.danger:hover {
+            color: var(--ml-red); border-color: rgba(255,69,58,0.35); background: rgba(255,69,58,0.08);
+          }
+          .midi-lib-card-name {
+            margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.025em;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          }
+          .midi-lib-card-meta {
+            margin: 6px 0 0; font-size: 12px; color: var(--ml-muted);
+          }
+          .midi-lib-rename {
+            width: 100%; height: 40px; padding: 0 12px; box-sizing: border-box;
+            border-radius: 8px; border: 1px solid var(--ml-line-strong);
+            background: #09090a; color: var(--ml-text); font: inherit; font-size: 15px; outline: none;
+          }
+          .midi-lib-rename-actions { display: flex; gap: 6px; margin-top: 10px; }
+          .midi-lib-open {
+            margin-top: auto; height: 36px; border-radius: 8px;
+            border: 1px solid var(--ml-line); background: transparent;
+            color: var(--ml-text); font: inherit; font-size: 13px; font-weight: 600;
+            cursor: pointer; width: 100%;
+          }
+          .midi-lib-open:hover { background: #0a0a0b; border-color: var(--ml-line-strong); }
+          .midi-lib-open:disabled { opacity: 0.45; cursor: wait; }
           .midi-lib-empty {
-            padding: 64px 24px; text-align: center; color: var(--ml-muted);
-            border: 1px solid var(--ml-line); border-radius: 14px;
-            background: var(--ml-surface);
+            padding: 72px 28px; text-align: center; color: var(--ml-muted);
+            border: 1px solid var(--ml-line); border-radius: 14px; background: var(--ml-surface);
           }
           .midi-lib-empty h2 {
-            margin: 14px 0 6px; font-size: 20px; font-weight: 600;
+            margin: 14px 0 6px; font-size: 22px; font-weight: 600;
             color: var(--ml-text); letter-spacing: -0.02em;
           }
           .midi-lib-empty p { margin: 0; font-size: 14px; line-height: 1.45; }
           .midi-lib-loading {
-            padding: 48px; text-align: center; color: var(--ml-muted); font-size: 14px;
+            padding: 64px; text-align: center; color: var(--ml-muted); font-size: 14px;
+            border: 1px solid var(--ml-line); border-radius: 14px; background: var(--ml-surface);
           }
           .midi-lib-foot {
-            margin-top: 28px; font-size: 12px; color: #636366; letter-spacing: 0.01em;
+            margin-top: 18px; font-size: 12px; color: var(--ml-dim);
           }
-          @media (max-width: 560px) {
-            .midi-lib-row { grid-template-columns: 1fr auto; }
-            .midi-lib-row-meta { grid-column: 1; grid-row: 2; }
+          @media (max-width: 900px) {
+            .midi-lib-shell { grid-template-columns: 1fr; }
+            .midi-lib-side { position: static; }
           }
         `}</style>
 
-        <div className="midi-lib-inner">
-          <p className="midi-lib-brand">SoundLab</p>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
-            <div>
-              <h1 className="midi-lib-title">Projects</h1>
-              <p className="midi-lib-lead">
-                Выберите проект или создайте новый. Всё сохраняется в аккаунт автоматически.
-              </p>
+        <div className="midi-lib-shell">
+          <aside className="midi-lib-side">
+            <p className="midi-lib-brand">SoundLab</p>
+            <h1 className="midi-lib-title">Projects</h1>
+            <p className="midi-lib-lead">
+              Библиотека битов в аккаунте. Откройте проект или создайте новый — автосохранение всегда включено.
+            </p>
+
+            <div className="midi-lib-stats">
+              <div className="midi-lib-stat">
+                <p className="midi-lib-stat-label">Всего</p>
+                <p className="midi-lib-stat-value">{projectsLoading ? '—' : projects.length}</p>
+              </div>
+              <div className="midi-lib-stat">
+                <p className="midi-lib-stat-label">Лимит семпла</p>
+                <p className="midi-lib-stat-value" style={{ fontSize: 22 }}>6 MB</p>
+              </div>
             </div>
-            <button
-              type="button"
-              className="midi-lib-btn midi-lib-btn-icon"
-              onClick={() => void loadProjectLibrary()}
-              disabled={projectsLoading}
-              title="Обновить"
-            >
-              <RefreshCw size={16} />
-            </button>
-          </div>
 
-          <div className="midi-lib-toolbar">
-            <input
-              className="midi-lib-input"
-              value={newProjectName}
-              onChange={event => setNewProjectName(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Enter' && !projectActionLoading) void createNewProject();
-              }}
-              maxLength={100}
-              placeholder="Название нового проекта"
-            />
-            <button
-              type="button"
-              className="midi-lib-btn midi-lib-btn-primary"
-              onClick={() => void createNewProject()}
-              disabled={projectActionLoading}
-            >
-              <Plus size={15} />
-              Создать
-            </button>
-            <label className="midi-lib-btn" style={{ margin: 0 }}>
-              <Upload size={15} />
-              Импорт
-              <input type="file" accept=".json" onChange={importProject} style={{ display: 'none' }} />
-            </label>
-          </div>
-
-          {libraryError && <div className="midi-lib-error">{libraryError}</div>}
-
-          {projectsLoading ? (
-            <div className="midi-lib-loading">Загрузка…</div>
-          ) : projects.length === 0 ? (
-            <div className="midi-lib-empty">
-              <FolderOpen size={28} strokeWidth={1.5} />
-              <h2>Пока пусто</h2>
-              <p>Введите название выше и нажмите «Создать».</p>
-            </div>
-          ) : (
-            <div className="midi-lib-list">
-              {projects.map(item => (
-                <div
-                  key={item.id}
-                  className="midi-lib-row"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => !projectActionLoading && void openProject(item.id)}
-                  onKeyDown={event => {
-                    if (projectActionLoading) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      void openProject(item.id);
-                    }
-                  }}
-                  style={{ cursor: projectActionLoading ? 'wait' : 'pointer', opacity: projectActionLoading ? 0.7 : 1 }}
+            <div className="midi-lib-create">
+              <p className="midi-lib-create-label">Новый проект</p>
+              <input
+                className="midi-lib-input"
+                value={newProjectName}
+                onChange={event => setNewProjectName(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && !projectActionLoading) void createNewProject();
+                }}
+                maxLength={100}
+                placeholder="Название"
+              />
+              <div className="midi-lib-actions">
+                <button
+                  type="button"
+                  className="midi-lib-btn midi-lib-btn-primary"
+                  onClick={() => void createNewProject()}
+                  disabled={projectActionLoading}
                 >
-                  <span className="midi-lib-row-name">{item.name}</span>
-                  <span className="midi-lib-row-meta">{formatUpdated(item.updatedAt)}</span>
-                  <button
-                    type="button"
-                    className="midi-lib-del"
-                    title="Удалить"
-                    onClick={event => {
-                      event.stopPropagation();
-                      void deleteProject(item);
-                    }}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
+                  <Plus size={15} />
+                  Создать
+                </button>
+                <label className="midi-lib-btn" style={{ margin: 0 }}>
+                  <Upload size={15} />
+                  Импорт
+                  <input type="file" accept=".json" onChange={importProject} style={{ display: 'none' }} />
+                </label>
+              </div>
             </div>
-          )}
+          </aside>
 
-          <p className="midi-lib-foot">Автосохранение · Проекты привязаны к аккаунту</p>
+          <section className="midi-lib-main">
+            <div className="midi-lib-main-head">
+              <div>
+                <h2 className="midi-lib-main-title">Ваши проекты</h2>
+                <p className="midi-lib-main-sub">Нажмите «Открыть» или переименуйте через карандаш</p>
+              </div>
+              <button
+                type="button"
+                className="midi-lib-btn midi-lib-btn-icon"
+                onClick={() => void loadProjectLibrary()}
+                disabled={projectsLoading}
+                title="Обновить"
+              >
+                <RefreshCw size={16} />
+              </button>
+            </div>
+
+            {libraryError && <div className="midi-lib-error">{libraryError}</div>}
+
+            {projectsLoading ? (
+              <div className="midi-lib-loading">Загрузка…</div>
+            ) : projects.length === 0 ? (
+              <div className="midi-lib-empty">
+                <FolderOpen size={30} strokeWidth={1.5} />
+                <h2>Пока пусто</h2>
+                <p>Создайте первый проект слева — он появится в этой сетке.</p>
+              </div>
+            ) : (
+              <div className="midi-lib-grid">
+                {projects.map(item => {
+                  const isRenaming = renamingProjectId === item.id;
+                  return (
+                    <article key={item.id} className="midi-lib-card">
+                      <div className="midi-lib-card-top">
+                        <div className="midi-lib-card-mark">
+                          <Music size={16} strokeWidth={1.75} />
+                        </div>
+                        <div className="midi-lib-card-tools">
+                          {!isRenaming && (
+                            <button
+                              type="button"
+                              className="midi-lib-icon-btn"
+                              title="Переименовать"
+                              onClick={() => beginRenameProject(item)}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="midi-lib-icon-btn danger"
+                            title="Удалить"
+                            onClick={() => void deleteProject(item)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isRenaming ? (
+                        <div>
+                          <input
+                            className="midi-lib-rename"
+                            value={renameDraft}
+                            autoFocus
+                            maxLength={100}
+                            onChange={event => setRenameDraft(event.target.value)}
+                            onKeyDown={event => {
+                              if (event.key === 'Enter') void saveRenameProject(item);
+                              if (event.key === 'Escape') cancelRenameProject();
+                            }}
+                          />
+                          <div className="midi-lib-rename-actions">
+                            <button
+                              type="button"
+                              className="midi-lib-btn midi-lib-btn-primary"
+                              style={{ height: 34, flex: 1 }}
+                              disabled={projectActionLoading}
+                              onClick={() => void saveRenameProject(item)}
+                            >
+                              Сохранить
+                            </button>
+                            <button
+                              type="button"
+                              className="midi-lib-btn"
+                              style={{ height: 34 }}
+                              onClick={cancelRenameProject}
+                            >
+                              Отмена
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <h3 className="midi-lib-card-name" title={item.name}>{item.name}</h3>
+                          <p className="midi-lib-card-meta">Изменён {formatUpdated(item.updatedAt)}</p>
+                        </div>
+                      )}
+
+                      {!isRenaming && (
+                        <button
+                          type="button"
+                          className="midi-lib-open"
+                          disabled={projectActionLoading}
+                          onClick={() => void openProject(item.id)}
+                        >
+                          Открыть
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            <p className="midi-lib-foot">Автосохранение · Проекты привязаны к аккаунту</p>
+          </section>
         </div>
       </div>
     );

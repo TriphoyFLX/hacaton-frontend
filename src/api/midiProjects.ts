@@ -26,6 +26,8 @@ export const midiProjectsApi = {
     api.post<StoredMidiProject>('/midi-projects', { name, data }),
   save: (id: string, name: string, data: Record<string, unknown>) =>
     api.put<StoredMidiProject>(`/midi-projects/${id}`, { name, data }),
+  rename: (id: string, name: string) =>
+    api.put<StoredMidiProject>(`/midi-projects/${id}`, { name }),
   remove: (id: string) => api.delete(`/midi-projects/${id}`),
   uploadSample: (projectId: string, file: File, sampleId?: string) => {
     const form = new FormData();
