@@ -1570,6 +1570,46 @@ function MIDISequencer() {
     return arrangementEnd;
   }, [getActivePattern]);
 
+  const scrubbingRef = useRef(false);
+
+  const seekPlayheadToBeat = useCallback((rawBeat: number, mode: 'pattern' | 'song') => {
+    if (!project) return;
+    let next = Math.max(0, snapToGrid(rawBeat));
+    if (mode === 'pattern') {
+      const len = patternBeats(getActivePattern(project).length);
+      next = Math.min(next, Math.max(0, len - quantizeGrid));
+    } else {
+      const len = getTimelineLength(project);
+      next = Math.min(next, Math.max(0, len));
+    }
+    playheadRef.current = next;
+    setPlayheadTime(next);
+  }, [project, snapToGrid, quantizeGrid, getActivePattern, getTimelineLength]);
+
+  const beginPlayheadScrub = useCallback((
+    e: React.MouseEvent,
+    mode: 'pattern' | 'song',
+    getBeatFromClientX: (clientX: number) => number,
+  ) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    scrubbingRef.current = true;
+    seekPlayheadToBeat(getBeatFromClientX(e.clientX), mode);
+
+    const onMove = (ev: MouseEvent) => {
+      if (!scrubbingRef.current) return;
+      seekPlayheadToBeat(getBeatFromClientX(ev.clientX), mode);
+    };
+    const onUp = () => {
+      scrubbingRef.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [seekPlayheadToBeat]);
+
   const getEngine = useCallback(() => {
     if (!engineRef.current) engineRef.current = new AudioEngine();
     return engineRef.current;
@@ -2031,6 +2071,12 @@ function MIDISequencer() {
       const now = eng.ctx.currentTime;
       const delta = Math.min(now - lastTimeRef.current, 0.05);
       lastTimeRef.current = now;
+
+      // Don't fight the user while they drag the playhead
+      if (scrubbingRef.current) {
+        rafRef.current = requestAnimationFrame(scheduleNotes);
+        return;
+      }
 
       const bps = snapshot.bpm / 60;
       const beatDelta = delta * bps;
@@ -3770,7 +3816,17 @@ function MIDISequencer() {
               }}>
                 BAR
               </div>
-              <div style={{ position: 'relative', width: patternBeatLength * zoom, height: 28 }}>
+              <div
+                style={{ position: 'relative', width: patternBeatLength * zoom, height: 28, cursor: 'ew-resize' }}
+                title="Перетащите, чтобы задать старт"
+                onMouseDown={(e) => {
+                  const el = e.currentTarget;
+                  beginPlayheadScrub(e, 'pattern', (clientX) => {
+                    const rect = el.getBoundingClientRect();
+                    return (clientX - rect.left) / zoom;
+                  });
+                }}
+              >
                 {/* Fencepost markers: 4 bars → points 1,2,3,4,5 (5 = end / loop) */}
                 {Array.from({ length: activePattern.length + 1 }).map((_, point) => {
                   const left = point * BEATS_PER_BAR * zoom;
@@ -3817,6 +3873,28 @@ function MIDISequencer() {
                     </div>
                   );
                 })}
+                {/* Playhead on pattern ruler */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    left: (playheadTime % Math.max(patternBeatLength, 0.0001)) * zoom,
+                    background: '#00D1FF',
+                    boxShadow: '0 0 10px #00D1FF',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 2, left: -5,
+                    width: 0, height: 0,
+                    borderLeft: '6px solid transparent',
+                    borderRight: '6px solid transparent',
+                    borderTop: '8px solid #00D1FF',
+                  }} />
+                </div>
               </div>
             </div>
 
@@ -3956,18 +4034,36 @@ function MIDISequencer() {
                   })
                 ))}
 
-                {/* Playhead — clamped inside pattern, loops with playback */}
-                <div style={{ 
-                  position: 'absolute', top: 0, bottom: 0, width: 3, 
-                  background: '#00D1FF', zIndex: 40, 
-                  boxShadow: '0 0 20px #00D1FF', 
-                  left: (playheadTime % Math.max(patternBeatLength, 0.0001)) * zoom,
-                  display: playheadTime >= 0 ? 'block' : 'none',
-                }}>
+                {/* Playhead — drag to set start */}
+                <div
+                  onMouseDown={(e) => {
+                    const grid = e.currentTarget.parentElement;
+                    if (!grid) return;
+                    beginPlayheadScrub(e, 'pattern', (clientX) => {
+                      const rect = grid.getBoundingClientRect();
+                      return (clientX - rect.left) / zoom;
+                    });
+                  }}
+                  title="Перетащите, чтобы задать старт"
+                  style={{ 
+                    position: 'absolute', top: 0, bottom: 0, width: 12, 
+                    marginLeft: -5,
+                    background: 'transparent', zIndex: 40, 
+                    cursor: 'ew-resize',
+                    left: (playheadTime % Math.max(patternBeatLength, 0.0001)) * zoom,
+                    display: playheadTime >= 0 ? 'block' : 'none',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 0, bottom: 0, left: 5, width: 3,
+                    background: '#00D1FF', boxShadow: '0 0 20px #00D1FF',
+                    pointerEvents: 'none',
+                  }} />
                   <div style={{ 
-                    position: 'absolute', top: -4, left: -5, 
+                    position: 'absolute', top: -4, left: 0, 
                     width: 12, height: 12, background: '#00D1FF', 
-                    borderRadius: '50%', boxShadow: '0 0 15px #00D1FF' 
+                    borderRadius: '50%', boxShadow: '0 0 15px #00D1FF',
+                    pointerEvents: 'none',
                   }} />
                 </div>
 
@@ -4080,9 +4176,29 @@ function MIDISequencer() {
               }}
             >
               <div style={{ position: 'absolute', left: 0, top: 0, width: PLAYLIST_LABEL_WIDTH, height: 30, borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#161616', zIndex: 6 }} />
-              <div style={{ position: 'absolute', left: PLAYLIST_LABEL_WIDTH, top: 0, width: timelineLength * zoom, height: 30, borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#141414', zIndex: 5 }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: PLAYLIST_LABEL_WIDTH,
+                  top: 0,
+                  width: timelineLength * zoom,
+                  height: 30,
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                  background: '#141414',
+                  zIndex: 5,
+                  cursor: 'ew-resize',
+                }}
+                title="Перетащите, чтобы задать старт"
+                onMouseDown={(e) => {
+                  const el = e.currentTarget;
+                  beginPlayheadScrub(e, 'song', (clientX) => {
+                    const rect = el.getBoundingClientRect();
+                    return (clientX - rect.left) / zoom;
+                  });
+                }}
+              >
                 {Array.from({ length: Math.ceil(timelineLength / BEATS_PER_BAR) }).map((_, bar) => (
-                  <div key={`bar-${bar}`} style={{ position: 'absolute', left: bar * BEATS_PER_BAR * zoom, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.18)' }}>
+                  <div key={`bar-${bar}`} style={{ position: 'absolute', left: bar * BEATS_PER_BAR * zoom, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.18)', pointerEvents: 'none' }}>
                     <span style={{ position: 'absolute', top: 7, left: 4, fontSize: 10, color: '#6e6e6e', fontFamily: 'monospace' }}>{bar + 1}</span>
                   </div>
                 ))}
@@ -4096,9 +4212,30 @@ function MIDISequencer() {
                       bottom: 0,
                       width: 1,
                       background: beat % BEATS_PER_BAR === 0 ? 'transparent' : 'rgba(255,255,255,0.05)',
+                      pointerEvents: 'none',
                     }}
                   />
                 ))}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    left: playheadTime * zoom,
+                    background: '#00D1FF',
+                    boxShadow: '0 0 10px rgba(0,209,255,0.8)',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 2, left: -5,
+                    width: 0, height: 0,
+                    borderLeft: '6px solid transparent',
+                    borderRight: '6px solid transparent',
+                    borderTop: '8px solid #00D1FF',
+                  }} />
+                </div>
               </div>
 
               {Array.from({ length: PLAYLIST_LANES }).map((_, lane) => (
@@ -4259,18 +4396,40 @@ function MIDISequencer() {
                 );
               })}
               <div
+                onMouseDown={(e) => {
+                  const parent = e.currentTarget.parentElement;
+                  if (!parent) return;
+                  beginPlayheadScrub(e, 'song', (clientX) => {
+                    const rect = parent.getBoundingClientRect();
+                    return (clientX - rect.left - PLAYLIST_LABEL_WIDTH) / zoom;
+                  });
+                }}
+                title="Перетащите, чтобы задать старт"
                 style={{
                   position: 'absolute',
                   top: 30,
                   bottom: 0,
-                  width: 2,
-                  background: '#00D1FF',
-                  boxShadow: '0 0 12px rgba(0,209,255,0.8)',
+                  width: 12,
+                  marginLeft: -5,
+                  background: 'transparent',
+                  cursor: 'ew-resize',
                   left: PLAYLIST_LABEL_WIDTH + playheadTime * zoom,
-                  zIndex: 7,
-                  pointerEvents: 'none',
+                  zIndex: 9,
                 }}
-              />
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: 5,
+                    width: 2,
+                    background: '#00D1FF',
+                    boxShadow: '0 0 12px rgba(0,209,255,0.8)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              </div>
             </div>
           </div>
 
