@@ -2020,7 +2020,7 @@ function MIDISequencer() {
     let lastUiUpdate = 0;
 
     const scheduleNotes = () => {
-      const snapshot = project;
+      const snapshot = latestProjectRef.current || project;
       if (!snapshot) return;
 
       if (!isPlayingRef.current) {
@@ -3250,15 +3250,21 @@ function MIDISequencer() {
             
             <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Metronome</span>
-              <button 
-                onClick={() => setProject({...project, metronomeEnabled: !project.metronomeEnabled})}
-                style={{ 
-                  fontSize: '10px', fontWeight: 'bold', background: 'none', border: 'none', 
-                  cursor: 'pointer', color: project.metronomeEnabled ? '#00D1FF' : '#666',
-                  letterSpacing: '1px', padding: '2px 0'
+              <button
+                type="button"
+                title={project.metronomeEnabled ? 'Выключить метроном' : 'Включить метроном'}
+                onClick={() => commitProject(prev => ({ ...prev, metronomeEnabled: !prev.metronomeEnabled }))}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                  padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                  border: project.metronomeEnabled ? '1px solid rgba(0,209,255,0.45)' : '1px solid rgba(255,255,255,0.15)',
+                  background: project.metronomeEnabled ? 'rgba(0,209,255,0.15)' : 'rgba(255,255,255,0.04)',
+                  color: project.metronomeEnabled ? '#7fdcf0' : '#777',
                 }}
               >
-                {project.metronomeEnabled ? 'ACTIVE' : 'MUTED'}
+                <Activity size={12} />
+                {project.metronomeEnabled ? 'ON' : 'OFF'}
               </button>
             </div>
             
@@ -3422,6 +3428,28 @@ function MIDISequencer() {
               boxShadow: project.isPlaying ? '0 4px 20px rgba(255,69,0,0.3)' : '0 4px 20px rgba(0,209,255,0.3)'
             }}>
               {project.isPlaying ? <Pause size={16} /> : <Play size={16} />}
+            </button>
+            <button
+              type="button"
+              title={project.metronomeEnabled ? 'Выключить метроном' : 'Включить метроном'}
+              onClick={() => commitProject(prev => ({ ...prev, metronomeEnabled: !prev.metronomeEnabled }))}
+              style={{
+                padding: '8px 10px',
+                background: project.metronomeEnabled ? 'rgba(0,209,255,0.2)' : 'none',
+                border: 'none',
+                borderRadius: 9,
+                cursor: 'pointer',
+                color: project.metronomeEnabled ? '#7fdcf0' : '#666',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 0.5,
+              }}
+            >
+              <Activity size={14} />
+              {project.metronomeEnabled ? 'CLICK' : 'MUTE'}
             </button>
           </div>
           
