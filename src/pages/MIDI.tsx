@@ -113,7 +113,7 @@ function normalizeTrackEq(eq: Partial<TrackEq> | undefined): TrackEq {
 
 const PROJECT_STORAGE_PREFIX = 'aura_pro_sequencer_v2';
 const LEGACY_PROJECT_STORAGE_KEY = 'aura_pro_sequencer_v2';
-const MAX_SAMPLE_BYTES = 3 * 1024 * 1024;
+const MAX_SAMPLE_BYTES = 6 * 1024 * 1024;
 /** MP3 encoder/decoder delay — silent gap at the start (~20ms / 0.02s) */
 const MP3_START_TRIM_SEC = 0.02;
 
@@ -2776,7 +2776,7 @@ function MIDISequencer() {
       console.error('Failed to import audio sample', e);
       window.alert(
         e instanceof Error && e.message === 'SAMPLE_TOO_LARGE'
-          ? 'Файл слишком большой. Максимальный размер сэмпла — 3 МБ.'
+          ? 'Файл слишком большой. Максимальный размер сэмпла — 6 МБ.'
           : 'Не удалось загрузить сэмпл на сервер. Попробуйте другой файл.',
       );
     }
@@ -2951,7 +2951,7 @@ function MIDISequencer() {
       }
     }
     if (tooLarge.length > 0) {
-      window.alert(`Файлы больше 3 МБ не добавлены:\n${tooLarge.join('\n')}`);
+      window.alert(`Файлы больше 6 МБ не добавлены:\n${tooLarge.join('\n')}`);
     }
     if (failed.length > 0) {
       window.alert(`Не удалось загрузить на сервер:\n${failed.join('\n')}`);
@@ -3161,7 +3161,7 @@ function MIDISequencer() {
           return;
         }
         if (blob.size > MAX_SAMPLE_BYTES) {
-          window.alert('Запись получилась больше 3 МБ — сократите дубль.');
+          window.alert('Запись получилась больше 6 МБ — сократите дубль.');
           return;
         }
         const extension = (recorder.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
