@@ -114,6 +114,34 @@ function normalizeTrackEq(eq: Partial<TrackEq> | undefined): TrackEq {
 const PROJECT_STORAGE_PREFIX = 'aura_pro_sequencer_v2';
 const LEGACY_PROJECT_STORAGE_KEY = 'aura_pro_sequencer_v2';
 const MAX_SAMPLE_BYTES = 3 * 1024 * 1024;
+/** MP3 encoder/decoder delay — silent gap at the start (~20ms / 0.02s) */
+const MP3_START_TRIM_SEC = 0.02;
+
+function looksLikeMp3(fileOrBytes: File | ArrayBuffer | string): boolean {
+  if (typeof fileOrBytes === 'string') {
+    return /\.mp3$/i.test(fileOrBytes) || /mpeg|mp3/i.test(fileOrBytes);
+  }
+  if (typeof File !== 'undefined' && fileOrBytes instanceof File) {
+    return /\.mp3$/i.test(fileOrBytes.name) || /mpeg|mp3/i.test(fileOrBytes.type);
+  }
+  const bytes = new Uint8Array(fileOrBytes as ArrayBuffer);
+  if (bytes.length < 3) return false;
+  // ID3 tag or MPEG frame sync
+  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) return true;
+  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) return true;
+  return false;
+}
+
+function trimAudioBufferStart(ctx: AudioContext, buffer: AudioBuffer, trimSec: number): AudioBuffer {
+  const startFrame = Math.floor(trimSec * buffer.sampleRate);
+  if (startFrame <= 0 || startFrame >= buffer.length - 1) return buffer;
+  const newLen = buffer.length - startFrame;
+  const trimmed = ctx.createBuffer(buffer.numberOfChannels, newLen, buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    trimmed.copyToChannel(buffer.getChannelData(ch).subarray(startFrame), ch);
+  }
+  return trimmed;
+}
 
 /** Per-user save key so projects don't leak between accounts on the same browser */
 function getProjectStorageKey(): string {
@@ -1114,7 +1142,11 @@ class AudioEngine {
     const original = await file.arrayBuffer();
     const forDecode = original.slice(0);
     const forStore = original.slice(0);
-    const audioBuffer = await this.ctx.decodeAudioData(forDecode);
+    let audioBuffer = await this.ctx.decodeAudioData(forDecode);
+    // Cut the fixed MP3 encoder gap so loops land on the beat
+    if (looksLikeMp3(file) || looksLikeMp3(original)) {
+      audioBuffer = trimAudioBufferStart(this.ctx, audioBuffer, MP3_START_TRIM_SEC);
+    }
     const id = persistedId || crypto.randomUUID();
     this.samples.set(id, audioBuffer);
     await saveSampleToDb(id, forStore);
@@ -1138,7 +1170,10 @@ class AudioEngine {
         if (!raw || raw.byteLength === 0) return null;
         await saveSampleToDb(id, raw.slice(0));
       }
-      const audioBuffer = await this.ctx.decodeAudioData(raw.slice(0));
+      let audioBuffer = await this.ctx.decodeAudioData(raw.slice(0));
+      if (looksLikeMp3(raw)) {
+        audioBuffer = trimAudioBufferStart(this.ctx, audioBuffer, MP3_START_TRIM_SEC);
+      }
       this.samples.set(id, audioBuffer);
       return audioBuffer;
     } catch (e) {
