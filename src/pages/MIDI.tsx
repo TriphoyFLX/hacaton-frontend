@@ -1603,6 +1603,19 @@ function MIDISequencer() {
     };
     const onUp = () => {
       scrubbingRef.current = false;
+      // After seek: drop "already played" keys and kill ringing audio so clips
+      // can restart from the new playhead (including mid-clip).
+      scheduledNotesRef.current.clear();
+      if (isPlayingRef.current) {
+        const eng = engineRef.current || new AudioEngine();
+        engineRef.current = eng;
+        eng.stopAll();
+        if (eng.masterGain.gain.value < 0.05) {
+          eng.masterGain.gain.cancelScheduledValues(eng.ctx.currentTime);
+          eng.masterGain.gain.setValueAtTime(0.7, eng.ctx.currentTime);
+        }
+        lastTimeRef.current = eng.ctx.currentTime;
+      }
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
@@ -2160,30 +2173,59 @@ function MIDISequencer() {
       if (snapshot.transportMode === 'song') {
         snapshot.arrangement.forEach(clip => {
           if (clip.type !== 'audio' || !clip.sampleId) return;
-          const absoluteStart = clip.startBar * BEATS_PER_BAR;
-          const crossesLoop = wrappedWindow && absoluteStart < windowStart;
-          const clipCycle = crossesLoop ? cycle + 1 : cycle;
-          const clipKey = `clip-${clip.id}-c${clipCycle}-${Math.round(absoluteStart * 1000)}`;
-          const isInWindow = wrappedWindow
-            ? (absoluteStart >= windowStart || absoluteStart < normalizedWindowEnd)
-            : (absoluteStart >= windowStart && absoluteStart < windowEnd);
-          if (!isInWindow || scheduledNotesRef.current.has(clipKey)) return;
-          scheduledNotesRef.current.add(clipKey);
-          const beatsUntilClip = crossesLoop
-            ? absoluteStart + currentTimelineLength - windowStart
-            : absoluteStart - windowStart;
-          const delay = beatsUntilClip / bps;
-          if (delay < 0 || delay >= lookahead + 0.05) return;
-          const offsetSec = (clip.offsetBeats ?? 0) / bps;
-          const durationSec = clip.lengthBeats / bps;
+          const clipStart = clip.startBar * BEATS_PER_BAR;
+          const clipEnd = clipStart + clip.lengthBeats;
           const clipGain = clip.gain ?? 0.9;
-          const cached = eng.samples.get(clip.sampleId);
-          if (cached) {
-            eng.playClip(cached, delay, clipGain, offsetSec, durationSec, clip.eq);
-          } else {
-            void eng.ensureSample(clip.sampleId).then(buffer => {
-              if (buffer && isPlayingRef.current) eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, clip.eq);
-            });
+          const baseOffsetSec = (clip.offsetBeats ?? 0) / bps;
+
+          const fireClip = (delay: number, offsetSec: number, durationSec: number) => {
+            if (delay < 0 || durationSec <= 0.01) return;
+            const cached = eng.samples.get(clip.sampleId!);
+            if (cached) {
+              eng.playClip(cached, delay, clipGain, offsetSec, durationSec, clip.eq);
+            } else {
+              void eng.ensureSample(clip.sampleId!).then(buffer => {
+                if (buffer && isPlayingRef.current) {
+                  eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, clip.eq);
+                }
+              });
+            }
+          };
+
+          // 1) Clip start enters lookahead — play from clip beginning
+          const crossesLoop = wrappedWindow && clipStart < windowStart;
+          const clipCycle = crossesLoop ? cycle + 1 : cycle;
+          const startKey = `clip-${clip.id}-c${clipCycle}-start`;
+          const isStartInWindow = wrappedWindow
+            ? (clipStart >= windowStart || clipStart < normalizedWindowEnd)
+            : (clipStart >= windowStart && clipStart < windowEnd);
+          if (isStartInWindow && !scheduledNotesRef.current.has(startKey)) {
+            scheduledNotesRef.current.add(startKey);
+            scheduledNotesRef.current.add(`clip-${clip.id}-c${clipCycle}-mid`);
+            const beatsUntilClip = crossesLoop
+              ? clipStart + currentTimelineLength - windowStart
+              : clipStart - windowStart;
+            const delay = beatsUntilClip / bps;
+            if (delay >= 0 && delay < lookahead + 0.05) {
+              fireClip(delay, baseOffsetSec, clip.lengthBeats / bps);
+            }
+            return;
+          }
+
+          // 2) After scrub/seek: playhead is inside the clip — start mid-sample
+          const midKey = `clip-${clip.id}-c${cycle}-mid`;
+          const midStartKey = `clip-${clip.id}-c${cycle}-start`;
+          if (
+            nextTime >= clipStart
+            && nextTime < clipEnd
+            && !scheduledNotesRef.current.has(midStartKey)
+            && !scheduledNotesRef.current.has(midKey)
+          ) {
+            scheduledNotesRef.current.add(midKey);
+            scheduledNotesRef.current.add(midStartKey);
+            const beatsIntoClip = nextTime - clipStart;
+            const remainingBeats = clipEnd - nextTime;
+            fireClip(0, baseOffsetSec + beatsIntoClip / bps, remainingBeats / bps);
           }
         });
       }
