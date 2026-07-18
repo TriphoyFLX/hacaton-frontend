@@ -3,7 +3,7 @@ import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
   Download, Upload, Repeat, Sliders, Activity, Volume2,
   MoreVertical, X, Check, Save, Headphones, Waves, Settings,
-  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw
+  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff
 } from 'lucide-react';
 import DesktopOnlyGate from '../components/DesktopOnlyGate';
 import { getAuthUserId } from '../lib/authToken';
@@ -1505,10 +1505,25 @@ function MIDISequencer() {
   const [eqPanelOpen, setEqPanelOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [vocalPanelClipId, setVocalPanelClipId] = useState<string | null>(null);
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState(() => {
+    try { return localStorage.getItem('soundlab_mic_id') || ''; } catch { return ''; }
+  });
+  const [micMonitorOn, setMicMonitorOn] = useState(false);
+  const [micArmed, setMicArmed] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [recordElapsedSec, setRecordElapsedSec] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordStartBeatRef = useRef(0);
   const pendingRecordPlayRef = useRef(false);
+  const monitorGainRef = useRef<GainNode | null>(null);
+  const monitorSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const micMeterSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micLevelRafRef = useRef<number | null>(null);
+  const recordTimerRef = useRef<number | null>(null);
+  const recordStartedAtRef = useRef(0);
   
   const engineRef = useRef<AudioEngine | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -2951,22 +2966,174 @@ function MIDISequencer() {
     setEditorView('playlist');
   }, [project, uploadAndLoadSample, commitProject]);
 
-  const stopVocalRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== 'inactive') recorder.stop();
+  const stopMicLevelMeter = useCallback(() => {
+    if (micLevelRafRef.current) {
+      cancelAnimationFrame(micLevelRafRef.current);
+      micLevelRafRef.current = null;
+    }
+    try { micMeterSourceRef.current?.disconnect(); } catch { /* noop */ }
+    micMeterSourceRef.current = null;
+    micAnalyserRef.current = null;
+    setMicLevel(0);
+  }, []);
+
+  const disconnectMicMonitor = useCallback(() => {
+    try { monitorSourceRef.current?.disconnect(); } catch { /* noop */ }
+    try { monitorGainRef.current?.disconnect(); } catch { /* noop */ }
+    monitorSourceRef.current = null;
+    monitorGainRef.current = null;
+  }, []);
+
+  const refreshMicDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter(d => d.kind === 'audioinput');
+      setMicDevices(mics);
+      if (mics.length > 0 && selectedMicId && !mics.some(m => m.deviceId === selectedMicId)) {
+        setSelectedMicId(mics[0].deviceId);
+      }
+    } catch (error) {
+      console.warn('enumerateDevices failed', error);
+    }
+  }, [selectedMicId]);
+
+  const startMicLevelMeter = useCallback((stream: MediaStream, ctx: AudioContext) => {
+    stopMicLevelMeter();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.7;
+    const source = ctx.createMediaStreamSource(stream);
+    source.connect(analyser);
+    micMeterSourceRef.current = source;
+    micAnalyserRef.current = analyser;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      setMicLevel(Math.min(1, rms * 3.2));
+      micLevelRafRef.current = requestAnimationFrame(tick);
+    };
+    tick();
+  }, [stopMicLevelMeter]);
+
+  const applyMicMonitor = useCallback(async (stream: MediaStream, enabled: boolean) => {
+    const eng = await ensureAudio();
+    disconnectMicMonitor();
+    if (!enabled) return;
+    const source = eng.ctx.createMediaStreamSource(stream);
+    const gain = eng.ctx.createGain();
+    gain.gain.value = 0.9;
+    source.connect(gain);
+    gain.connect(eng.ctx.destination);
+    monitorSourceRef.current = source;
+    monitorGainRef.current = gain;
+  }, [ensureAudio, disconnectMicMonitor]);
+
+  const closeMicStream = useCallback(() => {
+    stopMicLevelMeter();
+    disconnectMicMonitor();
     recordStreamRef.current?.getTracks().forEach(track => track.stop());
     recordStreamRef.current = null;
+    setMicArmed(false);
+  }, [stopMicLevelMeter, disconnectMicMonitor]);
+
+  const openMicStream = useCallback(async (deviceId?: string) => {
+    const constraints: MediaStreamConstraints = {
+      audio: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    // Labels appear only after permission — refresh list
+    await refreshMicDevices();
+    const eng = await ensureAudio();
+    await eng.resume();
+    recordStreamRef.current = stream;
+    startMicLevelMeter(stream, eng.ctx);
+    if (micMonitorOn) await applyMicMonitor(stream, true);
+    setMicArmed(true);
+    return stream;
+  }, [refreshMicDevices, ensureAudio, startMicLevelMeter, micMonitorOn, applyMicMonitor]);
+
+  const selectMicrophone = useCallback(async (deviceId: string) => {
+    setSelectedMicId(deviceId);
+    try { localStorage.setItem('soundlab_mic_id', deviceId); } catch { /* noop */ }
+    const wasRecording = isRecording;
+    const wasArmed = micArmed || Boolean(recordStreamRef.current);
+    if (wasRecording) {
+      window.alert('Сначала остановите запись, потом смените микрофон.');
+      return;
+    }
+    if (wasArmed) {
+      closeMicStream();
+      try {
+        await openMicStream(deviceId || undefined);
+      } catch (error) {
+        console.error(error);
+        window.alert('Не удалось переключить микрофон.');
+      }
+    }
+  }, [isRecording, micArmed, closeMicStream, openMicStream]);
+
+  const toggleMicMonitor = useCallback(async () => {
+    const next = !micMonitorOn;
+    setMicMonitorOn(next);
+    const stream = recordStreamRef.current;
+    if (stream) {
+      try {
+        await applyMicMonitor(stream, next);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  }, [micMonitorOn, applyMicMonitor]);
+
+  const armMicrophone = useCallback(async () => {
+    if (recordStreamRef.current) {
+      closeMicStream();
+      return;
+    }
+    try {
+      await openMicStream(selectedMicId || undefined);
+    } catch (error) {
+      console.error('Microphone access denied:', error);
+      window.alert('Нет доступа к микрофону. Разрешите доступ в настройках браузера.');
+    }
+  }, [openMicStream, selectedMicId, closeMicStream]);
+
+  const stopVocalRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.requestData(); } catch { /* noop */ }
+      recorder.stop();
+    }
     mediaRecorderRef.current = null;
     setIsRecording(false);
+    if (recordTimerRef.current) {
+      window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    setRecordElapsedSec(0);
+    // Keep mic armed for next take (stream stays open); just stop the recorder.
   }, []);
 
   const startVocalRecording = useCallback(async () => {
     if (!project || isRecording) return;
-    let stream: MediaStream;
+    setEditorView('playlist');
+    let stream = recordStreamRef.current;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
+      if (!stream || stream.getAudioTracks().every(t => t.readyState !== 'live')) {
+        stream = await openMicStream(selectedMicId || undefined);
+      }
     } catch (error) {
       console.error('Microphone access denied:', error);
       window.alert('Нет доступа к микрофону. Разрешите доступ в настройках браузера.');
@@ -2978,6 +3145,9 @@ function MIDISequencer() {
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     const chunks: Blob[] = [];
     recordStartBeatRef.current = playheadRef.current;
+    const projectIdAtStart = project.id;
+    const bpmAtStart = project.bpm;
+    const takeNumber = project.arrangement.filter(c => c.isVocal).length + 1;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunks.push(event.data);
@@ -2986,20 +3156,22 @@ function MIDISequencer() {
       void (async () => {
         stopPlayback();
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-        if (blob.size === 0) return;
+        if (blob.size === 0) {
+          window.alert('Пустая запись — проверьте микрофон и уровень.');
+          return;
+        }
         if (blob.size > MAX_SAMPLE_BYTES) {
           window.alert('Запись получилась больше 3 МБ — сократите дубль.');
           return;
         }
         const extension = (recorder.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
-        const takeNumber = (project?.arrangement.filter(c => c.isVocal).length ?? 0) + 1;
         const file = new File([blob], `vocal-take-${takeNumber}.${extension}`, { type: blob.type });
         try {
           const { id: sampleId, duration } = await uploadAndLoadSample(file);
-          const bps = (project?.bpm ?? 124) / 60;
+          const bps = bpmAtStart / 60;
           const lengthBeats = Math.max(quantizeMinBeat(), duration * bps);
           const startBar = Math.floor(recordStartBeatRef.current / BEATS_PER_BAR);
-          const usedLanes = new Set((project?.arrangement ?? []).map(c => c.lane));
+          const usedLanes = new Set((latestProjectRef.current?.arrangement ?? []).map(c => c.lane));
           let lane = PLAYLIST_LANES - 1;
           for (let i = 0; i < PLAYLIST_LANES; i++) {
             if (!usedLanes.has(i)) { lane = i; break; }
@@ -3019,11 +3191,14 @@ function MIDISequencer() {
             gain: 1,
             eq: { enabled: false, low: 0, mid: 0, high: 0 },
           };
-          commitProject(prev => ({
-            ...prev,
-            arrangement: [...prev.arrangement, clip],
-            transportMode: 'song',
-          }));
+          commitProject(prev => {
+            if (prev.id !== projectIdAtStart) return prev;
+            return {
+              ...prev,
+              arrangement: [...prev.arrangement, clip],
+              transportMode: 'song',
+            };
+          });
           setSelectedClipIds([clip.id]);
           setEditorView('playlist');
           setVocalPanelClipId(clip.id);
@@ -3035,14 +3210,18 @@ function MIDISequencer() {
     };
 
     mediaRecorderRef.current = recorder;
-    recordStreamRef.current = stream;
-    recorder.start();
+    recorder.start(250);
     setIsRecording(true);
+    recordStartedAtRef.current = Date.now();
+    setRecordElapsedSec(0);
+    if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+    recordTimerRef.current = window.setInterval(() => {
+      setRecordElapsedSec(Math.floor((Date.now() - recordStartedAtRef.current) / 1000));
+    }, 250);
     // Play the song under the take so vocals line up with the beat.
-    // Playback itself starts from an effect so it picks up the fresh transportMode.
     pendingRecordPlayRef.current = true;
     setProject(prev => prev ? { ...prev, transportMode: 'song' } : prev);
-  }, [project, isRecording, stopPlayback, uploadAndLoadSample, commitProject]);
+  }, [project, isRecording, stopPlayback, uploadAndLoadSample, commitProject, openMicStream, selectedMicId]);
 
   useEffect(() => {
     if (!pendingRecordPlayRef.current) return;
@@ -3051,13 +3230,23 @@ function MIDISequencer() {
     if (!project.isPlaying) togglePlayback();
   }, [isRecording, project, togglePlayback]);
 
+  useEffect(() => {
+    void refreshMicDevices();
+    const onChange = () => { void refreshMicDevices(); };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onChange);
+    return () => navigator.mediaDevices?.removeEventListener?.('devicechange', onChange);
+  }, [refreshMicDevices]);
+
   // Release the microphone if the editor unmounts mid-recording
   useEffect(() => () => {
+    if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+    stopMicLevelMeter();
+    disconnectMicMonitor();
     recordStreamRef.current?.getTracks().forEach(track => track.stop());
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
-  }, []);
+  }, [stopMicLevelMeter, disconnectMicMonitor]);
 
   const exportProject = () => {
     if (!project) return;
@@ -4124,27 +4313,96 @@ function MIDISequencer() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 10, color: '#8a8a8a', letterSpacing: '1px' }}>PLAYLIST</span>
-                <button
-                  type="button"
-                  onClick={() => { if (isRecording) { stopVocalRecording(); } else { void startVocalRecording(); } }}
-                  title={isRecording ? 'Остановить запись' : 'Записать вокал с микрофона (с позиции плейхеда)'}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    fontSize: 9, fontWeight: 700, letterSpacing: 1,
-                    padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-                    border: isRecording ? '1px solid rgba(255,70,70,0.6)' : '1px solid rgba(255,255,255,0.15)',
-                    background: isRecording ? 'rgba(255,70,70,0.2)' : 'rgba(255,255,255,0.04)',
-                    color: isRecording ? '#ff6b6b' : '#bbb',
-                  }}
-                >
-                  <span style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: isRecording ? '#ff4646' : '#c0392b',
-                    boxShadow: isRecording ? '0 0 8px #ff4646' : 'none',
-                    animation: isRecording ? 'pulse 1s infinite' : 'none',
-                  }} />
-                  {isRecording ? 'STOP' : 'REC'}
-                </button>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+                  padding: '3px 6px', borderRadius: 6,
+                  border: isRecording ? '1px solid rgba(255,70,70,0.45)' : '1px solid rgba(255,255,255,0.1)',
+                  background: isRecording ? 'rgba(255,70,70,0.08)' : 'rgba(255,255,255,0.03)',
+                }}>
+                  <Mic size={12} color={micArmed || isRecording ? '#ff8a8a' : '#777'} />
+                  <select
+                    value={selectedMicId}
+                    onChange={e => { void selectMicrophone(e.target.value); }}
+                    title="Выбор микрофона"
+                    style={{
+                      maxWidth: 160, fontSize: 9, color: '#ccc',
+                      background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: 4, padding: '3px 4px', outline: 'none',
+                    }}
+                  >
+                    <option value="">Микрофон по умолчанию</option>
+                    {micDevices.map(device => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Микрофон ${device.deviceId.slice(0, 6)}`}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => { void armMicrophone(); }}
+                    disabled={isRecording}
+                    title={micArmed ? 'Закрыть микрофон' : 'Открыть микрофон (проверка уровня)'}
+                    style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: 0.6, padding: '3px 7px', borderRadius: 4, cursor: isRecording ? 'default' : 'pointer',
+                      border: micArmed ? '1px solid rgba(255,138,138,0.5)' : '1px solid rgba(255,255,255,0.12)',
+                      background: micArmed ? 'rgba(255,138,138,0.15)' : 'rgba(255,255,255,0.04)',
+                      color: micArmed ? '#ffb3b3' : '#888',
+                      opacity: isRecording ? 0.5 : 1,
+                    }}
+                  >
+                    {micArmed ? 'MIC ON' : 'ARM'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void toggleMicMonitor(); }}
+                    title={micMonitorOn ? 'Выключить «слышать себя»' : 'Слышать себя (лучше в наушниках)'}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      fontSize: 9, fontWeight: 700, letterSpacing: 0.6, padding: '3px 7px', borderRadius: 4, cursor: 'pointer',
+                      border: micMonitorOn ? '1px solid rgba(0,209,255,0.45)' : '1px solid rgba(255,255,255,0.12)',
+                      background: micMonitorOn ? 'rgba(0,209,255,0.12)' : 'rgba(255,255,255,0.04)',
+                      color: micMonitorOn ? '#7fdcf0' : '#777',
+                    }}
+                  >
+                    {micMonitorOn ? <Headphones size={11} /> : <MicOff size={11} />}
+                    {micMonitorOn ? 'MONITOR' : 'MON'}
+                  </button>
+                  <div
+                    title="Уровень входа"
+                    style={{
+                      width: 56, height: 8, borderRadius: 3, overflow: 'hidden',
+                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    <div style={{
+                      width: `${Math.round(micLevel * 100)}%`,
+                      height: '100%',
+                      background: micLevel > 0.85 ? '#ff4646' : micLevel > 0.55 ? '#f0b429' : '#52d68a',
+                      transition: 'width 0.05s linear',
+                    }} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { if (isRecording) { stopVocalRecording(); } else { void startVocalRecording(); } }}
+                    title={isRecording ? 'Остановить запись' : 'Записать вокал с позиции плейхеда (бит играет под вас)'}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      fontSize: 9, fontWeight: 700, letterSpacing: 1,
+                      padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                      border: isRecording ? '1px solid rgba(255,70,70,0.6)' : '1px solid rgba(255,255,255,0.15)',
+                      background: isRecording ? 'rgba(255,70,70,0.2)' : 'rgba(255,255,255,0.04)',
+                      color: isRecording ? '#ff6b6b' : '#bbb',
+                    }}
+                  >
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: isRecording ? '#ff4646' : '#c0392b',
+                      boxShadow: isRecording ? '0 0 8px #ff4646' : 'none',
+                      animation: isRecording ? 'pulse 1s infinite' : 'none',
+                    }} />
+                    {isRecording ? `STOP ${Math.floor(recordElapsedSec / 60)}:${String(recordElapsedSec % 60).padStart(2, '0')}` : 'REC'}
+                  </button>
+                </div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   {[
                     { label: 'Split', title: 'Split at playhead (S)', onClick: splitSelectedClip },
