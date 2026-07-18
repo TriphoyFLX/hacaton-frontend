@@ -31,7 +31,10 @@ export const midiProjectsApi = {
     const form = new FormData();
     form.append('sample', file);
     if (sampleId) form.append('sampleId', sampleId);
-    return api.post<MidiSampleUpload>(`/midi-projects/${projectId}/samples`, form);
+    return api.post<MidiSampleUpload>(`/midi-projects/${projectId}/samples`, form, {
+      // Override default JSON content-type so multipart boundary is set correctly
+      headers: { 'Content-Type': undefined as unknown as string },
+    });
   },
   downloadSample: (sampleId: string) =>
     api.get<ArrayBuffer>(`/midi-samples/${sampleId}`, { responseType: 'arraybuffer' }),
