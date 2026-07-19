@@ -8,6 +8,16 @@ import {
 import DesktopOnlyGate from '../components/DesktopOnlyGate';
 import { getAuthUserId } from '../lib/authToken';
 import { midiProjectsApi, type MidiProjectSummary } from '../api/midiProjects';
+import {
+  EQ_GAIN_LIMIT,
+  EQ_BANDS,
+  type ClipFx,
+  VOCAL_FX_PRESETS,
+  clampEqGain,
+  normalizeClipFx,
+  makeDistortionCurve,
+  createImpulseReverb,
+} from '../lib/vocalFx';
 
 // ================= TYPES =================
 interface Note {
@@ -46,8 +56,10 @@ interface PlaylistClip {
   isVocal?: boolean;
   /** Playback volume 0..2 for audio clips */
   gain?: number;
-  /** Per-clip EQ (vocal/audio processing) */
+  /** Per-clip EQ (legacy, merged into fx) */
   eq?: TrackEq;
+  /** Vocal / audio processing chain */
+  fx?: ClipFx;
 }
 
 interface TrackEq {
@@ -57,6 +69,8 @@ interface TrackEq {
   mid: number;
   high: number;
 }
+
+/** Full vocal/audio insert FX — see ../lib/vocalFx */
 
 interface Track {
   id: string;
@@ -76,12 +90,6 @@ interface Track {
   eq?: TrackEq;
 }
 
-const EQ_GAIN_LIMIT = 12;
-const EQ_BANDS = [
-  { key: 'low' as const, label: 'LOW', hint: '200 Hz' },
-  { key: 'mid' as const, label: 'MID', hint: '1 kHz' },
-  { key: 'high' as const, label: 'HIGH', hint: '3.5 kHz' },
-];
 const EQ_PRESETS: { id: string; name: string; low: number; mid: number; high: number }[] = [
   { id: 'flat', name: 'Флэт', low: 0, mid: 0, high: 0 },
   { id: 'bass', name: 'Мощный бас', low: 9, mid: -2, high: 1 },
@@ -89,18 +97,9 @@ const EQ_PRESETS: { id: string; name: string; low: number; mid: number; high: nu
   { id: 'vocal', name: 'Вокал', low: -3, mid: 5, high: 2 },
   { id: 'lofi', name: 'Lo-Fi', low: 4, mid: -6, high: -8 },
 ];
-const VOCAL_PRESETS: { id: string; name: string; low: number; mid: number; high: number }[] = [
-  { id: 'flat', name: 'Флэт', low: 0, mid: 0, high: 0 },
-  { id: 'clean', name: 'Чистый вокал', low: -4, mid: 3, high: 4 },
-  { id: 'warm', name: 'Тёплый', low: 3, mid: 1, high: -2 },
-  { id: 'radio', name: 'Радио', low: -8, mid: 6, high: -3 },
-  { id: 'air', name: 'Воздух', low: -2, mid: 0, high: 9 },
-];
 
-function clampEqGain(value: unknown): number {
-  const num = typeof value === 'number' && Number.isFinite(value) ? value : 0;
-  return Math.max(-EQ_GAIN_LIMIT, Math.min(EQ_GAIN_LIMIT, num));
-}
+/** Typical browser mic + MediaRecorder lag */
+const VOCAL_REC_LATENCY_SEC = 0.16;
 
 function normalizeTrackEq(eq: Partial<TrackEq> | undefined): TrackEq {
   return {
@@ -141,6 +140,23 @@ function trimAudioBufferStart(ctx: AudioContext, buffer: AudioBuffer, trimSec: n
     trimmed.copyToChannel(buffer.getChannelData(ch).subarray(startFrame), ch);
   }
   return trimmed;
+}
+
+/** Remove leading near-silence (MediaRecorder / encoder padding) */
+function trimLeadingSilence(
+  ctx: AudioContext,
+  buffer: AudioBuffer,
+  threshold = 0.018,
+  maxTrimSec = 0.4,
+): AudioBuffer {
+  const data = buffer.getChannelData(0);
+  const maxSamples = Math.min(data.length - 1, Math.floor(maxTrimSec * buffer.sampleRate));
+  let start = 0;
+  while (start < maxSamples && Math.abs(data[start]) < threshold) start += 1;
+  // keep a tiny pre-roll so attacks aren't clipped
+  start = Math.max(0, start - Math.floor(0.008 * buffer.sampleRate));
+  if (start < 128) return buffer;
+  return trimAudioBufferStart(ctx, buffer, start / buffer.sampleRate);
 }
 
 /** Per-user save key so projects don't leak between accounts on the same browser */
@@ -309,584 +325,307 @@ type PlaylistDragState = {
 };
 
 // ================= СТИЛИ =================
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
+const STUDIO_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-const css = `
-${FONT_IMPORT}
-
-.midi-root {
-  --bg: #0a0a0a;
-  --bg-surface: #111111;
-  --bg-elevated: #1a1a1a;
-  --border: #2a2a2a;
-  --border-hover: #3a3a3a;
-  --border-mid: #252525;
-  --text-primary: #f0f0f0;
-  --text-secondary: #888888;
-  --text-muted: #555555;
-  --accent: #00ff88;
-  --accent-dim: #00cc6a;
-  --red: #ff4444;
-  --blue: #4488ff;
-  --orange: #ff8844;
-  --purple: #aa44ff;
-  font-family: 'Syne', sans-serif;
-  background: var(--bg);
-  color: var(--text-primary);
-  height: 100%;
-  min-height: 0;
+.midi-studio {
+  --st-bg: #050505;
+  --st-surface: #0e0e0f;
+  --st-elevated: #171718;
+  --st-hover: #1f1f21;
+  --st-line: rgba(255,255,255,0.1);
+  --st-line-strong: rgba(255,255,255,0.18);
+  --st-text: #f5f5f7;
+  --st-muted: #8e8e93;
+  --st-dim: #636366;
+  --st-red: #ff453a;
+  --st-green: #30d158;
+  --st-amber: #ffd60a;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(255,255,255,0.04), transparent 55%),
+    var(--st-bg);
+  color: var(--st-text);
+  font-family: 'Instrument Sans', ui-sans-serif, sans-serif;
   overflow: hidden;
-  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+.midi-studio * { box-sizing: border-box; }
 
-.midi-wrapper {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 16px;
-  height: 100%;
-  min-height: 0;
+.st-topbar {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.welcome-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100%;
-  text-align: center;
-  padding: 20px;
-}
-
-.welcome-title {
-  font-size: 56px;
-  font-weight: 800;
-  margin-bottom: 8px;
-  background: linear-gradient(135deg, var(--accent), var(--blue), var(--purple));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.welcome-subtitle {
-  font-size: 16px;
-  color: var(--text-secondary);
-  margin-bottom: 40px;
-  max-width: 500px;
-  line-height: 1.5;
-}
-
-.instrument-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  max-width: 800px;
-  width: 100%;
-  margin-bottom: 24px;
-}
-
-.instrument-card {
-  background: var(--bg-elevated);
-  border: 2px solid var(--border);
-  border-radius: 16px;
-  padding: 20px 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-}
-
-.instrument-card:hover {
-  border-color: var(--accent);
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 255, 136, 0.1);
-}
-
-.instrument-card.selected {
-  border-color: var(--accent);
-  background: rgba(0, 255, 136, 0.08);
-}
-
-.instrument-icon {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto 8px;
-  color: var(--accent);
-}
-
-.instrument-name {
-  font-weight: 600;
-  font-size: 16px;
-  margin-bottom: 4px;
-}
-
-.instrument-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.start-button {
-  background: var(--accent);
-  color: #000;
-  border: none;
-  border-radius: 12px;
-  padding: 14px 48px;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.start-button:hover:not(:disabled) {
-  background: var(--accent-dim);
-  transform: scale(1.02);
-}
-
-.start-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.transport-bar {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 20px;
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 12px 16px;
+  min-height: 58px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--st-line);
+  background: rgba(14,14,15,0.92);
+  backdrop-filter: blur(18px);
 }
 
-.transport-group {
+.st-brand {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.transport-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
+.st-brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--st-line);
+  background: var(--st-elevated);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.transport-btn:hover { border-color: var(--accent); }
-.transport-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
-.transport-btn.record { border-color: var(--red); }
-.transport-btn.record.active { background: var(--red); border-color: var(--red); }
-.transport-btn.loop { border-color: var(--blue); opacity: 0.5; }
-.transport-btn.loop.active { opacity: 1; background: var(--blue); border-color: var(--blue); color: white; }
-
-.bpm-box, .pattern-length-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 12px;
-}
-
-.bpm-label, .pattern-length-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
-
-.bpm-input {
-  width: 48px;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 700;
-  text-align: center;
-  font-family: 'DM Mono', monospace;
-}
-
-.pattern-length-select {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-family: 'DM Mono', monospace;
-  cursor: pointer;
-}
-
-.metronome-visual { display: flex; gap: 4px; }
-
-.metronome-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--border);
-  transition: all 0.1s;
-}
-
-.metronome-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-.metronome-dot.downbeat { width: 12px; height: 12px; }
-
-.midi-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-
-.midi-dot { width: 8px; height: 8px; border-radius: 50%; background: #333; }
-
-.midi-dot.connected { background: var(--accent); animation: pulse 2s infinite; }
-
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-.main-workspace { display: flex; gap: 12px; flex: 1; min-height: 0; }
-
-.tracks-panel {
-  width: 260px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow-y: auto;
+  color: var(--st-text);
   flex-shrink: 0;
 }
 
-.tracks-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-
-.tracks-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
-
-.track-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.track-card:hover { border-color: var(--border-hover); }
-.track-card.active { border-color: var(--accent); background: rgba(0,255,136,0.05); }
-
-.track-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-
-.track-name-input {
+.st-project-name {
+  width: 140px;
   background: transparent;
   border: none;
-  color: var(--text-primary);
-  font-weight: 600;
-  font-size: 13px;
-  width: 100px;
   outline: none;
+  color: var(--st-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
-.track-actions { display: flex; gap: 4px; align-items: center; }
+.st-project-name:focus {
+  border-bottom: 1px solid var(--st-line-strong);
+}
 
-.icon-btn {
-  width: 24px;
-  height: 24px;
+.st-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--st-line);
+}
+
+.st-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px;
+  border-left: 1px solid transparent;
+}
+
+.st-field + .st-field { border-left-color: var(--st-line); }
+
+.st-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--st-dim);
+}
+
+.st-input, .st-select {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--st-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.st-input { width: 52px; font-family: 'IBM Plex Mono', monospace; font-size: 15px; cursor: text; }
+
+.st-chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--st-line);
+  background: var(--st-elevated);
+  color: var(--st-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.st-chip:hover { background: var(--st-hover); border-color: var(--st-line-strong); color: var(--st-text); }
+.st-chip.on { background: #f5f5f7; border-color: #f5f5f7; color: #111; }
+.st-chip.ghost { background: transparent; }
+
+.st-seg {
+  display: inline-flex;
+  border: 1px solid var(--st-line);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--st-elevated);
+}
+
+.st-seg button {
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--st-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.st-seg button.on {
+  background: #f5f5f7;
+  color: #111;
+}
+
+.st-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-transport {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid var(--st-line);
+  background: var(--st-elevated);
+}
+
+.st-transport button {
+  border: none;
+  background: transparent;
+  color: var(--st-muted);
+  border-radius: 9px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: all 0.15s;
+  gap: 4px;
+  padding: 8px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
-.icon-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
-.icon-btn.active { color: var(--accent); }
-.icon-btn.solo-active { color: var(--orange); }
-.icon-btn.danger:hover { color: var(--red); }
-
-.track-note-count { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-family: 'DM Mono', monospace; }
-
-.volume-slider {
-  width: 100%;
-  height: 4px;
-  -webkit-appearance: none;
-  background: var(--border);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
+.st-transport .play {
+  padding: 8px 16px;
+  background: #f5f5f7;
+  color: #111;
 }
 
-.volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  background: var(--accent);
+.st-transport .play.playing {
+  background: var(--st-red);
+  color: #fff;
+}
+
+.st-transport .click.on { color: var(--st-text); background: rgba(255,255,255,0.08); }
+
+.st-save-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.timeline-panel {
-  flex: 1;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+.st-hint {
+  font-size: 8px;
+  color: var(--st-dim);
+  margin-top: 1px;
+}
+
+.st-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+.st-side {
+  width: 288px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--st-line);
+  background: rgba(14,14,15,0.96);
   display: flex;
   flex-direction: column;
+}
+
+.st-side-scroll {
+  padding: 18px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.st-panel {
+  border: 1px solid var(--st-line);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--st-surface);
+}
+
+.st-section-title {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--st-dim);
+}
+
+.st-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #080808;
   overflow: hidden;
   min-width: 0;
 }
 
-.timeline-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.zoom-controls { display: flex; align-items: center; gap: 4px; }
-
-.zoom-btn {
-  width: 28px;
-  height: 28px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 16px;
-}
-
-.time-ruler {
-  height: 24px;
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border);
-  position: relative;
-  overflow: hidden;
-}
-
-.time-marker {
-  position: absolute;
-  top: 2px;
-  font-size: 9px;
-  color: var(--text-muted);
-  font-family: 'DM Mono', monospace;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.time-marker.bar { color: var(--text-secondary); font-weight: 600; }
-
-.piano-roll-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-.piano-roll-container { flex: 1; display: flex; overflow: hidden; position: relative; }
-
-.note-ruler {
-  width: 60px;
-  background: var(--bg-surface);
-  border-right: 2px solid var(--border);
+.st-toolbar {
+  height: 42px;
   flex-shrink: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.note-row {
-  height: 16px;
+  border-bottom: 1px solid var(--st-line);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding-right: 8px;
-  font-size: 9px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  font-family: 'DM Mono', monospace;
-  font-weight: 500;
-  position: relative;
-}
-
-.note-row.black { 
-  background: linear-gradient(90deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 100%);
-  color: var(--text-muted);
-}
-
-.note-row.octave {
-  background: rgba(0, 255, 136, 0.03);
-  border-top: 1px solid rgba(0, 255, 136, 0.1);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.note-row.active { background: rgba(0, 255, 136, 0.2) !important; color: var(--accent) !important; font-weight: 700 !important; }
-
-.grid-viewport { flex: 1; overflow: auto; position: relative; }
-
-.grid-content { position: relative; min-height: 100%; }
-
-.grid-line-h {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: rgba(255,255,255,0.08);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.grid-line-h.octave { background: rgba(0, 255, 136, 0.15); height: 2px; }
-.grid-line-h.black { background: rgba(255,255,255,0.04); }
-
-.grid-line-v {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: rgba(255,255,255,0.08);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.grid-line-v.beat { background: rgba(255,255,255,0.12); }
-.grid-line-v.bar { background: rgba(0, 255, 136, 0.2); width: 2px; }
-.grid-line-v.loop-end { background: var(--blue); width: 2px; opacity: 0.8; }
-
-.note-block {
-  position: absolute;
-  border-radius: 4px;
-  cursor: pointer;
-  min-height: 12px;
-  transition: filter 0.15s ease;
-  z-index: 5;
-  border: 1px solid rgba(0,0,0,0.4);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  overflow: hidden;
-}
-
-.note-block::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
-  pointer-events: none;
-}
-
-.note-block:hover { filter: brightness(1.2); box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 10; }
-.note-block.selected { outline: 2px solid white; z-index: 15; }
-
-.note-resize-handle {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  cursor: ew-resize;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.2) 100%);
-  border-radius: 0 3px 3px 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.note-block:hover .note-resize-handle { opacity: 1; }
-
-.playhead {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: linear-gradient(180deg, var(--accent) 0%, rgba(0, 255, 136, 0.6) 100%);
-  pointer-events: none;
-  z-index: 20;
-  box-shadow: 0 0 12px var(--accent);
-  border-radius: 1px;
-}
-
-.save-controls { display: flex; gap: 8px; align-items: center; }
-
-.save-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s;
-}
-
-.save-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
-
-.virtual-keyboard { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
-
-.virtual-keyboard-title {
+  padding: 0 18px;
+  gap: 16px;
   font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
+  color: var(--st-muted);
+  background: rgba(14,14,15,0.9);
 }
 
-.keys-container { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; position: relative; margin-bottom: 8px; }
-
-.white-key {
-  height: 60px;
-  background: #555;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+.st-mixer {
+  height: 120px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--st-line);
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  font-size: 10px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.1s ease;
-  padding-bottom: 4px;
-  user-select: none;
+  align-items: center;
+  padding: 0 28px;
+  gap: 40px;
+  background: rgba(14,14,15,0.96);
 }
 
-.white-key:active, .white-key.active { background: var(--accent); color: #000; font-weight: 600; border-color: var(--accent); }
-
-.black-key {
-  position: absolute;
-  width: 10%;
-  height: 35px;
-  background: #333;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  font-size: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.1s ease;
-  padding-bottom: 2px;
-  z-index: 2;
-  user-select: none;
+@keyframes st-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
-
-.black-key:active, .black-key.active { background: var(--accent); color: #000; font-weight: 600; border-color: var(--accent); }
-
-.test-button, .add-test-notes-button {
-  width: 100%;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: 8px;
-}
-
-.test-button { background: var(--accent); color: #000; }
-
-.add-test-notes-button { background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border); }
 `;
 
 // ================= КОНСТАНТЫ =================
@@ -904,12 +643,12 @@ function getNoteLabel(pitch: number): string {
 }
 
 const INSTRUMENTS: { id: InstrumentType; name: string; icon: any; color: string }[] = [
-  { id: 'synth', name: 'NEON LEAD', icon: Zap, color: '#00D1FF' },
-  { id: 'bass', name: 'SUB BASS', icon: Headphones, color: '#00FF88' },
-  { id: 'pad', name: 'AMBIENT', icon: Waves, color: '#BD00FF' },
-  { id: 'kick', name: 'KICK', icon: Radio, color: '#FF4500' },
-  { id: 'snare', name: 'SNARE', icon: Wind, color: '#FFA500' },
-  { id: 'hihat', name: 'HI-HAT', icon: Music, color: '#FFFFFF' },
+  { id: 'synth', name: 'LEAD', icon: Zap, color: '#F5F5F7' },
+  { id: 'bass', name: 'BASS', icon: Headphones, color: '#64D2FF' },
+  { id: 'pad', name: 'PAD', icon: Waves, color: '#BF5AF2' },
+  { id: 'kick', name: 'KICK', icon: Radio, color: '#FF9F0A' },
+  { id: 'snare', name: 'SNARE', icon: Wind, color: '#FF453A' },
+  { id: 'hihat', name: 'HI-HAT', icon: Music, color: '#AEAEB2' },
 ];
 
 const PLAYLIST_LANES = 8;
@@ -951,7 +690,8 @@ function normalizePlaylistClip(
       gain: typeof clip.gain === 'number' && Number.isFinite(clip.gain)
         ? Math.max(0, Math.min(2, clip.gain))
         : 0.9,
-      eq: normalizeTrackEq(clip.eq),
+      eq: normalizeTrackEq(clip.eq ?? clip.fx),
+      fx: normalizeClipFx(clip.fx, clip.eq),
     };
   }
   const full = getPatternFullBeats(tracks, clip.patternId, patterns);
@@ -983,6 +723,18 @@ function quantizeMinBeat() {
   return 0.5;
 }
 
+/** Fine trim step = 1/10 of current quantize cell (Alt / ⌥ Option) */
+const FINE_GRID_DIVISOR = 10;
+
+function snapBeats(value: number, grid: number, fine = false): number {
+  const step = fine ? Math.max(0.001, grid / FINE_GRID_DIVISOR) : grid;
+  return Math.round(value / step) * step;
+}
+
+function minTrimBeats(grid: number, fine = false): number {
+  return fine ? Math.max(0.001, grid / FINE_GRID_DIVISOR) : quantizeMinBeat();
+}
+
 function normalizeTrack(track: Partial<Track> & Pick<Track, 'id' | 'notes'>): Track {
   const customSample = track.customSample;
   return {
@@ -990,7 +742,7 @@ function normalizeTrack(track: Partial<Track> & Pick<Track, 'id' | 'notes'>): Tr
     name: track.name || 'Track',
     // Prefer custom when a sample id is still linked (survives bad synth fallback)
     instrument: customSample ? 'custom' : (track.instrument || 'synth'),
-    color: track.color || '#00D1FF',
+    color: track.color || '#F5F5F7',
     notes: track.notes ?? [],
     muted: Boolean(track.muted),
     solo: Boolean(track.solo),
@@ -1043,6 +795,7 @@ class AudioEngine {
   delayGain: GainNode;
   analyzer: AnalyserNode;
   samples: Map<string, AudioBuffer> = new Map();
+  private vocalReverb: ConvolverNode | null = null;
   private activeSources: Set<AudioScheduledSourceNode> = new Set();
   private activeGains: Set<GainNode> = new Set();
 
@@ -1137,7 +890,7 @@ class AudioEngine {
     }
   }
 
-  async loadSample(file: File, persistedId?: string): Promise<{ id: string; duration: number }> {
+  async loadSample(file: File, persistedId?: string, opts?: { trimSilence?: boolean }): Promise<{ id: string; duration: number }> {
     // Keep separate copies: decodeAudioData may detach its input buffer
     const original = await file.arrayBuffer();
     const forDecode = original.slice(0);
@@ -1146,6 +899,9 @@ class AudioEngine {
     // Cut the fixed MP3 encoder gap so loops land on the beat
     if (looksLikeMp3(file) || looksLikeMp3(original)) {
       audioBuffer = trimAudioBufferStart(this.ctx, audioBuffer, MP3_START_TRIM_SEC);
+    }
+    if (opts?.trimSilence || /webm|ogg|opus/i.test(file.type) || /\.(webm|ogg|opus)$/i.test(file.name)) {
+      audioBuffer = trimLeadingSilence(this.ctx, audioBuffer);
     }
     const id = persistedId || crypto.randomUUID();
     this.samples.set(id, audioBuffer);
@@ -1158,7 +914,7 @@ class AudioEngine {
     return { id, duration: audioBuffer.duration };
   }
 
-  async ensureSample(id: string): Promise<AudioBuffer | null> {
+  async ensureSample(id: string, opts?: { trimSilence?: boolean }): Promise<AudioBuffer | null> {
     const cached = this.samples.get(id);
     if (cached) return cached;
     try {
@@ -1173,6 +929,12 @@ class AudioEngine {
       let audioBuffer = await this.ctx.decodeAudioData(raw.slice(0));
       if (looksLikeMp3(raw)) {
         audioBuffer = trimAudioBufferStart(this.ctx, audioBuffer, MP3_START_TRIM_SEC);
+      }
+      // Heuristic: webm/ogg vocal takes start with silence/padding
+      const head = new Uint8Array(raw.slice(0, 4));
+      const isWebm = head[0] === 0x1a && head[1] === 0x45;
+      if (opts?.trimSilence || isWebm) {
+        audioBuffer = trimLeadingSilence(this.ctx, audioBuffer);
       }
       this.samples.set(id, audioBuffer);
       return audioBuffer;
@@ -1219,8 +981,24 @@ class AudioEngine {
     return playDuration;
   }
 
-  /** Play an audio loop clip at original speed from offsetSec for durationSec */
-  playClip(buffer: AudioBuffer, time: number, volume: number, offsetSec: number, durationSec: number, eq?: TrackEq) {
+  /** Shared impulse for vocal/clip reverb (separate from instrument send bus). */
+  private getClipReverb(): ConvolverNode | null {
+    if (this.vocalReverb) return this.vocalReverb;
+    this.vocalReverb = createImpulseReverb(this.ctx);
+    return this.vocalReverb;
+  }
+
+  /**
+   * Play an audio loop clip. Pass ClipFx for full vocal chain, or legacy TrackEq.
+   */
+  playClip(
+    buffer: AudioBuffer,
+    time: number,
+    volume: number,
+    offsetSec: number,
+    durationSec: number,
+    fxOrEq?: ClipFx | TrackEq,
+  ) {
     const now = this.ctx.currentTime + time;
     const safeOffset = Math.max(0, Math.min(buffer.duration, offsetSec));
     const playDuration = Math.max(0.02, Math.min(buffer.duration - safeOffset, durationSec));
@@ -1235,7 +1013,75 @@ class AudioEngine {
     mainGain.gain.linearRampToValueAtTime(0.0001, now + playDuration + 0.01);
 
     source.connect(mainGain);
-    mainGain.connect(this.eqInput(eq));
+
+    const fx = fxOrEq && 'compress' in fxOrEq
+      ? normalizeClipFx(fxOrEq)
+      : normalizeClipFx(undefined, fxOrEq as TrackEq | undefined);
+
+    let node: AudioNode = mainGain;
+
+    if (fx.enabled && (fx.low !== 0 || fx.mid !== 0 || fx.high !== 0)) {
+      const low = this.ctx.createBiquadFilter();
+      low.type = 'lowshelf';
+      low.frequency.value = 200;
+      low.gain.value = fx.low;
+      const mid = this.ctx.createBiquadFilter();
+      mid.type = 'peaking';
+      mid.frequency.value = 1000;
+      mid.Q.value = 0.9;
+      mid.gain.value = fx.mid;
+      const high = this.ctx.createBiquadFilter();
+      high.type = 'highshelf';
+      high.frequency.value = 3500;
+      high.gain.value = fx.high;
+      node.connect(low);
+      low.connect(mid);
+      mid.connect(high);
+      node = high;
+    }
+
+    if (fx.enabled && fx.compress > 0.01) {
+      const comp = this.ctx.createDynamicsCompressor();
+      comp.threshold.value = -12 - fx.compress * 28;
+      comp.knee.value = 6 + fx.compress * 12;
+      comp.ratio.value = 2 + fx.compress * 10;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.12 + (1 - fx.compress) * 0.18;
+      node.connect(comp);
+      node = comp;
+    }
+
+    if (fx.enabled && fx.drive > 0.01) {
+      const shaper = this.ctx.createWaveShaper();
+      // DOM typings disagree on Float32Array buffer brand across TS versions
+      (shaper as WaveShaperNode).curve = makeDistortionCurve(1 + fx.drive * 40) as any;
+      shaper.oversample = '2x';
+      const driveGain = this.ctx.createGain();
+      driveGain.gain.value = 1 - fx.drive * 0.25;
+      node.connect(shaper);
+      shaper.connect(driveGain);
+      node = driveGain;
+    }
+
+    if (fx.enabled && fx.reverb > 0.01) {
+      const dry = this.ctx.createGain();
+      const wet = this.ctx.createGain();
+      dry.gain.value = 1 - fx.reverb * 0.85;
+      wet.gain.value = fx.reverb * 0.9;
+      node.connect(dry);
+      dry.connect(this.masterGain);
+      const reverb = this.getClipReverb();
+      if (reverb) {
+        node.connect(wet);
+        wet.connect(reverb);
+        reverb.connect(this.masterGain);
+      } else {
+        node.connect(this.masterGain);
+      }
+    } else {
+      node.connect(this.masterGain);
+    }
+
     this.trackSource(source, mainGain);
     source.start(now, safeOffset, playDuration + 0.02);
   }
@@ -1565,8 +1411,8 @@ function MIDISequencer() {
     setProject(prev => prev ? { ...snap, isPlaying: prev.isPlaying } : snap);
   }, []);
 
-  const snapToGrid = useCallback((value: number) => {
-    return Math.round(value / quantizeGrid) * quantizeGrid;
+  const snapToGrid = useCallback((value: number, fine = false) => {
+    return snapBeats(value, quantizeGrid, fine);
   }, [quantizeGrid]);
 
   const getActivePattern = useCallback((p: MIDIProject) => {
@@ -1831,11 +1677,13 @@ function MIDISequencer() {
       const dragging = dragStateRef.current;
       if (!dragging) return;
       if (!project) return;
-      
+
+      const fine = e.altKey; // Alt on Win/Linux, ⌥ Option on Mac
       const deltaX = e.clientX - dragging.startX;
       const deltaY = e.clientY - dragging.startY;
       const beatDelta = deltaX / zoom;
       const pitchDelta = Math.round(-deltaY / NOTE_HEIGHT);
+      const minDur = fine ? Math.max(0.001, quantizeGrid / FINE_GRID_DIVISOR) : quantizeGrid;
 
       setProject(prev => {
         if (!prev) return prev;
@@ -1848,10 +1696,10 @@ function MIDISequencer() {
               if (note.id !== dragging.id) return note;
               
               if (dragging.type === 'move') {
-                const maxStart = patternBeats(prev.patternLength) - quantizeGrid;
+                const maxStart = patternBeats(prev.patternLength) - minDur;
                 const newStartTime = Math.max(0, Math.min(maxStart, dragging.origStart + beatDelta));
                 const newPitch = Math.max(LOWEST_NOTE, Math.min(HIGHEST_NOTE, dragging.origPitch + pitchDelta));
-                const quantized = snapToGrid(newStartTime);
+                const quantized = snapToGrid(newStartTime, fine);
                 
                 return {
                   ...note,
@@ -1859,7 +1707,7 @@ function MIDISequencer() {
                   pitch: newPitch,
                 };
               } else if (dragging.type === 'resize') {
-                const newDuration = Math.max(quantizeGrid, snapToGrid(dragging.origDur + beatDelta));
+                const newDuration = Math.max(minDur, snapToGrid(dragging.origDur + beatDelta, fine));
                 
                 return {
                   ...note,
@@ -1892,12 +1740,16 @@ function MIDISequencer() {
     const handleMouseMove = (e: MouseEvent) => {
       const dragging = playlistDragRef.current;
       if (!dragging) return;
+      const fine = e.altKey; // Alt on Win/Linux, ⌥ Option on Mac
       setProject(prev => {
         if (!prev) return prev;
         const deltaX = e.clientX - dragging.startX;
         const deltaY = e.clientY - dragging.startY;
         const beatDelta = deltaX / zoom;
-        const minLen = quantizeMinBeat();
+        const minLen = minTrimBeats(quantizeGrid, fine);
+        // Fine snap only while resizing edges; moves stay on the main grid unless Alt is held
+        const snapMove = (v: number) => snapToGrid(v, fine);
+        const snapTrim = (v: number) => snapToGrid(v, fine);
 
         return {
           ...prev,
@@ -1905,7 +1757,7 @@ function MIDISequencer() {
             if (dragging.type === 'move' && dragging.moveGroup) {
               const orig = dragging.moveGroup.find(g => g.clipId === clip.id);
               if (!orig) return clip;
-              const startBar = Math.max(0, snapToGrid(orig.startBar * BEATS_PER_BAR + beatDelta) / BEATS_PER_BAR);
+              const startBar = Math.max(0, snapMove(orig.startBar * BEATS_PER_BAR + beatDelta) / BEATS_PER_BAR);
               const lane = Math.max(0, Math.min(PLAYLIST_LANES - 1, orig.lane + Math.round(deltaY / PLAYLIST_LANE_HEIGHT)));
               return { ...clip, startBar, lane };
             }
@@ -1914,21 +1766,21 @@ function MIDISequencer() {
             const full = getClipFullBeats(clip, prev.tracks, prev.patterns, prev.bpm);
 
             if (dragging.type === 'move') {
-              const startBar = Math.max(0, snapToGrid(dragging.origStartBar * BEATS_PER_BAR + beatDelta) / BEATS_PER_BAR);
+              const startBar = Math.max(0, snapMove(dragging.origStartBar * BEATS_PER_BAR + beatDelta) / BEATS_PER_BAR);
               const lane = Math.max(0, Math.min(PLAYLIST_LANES - 1, dragging.origLane + Math.round(deltaY / PLAYLIST_LANE_HEIGHT)));
               return { ...clip, startBar, lane };
             }
 
             if (dragging.type === 'resize-right') {
               const maxLen = Math.max(minLen, full - dragging.origOffsetBeats);
-              const lengthBeats = Math.max(minLen, Math.min(maxLen, snapToGrid(dragging.origLengthBeats + beatDelta)));
+              const lengthBeats = Math.max(minLen, Math.min(maxLen, snapTrim(dragging.origLengthBeats + beatDelta)));
               return { ...clip, lengthBeats };
             }
 
             // resize-left: keep right edge fixed, shift window into pattern
             const origStartBeats = dragging.origStartBar * BEATS_PER_BAR;
             const rightEdge = origStartBeats + dragging.origLengthBeats;
-            let newStartBeats = snapToGrid(origStartBeats + beatDelta);
+            let newStartBeats = snapTrim(origStartBeats + beatDelta);
             newStartBeats = Math.max(0, Math.min(rightEdge - minLen, newStartBeats));
             const lengthBeats = Math.max(minLen, rightEdge - newStartBeats);
             const offsetDelta = newStartBeats - origStartBeats;
@@ -1951,7 +1803,7 @@ function MIDISequencer() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [snapToGrid, zoom]);
+  }, [snapToGrid, zoom, quantizeGrid]);
 
   const buildNewProject = (name: string): MIDIProject => {
     const trackId = crypto.randomUUID();
@@ -1964,7 +1816,7 @@ function MIDISequencer() {
         id: trackId,
         name: "Neon Lead",
         instrument: 'synth',
-        color: '#00D1FF',
+        color: '#F5F5F7',
         notes: [],
         muted: false,
         solo: false,
@@ -2238,15 +2090,16 @@ function MIDISequencer() {
           const clipGain = clip.gain ?? 0.9;
           const baseOffsetSec = (clip.offsetBeats ?? 0) / bps;
 
+          const clipFx = clip.fx ?? normalizeClipFx(undefined, clip.eq);
           const fireClip = (delay: number, offsetSec: number, durationSec: number) => {
             if (delay < 0 || durationSec <= 0.01) return;
             const cached = eng.samples.get(clip.sampleId!);
             if (cached) {
-              eng.playClip(cached, delay, clipGain, offsetSec, durationSec, clip.eq);
+              eng.playClip(cached, delay, clipGain, offsetSec, durationSec, clipFx);
             } else {
-              void eng.ensureSample(clip.sampleId!).then(buffer => {
+              void eng.ensureSample(clip.sampleId!, { trimSilence: clip.isVocal }).then(buffer => {
                 if (buffer && isPlayingRef.current) {
-                  eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, clip.eq);
+                  eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, clipFx);
                 }
               });
             }
@@ -3089,12 +2942,14 @@ function MIDISequencer() {
   }, [stopMicLevelMeter, disconnectMicMonitor]);
 
   const openMicStream = useCallback(async (deviceId?: string) => {
+    // Disable browser "enhancements" — they add 80–200ms latency and throw vocals off the grid.
     const constraints: MediaStreamConstraints = {
       audio: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 1,
       },
     };
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -3174,28 +3029,55 @@ function MIDISequencer() {
   const startVocalRecording = useCallback(async () => {
     if (!project || isRecording) return;
     setEditorView('playlist');
-    let stream = recordStreamRef.current;
+
+    // Always reopen mic with low-latency constraints (no AGC / echo cancel).
+    let stream: MediaStream;
     try {
-      if (!stream || stream.getAudioTracks().every(t => t.readyState !== 'live')) {
-        stream = await openMicStream(selectedMicId || undefined);
-      }
+      closeMicStream();
+      stream = await openMicStream(selectedMicId || undefined);
     } catch (error) {
       console.error('Microphone access denied:', error);
       window.alert('Нет доступа к микрофону. Разрешите доступ в настройках браузера.');
       return;
     }
 
+    // Start backing track first so the singer hears the beat before MediaRecorder buffers.
+    const eng = await ensureAudio();
+    await eng.resume();
+    if (project.transportMode !== 'song') {
+      setProject(prev => prev ? { ...prev, transportMode: 'song' } : prev);
+      if (latestProjectRef.current) {
+        latestProjectRef.current = { ...latestProjectRef.current, transportMode: 'song' };
+      }
+    }
+    if (!isPlayingRef.current) {
+      await Promise.all([
+        ...project.tracks
+          .filter(t => t.customSample)
+          .map(t => eng.ensureSample(t.customSample!)),
+        ...project.arrangement
+          .filter(c => c.type === 'audio' && c.sampleId)
+          .map(c => eng.ensureSample(c.sampleId!)),
+      ]);
+      startPlayback();
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    }
+
     const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
       .find(type => MediaRecorder.isTypeSupported(type)) || '';
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     const chunks: Blob[] = [];
-    recordStartBeatRef.current = playheadRef.current;
     const projectIdAtStart = project.id;
     const bpmAtStart = project.bpm;
     const takeNumber = project.arrangement.filter(c => c.isVocal).length + 1;
+    recordStartBeatRef.current = playheadRef.current;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunks.push(event.data);
+    };
+    recorder.onstart = () => {
+      // Stamp the live playhead when the recorder actually starts (not when REC was clicked).
+      recordStartBeatRef.current = playheadRef.current;
     };
     recorder.onstop = () => {
       void (async () => {
@@ -3212,15 +3094,23 @@ function MIDISequencer() {
         const extension = (recorder.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
         const file = new File([blob], `vocal-take-${takeNumber}.${extension}`, { type: blob.type });
         try {
-          const { id: sampleId, duration } = await uploadAndLoadSample(file);
+          const { eng: loadEng, id: sampleId, duration } = await uploadAndLoadSample(file);
+          const buf = loadEng.samples.get(sampleId);
+          const trimmedDuration = buf?.duration ?? duration;
           const bps = bpmAtStart / 60;
-          const lengthBeats = Math.max(quantizeMinBeat(), duration * bps);
-          const startBar = Math.floor(recordStartBeatRef.current / BEATS_PER_BAR);
+          const lengthBeats = Math.max(quantizeMinBeat(), trimmedDuration * bps);
+          // Pull clip earlier by measured input latency so takes land on the grid.
+          const engLatency = (loadEng.ctx.baseLatency || 0)
+            + ((loadEng.ctx as AudioContext & { outputLatency?: number }).outputLatency || 0);
+          const latencySec = VOCAL_REC_LATENCY_SEC + Math.min(0.08, engLatency * 0.5);
+          const startBeat = Math.max(0, recordStartBeatRef.current - latencySec * bps);
+          const startBar = startBeat / BEATS_PER_BAR;
           const usedLanes = new Set((latestProjectRef.current?.arrangement ?? []).map(c => c.lane));
           let lane = PLAYLIST_LANES - 1;
           for (let i = 0; i < PLAYLIST_LANES; i++) {
             if (!usedLanes.has(i)) { lane = i; break; }
           }
+          const flatFx = normalizeClipFx(undefined);
           const clip: PlaylistClip = {
             id: crypto.randomUUID(),
             patternId: '',
@@ -3231,10 +3121,11 @@ function MIDISequencer() {
             type: 'audio',
             sampleId,
             name: `Вокал ${takeNumber}`,
-            sampleSeconds: duration,
+            sampleSeconds: trimmedDuration,
             isVocal: true,
             gain: 1,
             eq: { enabled: false, low: 0, mid: 0, high: 0 },
+            fx: flatFx,
           };
           commitProject(prev => {
             if (prev.id !== projectIdAtStart) return prev;
@@ -3255,7 +3146,7 @@ function MIDISequencer() {
     };
 
     mediaRecorderRef.current = recorder;
-    recorder.start(250);
+    recorder.start(100);
     setIsRecording(true);
     recordStartedAtRef.current = Date.now();
     setRecordElapsedSec(0);
@@ -3263,17 +3154,18 @@ function MIDISequencer() {
     recordTimerRef.current = window.setInterval(() => {
       setRecordElapsedSec(Math.floor((Date.now() - recordStartedAtRef.current) / 1000));
     }, 250);
-    // Play the song under the take so vocals line up with the beat.
-    pendingRecordPlayRef.current = true;
-    setProject(prev => prev ? { ...prev, transportMode: 'song' } : prev);
-  }, [project, isRecording, stopPlayback, uploadAndLoadSample, commitProject, openMicStream, selectedMicId]);
-
-  useEffect(() => {
-    if (!pendingRecordPlayRef.current) return;
-    if (!isRecording || !project || project.transportMode !== 'song') return;
-    pendingRecordPlayRef.current = false;
-    if (!project.isPlaying) togglePlayback();
-  }, [isRecording, project, togglePlayback]);
+  }, [
+    project,
+    isRecording,
+    stopPlayback,
+    startPlayback,
+    uploadAndLoadSample,
+    commitProject,
+    openMicStream,
+    closeMicStream,
+    selectedMicId,
+    ensureAudio,
+  ]);
 
   useEffect(() => {
     void refreshMicDevices();
@@ -3709,128 +3601,77 @@ function MIDISequencer() {
   const patternBeatLength = patternBeats(activePattern.length);
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: '100vh', 
-      background: '#0a0a0a', 
-      color: '#F5F5F7',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      overflow: 'hidden'
-    }}>
-      {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        flexWrap: 'wrap',
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        padding: '8px 16px', 
-        minHeight: 64, 
-        rowGap: 8,
-        columnGap: 16,
-        borderBottom: '1px solid rgba(255,255,255,0.05)', 
-        background: 'rgba(0,0,0,0.6)',
-        backdropFilter: 'blur(20px)'
-      }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', rowGap: 8, columnGap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ 
-              width: 36, 
-              height: 36, 
-              borderRadius: 10, 
-              background: 'linear-gradient(135deg, #00D1FF, #BD00FF)',
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(0,209,255,0.3)',
-              flexShrink: 0
-            }}>
-              <Activity size={18} style={{ color: 'white' }} />
+    <div className="midi-studio">
+      <style>{STUDIO_CSS}</style>
+
+      <header className="st-topbar">
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
+          <div className="st-brand">
+            <div className="st-brand-mark">
+              <Activity size={15} strokeWidth={1.75} />
             </div>
             <input
+              className="st-project-name"
               value={project.name}
               onChange={event => setProject({ ...project, name: event.target.value.slice(0, 100) })}
               onBlur={() => {
                 if (!project.name.trim()) setProject({ ...project, name: 'Без названия' });
               }}
               title="Название проекта"
-              style={{
-                width: 120, background: 'transparent', border: 'none', outline: 'none',
-                color: '#F5F5F7', fontSize: 11, fontWeight: 'bold',
-                textTransform: 'uppercase', letterSpacing: 2,
-              }}
             />
           </div>
-          
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', rowGap: 8, columnGap: 16, paddingLeft: 16, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Tempo</span>
-              <input 
-                type="number" 
-                value={project.bpm} 
+
+          <div className="st-meta">
+            <div className="st-field">
+              <span className="st-label">Tempo</span>
+              <input
+                className="st-input"
+                type="number"
+                value={project.bpm}
                 onChange={e => {
                   const val = parseInt(e.target.value);
-                  if (val > 0 && val <= 300) setProject({...project, bpm: val});
+                  if (val > 0 && val <= 300) setProject({ ...project, bpm: val });
                 }}
-                style={{ 
-                  background: 'transparent', 
-                  fontSize: '18px', 
-                  fontFamily: 'monospace', 
-                  width: 56, 
-                  border: 'none', 
-                  color: '#00D1FF', 
-                  outline: 'none',
-                  fontWeight: 'bold'
-                }} 
               />
             </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Metronome</span>
+
+            <div className="st-field">
+              <span className="st-label">Metronome</span>
               <button
                 type="button"
+                className={`st-chip ${project.metronomeEnabled ? 'on' : ''}`}
                 title={project.metronomeEnabled ? 'Выключить метроном' : 'Включить метроном'}
                 onClick={() => commitProject(prev => ({ ...prev, metronomeEnabled: !prev.metronomeEnabled }))}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  fontSize: 10, fontWeight: 700, letterSpacing: 1,
-                  padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
-                  border: project.metronomeEnabled ? '1px solid rgba(0,209,255,0.45)' : '1px solid rgba(255,255,255,0.15)',
-                  background: project.metronomeEnabled ? 'rgba(0,209,255,0.15)' : 'rgba(255,255,255,0.04)',
-                  color: project.metronomeEnabled ? '#7fdcf0' : '#777',
-                }}
               >
                 <Activity size={12} />
                 {project.metronomeEnabled ? 'ON' : 'OFF'}
               </button>
             </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Pattern Selector</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+            <div className="st-field">
+              <span className="st-label">Pattern</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <select
+                  className="st-select"
                   value={project.activePatternId}
                   onChange={e => {
                     playheadRef.current = 0;
                     setPlayheadTime(0);
                     setProject({ ...project, activePatternId: e.target.value, transportMode: 'pattern' });
                   }}
-                  style={{
-                    background: 'transparent', border: 'none', color: '#00D1FF',
-                    fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', outline: 'none'
-                  }}
                 >
                   {project.patterns.map(pattern => (
                     <option key={pattern.id} value={pattern.id}>{pattern.name}</option>
                   ))}
                 </select>
-                <button onClick={createPattern} style={{ border: 'none', background: 'rgba(0,209,255,0.15)', color: '#00D1FF', borderRadius: 6, cursor: 'pointer', padding: '2px 6px' }}>+</button>
+                <button type="button" className="st-chip ghost" onClick={createPattern} title="Новый паттерн">+</button>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Length</span>
+            <div className="st-field">
+              <span className="st-label">Length</span>
               <select
+                className="st-select"
                 value={activePattern.length}
                 onChange={e => {
                   const nextLength = parseInt(e.target.value, 10);
@@ -3841,16 +3682,11 @@ function MIDISequencer() {
                       pattern.id === project.activePatternId ? { ...pattern, length: nextLength } : pattern
                     ),
                   });
-                  // Reset playhead into new bounds
                   const beats = patternBeats(nextLength);
                   if (playheadRef.current >= beats) {
                     playheadRef.current = 0;
                     setPlayheadTime(0);
                   }
-                }}
-                style={{
-                  background: 'transparent', border: 'none', color: '#00D1FF',
-                  fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', outline: 'none'
                 }}
               >
                 {Array.from(new Set([...PATTERN_LENGTH_OPTIONS, activePattern.length]))
@@ -3861,158 +3697,94 @@ function MIDISequencer() {
               </select>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ fontSize: '9px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantize</span>
+            <div className="st-field">
+              <span className="st-label">Quantize</span>
               <select
+                className="st-select"
                 value={quantizeGrid}
                 onChange={e => setQuantizeGrid(parseFloat(e.target.value))}
-                style={{
-                  background: 'transparent', border: 'none', color: '#00D1FF',
-                  fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', outline: 'none'
-                }}
+                title="Зажми ⌥ Option (Mac) / Alt (Win) при обрезке — шаг 1/10 клетки"
               >
                 <option value={0.5}>1/8 (8 в такте)</option>
                 <option value={1}>1/4 (4 в такте)</option>
                 <option value={0.25}>1/16</option>
                 <option value={0.125}>1/32</option>
               </select>
+              <span className="st-hint">⌥/Alt = точно</span>
             </div>
 
-            <button
-              onClick={duplicatePatternNotes}
-              title="Duplicate all notes to next pattern block"
-              style={{
-                padding: '6px 12px',
-                background: 'rgba(0,209,255,0.15)',
-                border: '1px solid rgba(0,209,255,0.3)',
-                borderRadius: 8,
-                color: '#00D1FF',
-                fontSize: '10px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                letterSpacing: '1px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              DUP PATTERN
+            <button type="button" className="st-chip" onClick={duplicatePatternNotes} title="Duplicate all notes to next pattern block">
+              Dup Pattern
             </button>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', rowGap: 8, columnGap: 10 }}>
-          <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+        <div className="st-actions">
+          <div className="st-seg">
             <button
+              type="button"
+              className={project.transportMode === 'pattern' ? 'on' : ''}
               onClick={() => setProject({ ...project, transportMode: 'pattern' })}
-              style={{
-                border: 'none',
-                padding: '6px 10px',
-                cursor: 'pointer',
-                background: project.transportMode === 'pattern' ? 'rgba(0,209,255,0.2)' : 'transparent',
-                color: project.transportMode === 'pattern' ? '#00D1FF' : '#888',
-                fontSize: 10,
-                fontWeight: 700,
-              }}
             >
-              PATTERN
+              Pattern
             </button>
             <button
+              type="button"
+              className={project.transportMode === 'song' ? 'on' : ''}
               onClick={() => setProject({ ...project, transportMode: 'song' })}
-              style={{
-                border: 'none',
-                padding: '6px 10px',
-                cursor: 'pointer',
-                background: project.transportMode === 'song' ? 'rgba(0,209,255,0.2)' : 'transparent',
-                color: project.transportMode === 'song' ? '#00D1FF' : '#888',
-                fontSize: 10,
-                fontWeight: 700,
-              }}
             >
-              SONG
+              Song
             </button>
           </div>
+          <button type="button" className="st-chip" onClick={addPatternToPlaylist}>+ Playlist</button>
           <button
-            onClick={addPatternToPlaylist}
-            style={{ border: '1px solid rgba(0,209,255,0.3)', background: 'rgba(0,209,255,0.1)', color: '#00D1FF', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px', whiteSpace: 'nowrap' }}
-          >
-            + TO PLAYLIST
-          </button>
-          <button
+            type="button"
+            className="st-chip"
             onClick={() => void saveProjectNow(project)}
             disabled={saveStatus === 'saving'}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid rgba(0,209,255,0.3)', background: 'rgba(0,209,255,0.1)', color: '#00D1FF', borderRadius: 8, cursor: 'pointer', fontSize: 10, padding: '7px 10px', whiteSpace: 'nowrap' }}
           >
-            <Save size={13} /> СОХРАНИТЬ
+            <Save size={13} /> Save
           </button>
           <span
+            className="st-save-dot"
             title={saveStatus === 'error' ? 'Ошибка сохранения' : saveStatus === 'saving' ? 'Сохранение…' : 'Сохранено'}
             style={{
-              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-              background: saveStatus === 'error' ? '#ff6666' : saveStatus === 'saving' ? '#f0b429' : '#52d68a',
-              boxShadow: `0 0 8px ${saveStatus === 'error' ? '#ff6666' : saveStatus === 'saving' ? '#f0b429' : '#52d68a'}`,
+              background: saveStatus === 'error' ? '#ff453a' : saveStatus === 'saving' ? '#ffd60a' : '#30d158',
             }}
           />
-          <div style={{ 
-            display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: 12, 
-            padding: 3, border: '1px solid rgba(255,255,255,0.05)', gap: 3
-          }}>
-            <button onClick={stopPlayback} style={{ padding: '8px', background: 'none', border: 'none', borderRadius: 9, cursor: 'pointer', color: '#999' }}>
-              <Square size={15} />
-            </button>
-            <button onClick={togglePlayback} style={{ 
-              padding: '8px 16px', 
-              background: project.isPlaying ? 'linear-gradient(135deg, #FF4500, #FFA500)' : 'linear-gradient(135deg, #00D1FF, #BD00FF)',
-              border: 'none', borderRadius: 9, cursor: 'pointer', color: 'white',
-              boxShadow: project.isPlaying ? '0 4px 20px rgba(255,69,0,0.3)' : '0 4px 20px rgba(0,209,255,0.3)'
-            }}>
+          <div className="st-transport">
+            <button type="button" onClick={stopPlayback} title="Stop"><Square size={15} /></button>
+            <button
+              type="button"
+              className={`play ${project.isPlaying ? 'playing' : ''}`}
+              onClick={togglePlayback}
+              title={project.isPlaying ? 'Pause' : 'Play'}
+            >
               {project.isPlaying ? <Pause size={16} /> : <Play size={16} />}
             </button>
             <button
               type="button"
+              className={`click ${project.metronomeEnabled ? 'on' : ''}`}
               title={project.metronomeEnabled ? 'Выключить метроном' : 'Включить метроном'}
               onClick={() => commitProject(prev => ({ ...prev, metronomeEnabled: !prev.metronomeEnabled }))}
-              style={{
-                padding: '8px 10px',
-                background: project.metronomeEnabled ? 'rgba(0,209,255,0.2)' : 'none',
-                border: 'none',
-                borderRadius: 9,
-                cursor: 'pointer',
-                color: project.metronomeEnabled ? '#7fdcf0' : '#666',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-              }}
             >
               <Activity size={14} />
-              {project.metronomeEnabled ? 'CLICK' : 'MUTE'}
+              {project.metronomeEnabled ? 'Click' : 'Mute'}
             </button>
           </div>
-          
-          <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.05)' }} />
-          
-          <button
-            onClick={() => void returnToProjects()}
-            title="Вернуться к проектам"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#ccc', cursor: 'pointer', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}
-          >
-            <ArrowLeft size={14} /> ПРОЕКТЫ
+          <button type="button" className="st-chip ghost" onClick={() => void returnToProjects()} title="Вернуться к проектам">
+            <ArrowLeft size={14} /> Projects
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="st-body">
         {/* Sidebar */}
-        <div style={{ 
-          width: 300, borderRight: '1px solid rgba(255,255,255,0.05)', 
-          background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(20px)',
-          display: 'flex', flexDirection: 'column', flexShrink: 0 
-        }}>
-          <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24, overflowY: 'auto', flex: 1 }}>
-            <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: 8 }}>Browser</div>
+        <aside className="st-side">
+          <div className="st-side-scroll">
+            <div className="st-panel">
+              <div className="st-section-title" style={{ marginBottom: 10 }}>Browser</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {project.patterns.map(pattern => (
                   <button
@@ -4026,23 +3798,25 @@ function MIDISequencer() {
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      padding: '6px 8px',
-                      borderRadius: 8,
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      background: pattern.id === project.activePatternId ? 'rgba(0,209,255,0.12)' : 'rgba(255,255,255,0.02)',
-                      color: pattern.id === project.activePatternId ? '#00D1FF' : '#a3a3a3',
+                      padding: '8px 10px',
+                      borderRadius: 10,
+                      border: pattern.id === project.activePatternId ? '1px solid rgba(245,245,247,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                      background: pattern.id === project.activePatternId ? 'rgba(245,245,247,0.1)' : 'rgba(255,255,255,0.02)',
+                      color: pattern.id === project.activePatternId ? '#F5F5F7' : '#8e8e93',
                       cursor: 'pointer',
-                      fontSize: 11,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      fontFamily: 'inherit',
                     }}
                   >
                     <span>{pattern.name}</span>
-                    <span>{pattern.length} bars</span>
+                    <span style={{ color: '#636366' }}>{pattern.length} bars</span>
                   </button>
                 ))}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h2 style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '2px', color: '#666' }}>Track List</h2>
+              <h2 className="st-section-title">Tracks</h2>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input type="file" id="sample-in" style={{ display: 'none' }} accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a" onChange={handleFileUpload} />
                 <label
@@ -4059,25 +3833,16 @@ function MIDISequencer() {
                     if (file) void importAudioFile(file);
                   }}
                   title="Upload or drop one-shot here"
-                  style={{ 
-                  padding: '8px', borderRadius: 8, cursor: 'pointer',
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
+                  className="st-chip ghost"
+                  style={{ width: 34, height: 34, padding: 0, justifyContent: 'center' }}
+                >
                   <Upload size={14} />
                 </label>
                 <button
+                  type="button"
                   onClick={() => setEqPanelOpen(open => !open)}
                   title="Обработка активного трека (эквалайзер)"
-                  style={{
-                    padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-                    background: eqPanelOpen || project.tracks.find(t => t.id === project.activeTrackId)?.eq?.enabled
-                      ? 'rgba(0,209,255,0.15)' : 'rgba(255,255,255,0.05)',
-                    border: eqPanelOpen ? '1px solid rgba(0,209,255,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                    color: eqPanelOpen ? '#00D1FF' : '#aaa',
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    fontSize: 9, fontWeight: 700, letterSpacing: 1,
-                  }}
+                  className={`st-chip ${eqPanelOpen || project.tracks.find(t => t.id === project.activeTrackId)?.eq?.enabled ? 'on' : ''}`}
                 >
                   <Sliders size={13} /> FX
                 </button>
@@ -4098,36 +3863,29 @@ function MIDISequencer() {
               };
               const activePreset = EQ_PRESETS.find(p => p.low === eq.low && p.mid === eq.mid && p.high === eq.high);
               return (
-                <div style={{ border: '1px solid rgba(0,209,255,0.25)', borderRadius: 12, padding: 12, background: 'rgba(0,209,255,0.04)' }}>
+                <div className="st-panel" style={{ borderColor: 'rgba(245,245,247,0.18)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#00D1FF', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
-                      EQ • {activeTrack.name}
+                    <div style={{ fontSize: 11, letterSpacing: -0.01, color: '#F5F5F7', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
+                      EQ · {activeTrack.name}
                     </div>
                     <button
+                      type="button"
                       onClick={() => updateEq({ enabled: !eq.enabled })}
-                      style={{
-                        border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 10px',
-                        fontSize: 9, fontWeight: 700, letterSpacing: 1,
-                        background: eq.enabled ? 'rgba(82,214,138,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: eq.enabled ? '#52d68a' : '#888',
-                      }}
+                      className={`st-chip ${eq.enabled ? 'on' : ''}`}
                     >
                       {eq.enabled ? 'ON' : 'OFF'}
                     </button>
                   </div>
 
-                  <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, color: '#777', marginBottom: 6 }}>Пресеты</div>
+                  <div className="st-label" style={{ marginBottom: 6 }}>Пресеты</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                     {EQ_PRESETS.map(preset => (
                       <button
                         key={preset.id}
+                        type="button"
                         onClick={() => updateEq({ enabled: true, low: preset.low, mid: preset.mid, high: preset.high })}
-                        style={{
-                          border: activePreset?.id === preset.id ? '1px solid rgba(0,209,255,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                          background: activePreset?.id === preset.id ? 'rgba(0,209,255,0.18)' : 'rgba(255,255,255,0.04)',
-                          color: activePreset?.id === preset.id ? '#00D1FF' : '#bbb',
-                          borderRadius: 7, cursor: 'pointer', padding: '5px 9px', fontSize: 10,
-                        }}
+                        className={`st-chip ${activePreset?.id === preset.id ? 'on' : ''}`}
+                        style={{ height: 28, fontSize: 11 }}
                       >
                         {preset.name}
                       </button>
@@ -4136,9 +3894,9 @@ function MIDISequencer() {
 
                   {EQ_BANDS.map(band => (
                     <div key={band.key} style={{ marginBottom: 10, opacity: eq.enabled ? 1 : 0.45 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                        <span>{band.label} <span style={{ color: '#555' }}>{band.hint}</span></span>
-                        <span style={{ color: eq[band.key] > 0 ? '#52d68a' : eq[band.key] < 0 ? '#ff9d66' : '#777', fontFamily: 'monospace' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: '#8e8e93', marginBottom: 4 }}>
+                        <span>{band.label} <span style={{ color: '#636366' }}>{band.hint}</span></span>
+                        <span style={{ color: eq[band.key] > 0 ? '#30d158' : eq[band.key] < 0 ? '#ff9f0a' : '#636366', fontFamily: "'IBM Plex Mono', monospace" }}>
                           {eq[band.key] > 0 ? '+' : ''}{eq[band.key]} dB
                         </span>
                       </div>
@@ -4149,11 +3907,11 @@ function MIDISequencer() {
                         step={1}
                         value={eq[band.key]}
                         onChange={e => updateEq({ enabled: true, [band.key]: Number(e.target.value) })}
-                        style={{ width: '100%', accentColor: '#00D1FF' }}
+                        style={{ width: '100%', accentColor: '#F5F5F7' }}
                       />
                     </div>
                   ))}
-                  <div style={{ fontSize: 9, color: '#666' }}>
+                  <div style={{ fontSize: 11, color: '#636366', lineHeight: 1.4 }}>
                     Действует на выбранный трек при проигрывании нот и сэмплов.
                   </div>
                 </div>
@@ -4163,105 +3921,96 @@ function MIDISequencer() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {project.tracks.map(track => (
                 <div key={track.id} onClick={() => setProject({...project, activeTrackId: track.id})} style={{ 
-                  padding: 16, borderRadius: 16, border: '1px solid', cursor: 'pointer', 
-                  transition: 'all 0.2s', 
-                  background: project.activeTrackId === track.id ? 'rgba(255,255,255,0.08)' : 'transparent', 
-                  borderColor: project.activeTrackId === track.id ? 'rgba(255,255,255,0.15)' : 'transparent', 
-                  opacity: project.activeTrackId === track.id ? 1 : 0.5
+                  padding: 14, borderRadius: 14, border: '1px solid', cursor: 'pointer', 
+                  transition: 'background 0.15s, border-color 0.15s, opacity 0.15s', 
+                  background: project.activeTrackId === track.id ? 'rgba(255,255,255,0.06)' : 'transparent', 
+                  borderColor: project.activeTrackId === track.id ? 'rgba(255,255,255,0.14)' : 'transparent', 
+                  opacity: project.activeTrackId === track.id ? 1 : 0.55
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: track.color, boxShadow: `0 0 12px ${track.color}` }} />
-                      <span style={{ fontSize: '12px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>{track.name}</span>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: track.color }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120, letterSpacing: -0.02 }}>{track.name}</span>
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={e => { e.stopPropagation(); setProject({...project, tracks: project.tracks.map(t => t.id === track.id ? {...t, muted: !t.muted} : t)}); }} style={{ 
                         width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                        fontSize: '9px', fontWeight: 'bold', borderRadius: 6, border: 'none', cursor: 'pointer', 
-                        background: track.muted ? '#ff4444' : 'rgba(255,255,255,0.1)', color: 'white'
+                        fontSize: 9, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer', 
+                        background: track.muted ? '#ff453a' : 'rgba(255,255,255,0.08)', color: 'white'
                       }}>M</button>
                       <button onClick={e => { e.stopPropagation(); setProject({...project, tracks: project.tracks.map(t => t.id === track.id ? {...t, solo: !t.solo} : t)}); }} style={{ 
                         width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                        fontSize: '9px', fontWeight: 'bold', borderRadius: 6, border: 'none', cursor: 'pointer', 
-                        background: track.solo ? '#00D1FF' : 'rgba(255,255,255,0.1)', color: 'white'
+                        fontSize: 9, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer', 
+                        background: track.solo ? '#F5F5F7' : 'rgba(255,255,255,0.08)', color: track.solo ? '#111' : 'white'
                       }}>S</button>
                       {project.tracks.length > 1 && (
                         <button onClick={e => { e.stopPropagation(); handleDeleteTrack(track.id); }} style={{ 
                           width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                          fontSize: '12px', fontWeight: 'bold', borderRadius: 6, border: 'none', cursor: 'pointer', 
-                          background: 'rgba(255,68,68,0.2)', color: '#ff4444'
+                          fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer', 
+                          background: 'rgba(255,69,58,0.15)', color: '#ff453a'
                         }}>×</button>
                       )}
                     </div>
                   </div>
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Volume2 size={12} style={{ color: '#666' }} />
-                    <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', background: track.color, width: `${track.volume * 100}%`, borderRadius: 2, boxShadow: `0 0 8px ${track.color}44` }} />
+                    <Volume2 size={12} style={{ color: '#636366' }} />
+                    <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', background: track.color, width: `${track.volume * 100}%`, borderRadius: 2 }} />
                     </div>
-                    <span style={{ fontSize: '9px', color: '#666', fontFamily: 'monospace', minWidth: 32, textAlign: 'right' }}>{Math.round(track.volume * 100)}%</span>
+                    <span style={{ fontSize: 10, color: '#636366', fontFamily: "'IBM Plex Mono', monospace", minWidth: 32, textAlign: 'right' }}>{Math.round(track.volume * 100)}%</span>
                   </div>
                 </div>
               ))}
             </div>
 
             <div>
-              <h3 style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '2px', color: '#666', marginBottom: 16 }}>Add Instrument</h3>
+              <h3 className="st-section-title" style={{ marginBottom: 12 }}>Add Instrument</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                 {INSTRUMENTS.map(inst => (
                   <button key={inst.id} onClick={() => addDefaultTrack(inst.id)} style={{ 
-                    padding: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', 
-                    borderRadius: 12, cursor: 'pointer', transition: 'all 0.2s', 
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: '#999'
+                    padding: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', 
+                    borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', 
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: '#8e8e93',
+                    fontFamily: 'inherit',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = inst.color; e.currentTarget.style.color = inst.color; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#999'; }}>
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; e.currentTarget.style.color = '#F5F5F7'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#8e8e93'; }}>
                     <inst.icon size={16} />
-                    <span style={{ fontSize: '8px', fontWeight: 'bold', letterSpacing: '1px' }}>{inst.name}</span>
+                    <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.06em' }}>{inst.name}</span>
                   </button>
                 ))}
               </div>
             </div>
           </div>
-        </div>
+        </aside>
 
         {/* Piano Roll */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', background: '#0a0a0a', overflow: 'hidden' }}>
+        <div className="st-main">
           {/* Toolbar */}
-          <div style={{ 
-            height: 40, borderBottom: '1px solid rgba(255,255,255,0.05)', 
-            display: 'flex', alignItems: 'center', padding: '0 24px', gap: 32, 
-            fontSize: '10px', letterSpacing: '1px', fontFamily: 'monospace', color: '#666', flexShrink: 0 
-          }}>
-            <span>TIMELINE VIEW</span>
-            <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+          <div className="st-toolbar">
+            <span style={{ fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: 10, color: '#636366' }}>Timeline</span>
+            <div className="st-seg">
               <button
+                type="button"
+                className={editorView === 'piano' ? 'on' : ''}
                 onClick={() => setEditorView('piano')}
-                style={{ border: 'none', padding: '4px 8px', cursor: 'pointer', background: editorView === 'piano' ? 'rgba(0,209,255,0.18)' : 'transparent', color: editorView === 'piano' ? '#00D1FF' : '#888', fontSize: 10 }}
               >
-                PIANO
+                Piano
               </button>
               <button
+                type="button"
+                className={editorView === 'playlist' ? 'on' : ''}
                 onClick={() => setEditorView('playlist')}
-                style={{ border: 'none', padding: '4px 8px', cursor: 'pointer', background: editorView === 'playlist' ? 'rgba(0,209,255,0.18)' : 'transparent', color: editorView === 'playlist' ? '#00D1FF' : '#888', fontSize: 10 }}
               >
-                PLAYLIST
+                Playlist
               </button>
             </div>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <button
-                onClick={undo}
-                title="Undo (Ctrl+Z)"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 6, color: '#ccc', cursor: 'pointer', padding: '4px 10px', fontSize: 11,
-                }}
-              >
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" onClick={undo} title="Undo (Ctrl+Z)" className="st-chip ghost">
                 <Undo2 size={14} /> Undo
               </button>
-              <button onClick={() => setZoom(z => Math.max(24, Math.round(z / 1.25)))} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ccc', cursor: 'pointer', padding: '4px 10px', fontSize: 11 }}>− Zoom</button>
+              <button type="button" onClick={() => setZoom(z => Math.max(24, Math.round(z / 1.25)))} className="st-chip ghost">− Zoom</button>
               <input
                 type="range"
                 min={24}
@@ -4269,15 +4018,15 @@ function MIDISequencer() {
                 value={zoom}
                 onChange={e => setZoom(Number(e.target.value))}
                 title="Масштаб"
-                style={{ width: 100, accentColor: '#00D1FF' }}
+                style={{ width: 100, accentColor: '#F5F5F7' }}
               />
-              <button onClick={() => {
+              <button type="button" onClick={() => {
                 setZoom(z => Math.min(320, Math.round(z * 1.25)));
-                setQuantizeGrid(q => (q >= 1 ? 0.5 : q)); // zoom in → 8 cells/bar
-              }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ccc', cursor: 'pointer', padding: '4px 10px', fontSize: 11 }}>Zoom +</button>
-              <span style={{ fontSize: 10, color: '#666', fontFamily: 'monospace', minWidth: 36 }}>{zoom}px</span>
-              <button onClick={() => commitProject(p => ({...p, tracks: p.tracks.map(t => ({...t, notes: []}))}))} style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold' }}>Clear All</button>
-              <button onClick={exportProject} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}>Export JSON</button>
+                setQuantizeGrid(q => (q >= 1 ? 0.5 : q));
+              }} className="st-chip ghost">Zoom +</button>
+              <span style={{ fontSize: 11, color: '#636366', fontFamily: "'IBM Plex Mono', monospace", minWidth: 36 }}>{zoom}px</span>
+              <button type="button" onClick={() => commitProject(p => ({...p, tracks: p.tracks.map(t => ({...t, notes: []}))}))} className="st-chip ghost" style={{ color: '#ff453a' }}>Clear All</button>
+              <button type="button" onClick={exportProject} className="st-chip ghost">Export JSON</button>
             </div>
           </div>
 
@@ -4331,7 +4080,7 @@ function MIDISequencer() {
                         top: 0,
                         bottom: 0,
                         width: isEnd ? 2 : BEATS_PER_BAR * zoom,
-                        borderLeft: '2px solid rgba(0,209,255,0.55)',
+                        borderLeft: '2px solid rgba(245,245,247,0.55)',
                         boxSizing: 'border-box',
                         pointerEvents: 'none',
                       }}
@@ -4344,7 +4093,7 @@ function MIDISequencer() {
                         fontSize: 11,
                         fontFamily: 'monospace',
                         fontWeight: 700,
-                        color: '#00D1FF',
+                        color: '#F5F5F7',
                       }}>
                         {point + 1}
                       </span>
@@ -4372,8 +4121,8 @@ function MIDISequencer() {
                     bottom: 0,
                     width: 2,
                     left: (playheadTime % Math.max(patternBeatLength, 0.0001)) * zoom,
-                    background: '#00D1FF',
-                    boxShadow: '0 0 10px #00D1FF',
+                    background: '#F5F5F7',
+                    boxShadow: 'none',
                     pointerEvents: 'none',
                     zIndex: 2,
                   }}
@@ -4383,7 +4132,7 @@ function MIDISequencer() {
                     width: 0, height: 0,
                     borderLeft: '6px solid transparent',
                     borderRight: '6px solid transparent',
-                    borderTop: '8px solid #00D1FF',
+                    borderTop: '8px solid #F5F5F7',
                   }} />
                 </div>
               </div>
@@ -4406,7 +4155,7 @@ function MIDISequencer() {
                       paddingRight: 8, borderBottom: '1px solid rgba(255,255,255,0.01)', 
                       fontSize: '8px', fontFamily: 'monospace', letterSpacing: '-0.02em',
                       background: isBlack ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.03)', 
-                      color: isC ? '#00D1FF' : isBlack ? '#888' : '#bbb',
+                      color: isC ? '#F5F5F7' : isBlack ? '#888' : '#bbb',
                       fontWeight: isC ? 700 : 500,
                     }}>
                       {getNoteLabel(pitch)}
@@ -4441,7 +4190,7 @@ function MIDISequencer() {
                     <div key={`v-${i}`} style={{ 
                       position: 'absolute', top: 0, bottom: 0, width: isBar ? 2 : 1, 
                       left: i * (zoom * quantizeGrid), 
-                      background: isBar ? 'rgba(0,209,255,0.4)' : 'rgba(255,255,255,0.1)',
+                      background: isBar ? 'rgba(245,245,247,0.4)' : 'rgba(255,255,255,0.1)',
                     }} />
                   );
                 })}
@@ -4452,7 +4201,7 @@ function MIDISequencer() {
                   bottom: 0,
                   width: 2,
                   left: patternBeatLength * zoom - 2,
-                  background: 'rgba(0,209,255,0.55)',
+                  background: 'rgba(245,245,247,0.55)',
                 }} />
 
                 {/* Bar watermarks 1..N only (not the end point) */}
@@ -4503,7 +4252,7 @@ function MIDISequencer() {
                           border: `1px solid ${isDraggingNote ? '#FFFFFF' : 'rgba(0,0,0,0.3)'}`,
                           cursor: isDraggingNote ? 'grabbing' : 'grab',
                           zIndex: isActive ? 20 : 10,
-                          boxShadow: isActive ? `0 0 16px ${track.color}66, inset 0 1px 0 rgba(255,255,255,0.2)` : 'none',
+                          boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.18)' : 'none',
                           transition: isDraggingNote ? 'none' : 'box-shadow 0.2s',
                         }}
                       >
@@ -4547,13 +4296,13 @@ function MIDISequencer() {
                 >
                   <div style={{
                     position: 'absolute', top: 0, bottom: 0, left: 5, width: 3,
-                    background: '#00D1FF', boxShadow: '0 0 20px #00D1FF',
+                    background: '#F5F5F7', boxShadow: 'none',
                     pointerEvents: 'none',
                   }} />
                   <div style={{ 
                     position: 'absolute', top: -4, left: 0, 
-                    width: 12, height: 12, background: '#00D1FF', 
-                    borderRadius: '50%', boxShadow: '0 0 15px #00D1FF',
+                    width: 12, height: 12, background: '#F5F5F7', 
+                    borderRadius: '50%', boxShadow: 'none',
                     pointerEvents: 'none',
                   }} />
                 </div>
@@ -4619,9 +4368,9 @@ function MIDISequencer() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: 4,
                       fontSize: 9, fontWeight: 700, letterSpacing: 0.6, padding: '3px 7px', borderRadius: 4, cursor: 'pointer',
-                      border: micMonitorOn ? '1px solid rgba(0,209,255,0.45)' : '1px solid rgba(255,255,255,0.12)',
-                      background: micMonitorOn ? 'rgba(0,209,255,0.12)' : 'rgba(255,255,255,0.04)',
-                      color: micMonitorOn ? '#7fdcf0' : '#777',
+                      border: micMonitorOn ? '1px solid rgba(245,245,247,0.45)' : '1px solid rgba(255,255,255,0.12)',
+                      background: micMonitorOn ? 'rgba(245,245,247,0.12)' : 'rgba(255,255,255,0.04)',
+                      color: micMonitorOn ? '#D1D1D6' : '#777',
                     }}
                   >
                     {micMonitorOn ? <Headphones size={11} /> : <MicOff size={11} />}
@@ -4658,7 +4407,7 @@ function MIDISequencer() {
                       width: 8, height: 8, borderRadius: '50%',
                       background: isRecording ? '#ff4646' : '#c0392b',
                       boxShadow: isRecording ? '0 0 8px #ff4646' : 'none',
-                      animation: isRecording ? 'pulse 1s infinite' : 'none',
+                      animation: isRecording ? 'st-pulse 1s infinite' : 'none',
                     }} />
                     {isRecording ? `STOP ${Math.floor(recordElapsedSec / 60)}:${String(recordElapsedSec % 60).padStart(2, '0')}` : 'REC'}
                   </button>
@@ -4681,8 +4430,8 @@ function MIDISequencer() {
                         padding: '3px 8px',
                         borderRadius: 4,
                         border: '1px solid rgba(255,255,255,0.12)',
-                        background: selectedClipIds.length > 0 ? 'rgba(0,209,255,0.12)' : 'rgba(255,255,255,0.03)',
-                        color: selectedClipIds.length > 0 ? '#9ad8e6' : '#555',
+                        background: selectedClipIds.length > 0 ? 'rgba(245,245,247,0.12)' : 'rgba(255,255,255,0.03)',
+                        color: selectedClipIds.length > 0 ? '#AEAEB2' : '#555',
                         cursor: selectedClipIds.length > 0 ? 'pointer' : 'default',
                         fontFamily: 'inherit',
                       }}
@@ -4783,8 +4532,8 @@ function MIDISequencer() {
                     bottom: 0,
                     width: 2,
                     left: playheadTime * zoom,
-                    background: '#00D1FF',
-                    boxShadow: '0 0 10px rgba(0,209,255,0.8)',
+                    background: '#F5F5F7',
+                    boxShadow: 'none',
                     pointerEvents: 'none',
                   }}
                 >
@@ -4793,7 +4542,7 @@ function MIDISequencer() {
                     width: 0, height: 0,
                     borderLeft: '6px solid transparent',
                     borderRight: '6px solid transparent',
-                    borderTop: '8px solid #00D1FF',
+                    borderTop: '8px solid #F5F5F7',
                   }} />
                 </div>
               </div>
@@ -4862,7 +4611,7 @@ function MIDISequencer() {
                 const selected = selectedClipIds.includes(clip.id);
                 const barsLabel = (clipBeatLen / BEATS_PER_BAR).toFixed(clipBeatLen % BEATS_PER_BAR === 0 ? 0 : 1);
                 const isVocalClip = isAudioClip && clip.isVocal;
-                const accent = isVocalClip ? '#FF8A8A' : isAudioClip ? '#B7F36B' : '#00D1FF';
+                const accent = isVocalClip ? '#FF453A' : isAudioClip ? '#30D158' : '#F5F5F7';
                 return (
                   <div
                     key={clip.id}
@@ -4905,13 +4654,13 @@ function MIDISequencer() {
                       height: PLAYLIST_LANE_HEIGHT - 8,
                       borderRadius: 4,
                       border: selected ? `1px solid ${accent}` : '1px solid rgba(255,255,255,0.2)',
-                      boxShadow: selected ? `0 0 0 1px ${isVocalClip ? 'rgba(255,138,138,0.35)' : isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)'}` : 'none',
+                      boxShadow: selected ? `0 0 0 1px ${isVocalClip ? 'rgba(255,138,138,0.35)' : isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(245,245,247,0.35)'}` : 'none',
                       background: isVocalClip
                         ? (selected ? 'linear-gradient(180deg, rgba(255,138,138,0.38), rgba(255,138,138,0.16))' : 'linear-gradient(180deg, rgba(255,138,138,0.22), rgba(255,138,138,0.09))')
                         : isAudioClip
                           ? (selected ? 'linear-gradient(180deg, rgba(183,243,107,0.38), rgba(183,243,107,0.16))' : 'linear-gradient(180deg, rgba(183,243,107,0.22), rgba(183,243,107,0.09))')
-                          : (selected ? 'linear-gradient(180deg, rgba(0,209,255,0.38), rgba(0,209,255,0.18))' : 'linear-gradient(180deg, rgba(0,209,255,0.22), rgba(0,209,255,0.1))'),
-                      color: isVocalClip ? (selected ? '#ffe3e3' : '#e0a3a3') : isAudioClip ? (selected ? '#eaffd0' : '#b3d68f') : (selected ? '#d8faff' : '#95c6d2'),
+                          : (selected ? 'linear-gradient(180deg, rgba(245,245,247,0.38), rgba(245,245,247,0.18))' : 'linear-gradient(180deg, rgba(245,245,247,0.22), rgba(245,245,247,0.1))'),
+                      color: isVocalClip ? (selected ? '#ffe3e3' : '#e0a3a3') : isAudioClip ? (selected ? '#eaffd0' : '#b3d68f') : (selected ? '#F5F5F7' : '#A1A1A6'),
                       fontSize: 9,
                       display: 'flex',
                       alignItems: 'center',
@@ -4925,6 +4674,7 @@ function MIDISequencer() {
                   >
                     <div
                       onMouseDown={(e) => beginPlaylistDrag(clip, e, 'resize-left')}
+                      title="Обрезать слева · ⌥/Alt — шаг 1/10"
                       style={{
                         position: 'absolute',
                         left: 0,
@@ -4932,7 +4682,7 @@ function MIDISequencer() {
                         bottom: 0,
                         width: 7,
                         cursor: 'ew-resize',
-                        background: selected ? (isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)') : 'rgba(255,255,255,0.08)',
+                        background: selected ? (isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(245,245,247,0.35)') : 'rgba(255,255,255,0.08)',
                       }}
                     />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
@@ -4942,6 +4692,7 @@ function MIDISequencer() {
                     </span>
                     <div
                       onMouseDown={(e) => beginPlaylistDrag(clip, e, 'resize-right')}
+                      title="Обрезать справа · ⌥/Alt — шаг 1/10"
                       style={{
                         position: 'absolute',
                         right: 0,
@@ -4949,7 +4700,7 @@ function MIDISequencer() {
                         bottom: 0,
                         width: 7,
                         cursor: 'ew-resize',
-                        background: selected ? (isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(0,209,255,0.35)') : 'rgba(255,255,255,0.08)',
+                        background: selected ? (isAudioClip ? 'rgba(183,243,107,0.35)' : 'rgba(245,245,247,0.35)') : 'rgba(255,255,255,0.08)',
                       }}
                     />
                   </div>
@@ -4984,8 +4735,8 @@ function MIDISequencer() {
                     bottom: 0,
                     left: 5,
                     width: 2,
-                    background: '#00D1FF',
-                    boxShadow: '0 0 12px rgba(0,209,255,0.8)',
+                    background: '#F5F5F7',
+                    boxShadow: 'none',
                     pointerEvents: 'none',
                   }}
                 />
@@ -4997,13 +4748,28 @@ function MIDISequencer() {
           {vocalPanelClipId && (() => {
             const clip = project.arrangement.find(c => c.id === vocalPanelClipId);
             if (!clip || clip.type !== 'audio') return null;
-            const clipEq: TrackEq = clip.eq ?? { enabled: false, low: 0, mid: 0, high: 0 };
+            const clipFx = normalizeClipFx(clip.fx, clip.eq);
             const clipGain = clip.gain ?? 0.9;
             const patchClip = (patch: Partial<PlaylistClip>) => {
               commitProject(prev => ({
                 ...prev,
-                arrangement: prev.arrangement.map(c => c.id === clip.id ? { ...c, ...patch } : c),
+                arrangement: prev.arrangement.map(c => {
+                  if (c.id !== clip.id) return c;
+                  const next = { ...c, ...patch };
+                  if (patch.fx) {
+                    next.eq = {
+                      enabled: patch.fx.enabled,
+                      low: patch.fx.low,
+                      mid: patch.fx.mid,
+                      high: patch.fx.high,
+                    };
+                  }
+                  return next;
+                }),
               }));
+            };
+            const setFx = (partial: Partial<ClipFx>) => {
+              patchClip({ fx: normalizeClipFx({ ...clipFx, ...partial }) });
             };
             const previewClip = () => {
               const eng = getEngine();
@@ -5012,10 +4778,15 @@ function MIDISequencer() {
               const offsetSec = (clip.offsetBeats ?? 0) / bps;
               const durationSec = Math.min(clip.lengthBeats / bps, 8);
               if (!clip.sampleId) return;
-              void eng.ensureSample(clip.sampleId).then(buffer => {
-                if (buffer) eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, { ...clipEq, enabled: clipEq.enabled });
+              void eng.ensureSample(clip.sampleId, { trimSilence: clip.isVocal }).then(buffer => {
+                if (buffer) eng.playClip(buffer, 0, clipGain, offsetSec, durationSec, clipFx);
               });
             };
+            const fxSliders: { key: keyof Pick<ClipFx, 'compress' | 'drive' | 'reverb'>; label: string }[] = [
+              { key: 'compress', label: 'Компрессор' },
+              { key: 'drive', label: 'Дисторшн' },
+              { key: 'reverb', label: 'Реверб' },
+            ];
             return (
               <div
                 onClick={() => setVocalPanelClipId(null)}
@@ -5028,7 +4799,8 @@ function MIDISequencer() {
                 <div
                   onClick={e => e.stopPropagation()}
                   style={{
-                    width: 380, maxWidth: '92vw', padding: 20, borderRadius: 14,
+                    width: 420, maxWidth: '94vw', maxHeight: '90vh', overflowY: 'auto',
+                    padding: 20, borderRadius: 14,
                     background: '#151515', border: '1px solid rgba(255,255,255,0.12)',
                     boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
                     display: 'flex', flexDirection: 'column', gap: 14,
@@ -5050,7 +4822,6 @@ function MIDISequencer() {
                     </button>
                   </div>
 
-                  {/* Volume */}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                       <span>Громкость</span>
@@ -5059,34 +4830,50 @@ function MIDISequencer() {
                     <input
                       type="range" min={0} max={2} step={0.01} value={clipGain}
                       onChange={e => patchClip({ gain: Number(e.target.value) })}
-                      style={{ width: '100%', accentColor: '#00D1FF' }}
+                      style={{ width: '100%', accentColor: '#F5F5F7' }}
                     />
                   </div>
 
-                  {/* EQ enable + presets */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>Эквалайзер</span>
+                    <span style={{ fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>FX цепь</span>
                     <button
                       type="button"
-                      onClick={() => patchClip({ eq: { ...clipEq, enabled: !clipEq.enabled } })}
+                      onClick={() => setFx({ enabled: !clipFx.enabled })}
                       style={{
                         fontSize: 9, fontWeight: 700, letterSpacing: 1, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-                        border: clipEq.enabled ? '1px solid rgba(0,209,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
-                        background: clipEq.enabled ? 'rgba(0,209,255,0.15)' : 'rgba(255,255,255,0.04)',
-                        color: clipEq.enabled ? '#7fdcf0' : '#777',
+                        border: clipFx.enabled ? '1px solid rgba(245,245,247,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                        background: clipFx.enabled ? 'rgba(245,245,247,0.15)' : 'rgba(255,255,255,0.04)',
+                        color: clipFx.enabled ? '#D1D1D6' : '#777',
                       }}
                     >
-                      {clipEq.enabled ? 'ON' : 'OFF'}
+                      {clipFx.enabled ? 'ON' : 'OFF'}
                     </button>
                   </div>
+
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {VOCAL_PRESETS.map(preset => {
-                      const active = clipEq.low === preset.low && clipEq.mid === preset.mid && clipEq.high === preset.high;
+                    {VOCAL_FX_PRESETS.map(preset => {
+                      const active = clipFx.enabled === preset.enabled
+                        && clipFx.low === preset.low
+                        && clipFx.mid === preset.mid
+                        && clipFx.high === preset.high
+                        && Math.abs(clipFx.compress - preset.compress) < 0.02
+                        && Math.abs(clipFx.drive - preset.drive) < 0.02
+                        && Math.abs(clipFx.reverb - preset.reverb) < 0.02;
                       return (
                         <button
                           key={preset.id}
                           type="button"
-                          onClick={() => patchClip({ eq: { enabled: true, low: preset.low, mid: preset.mid, high: preset.high } })}
+                          onClick={() => patchClip({
+                            fx: {
+                              enabled: preset.enabled,
+                              low: preset.low,
+                              mid: preset.mid,
+                              high: preset.high,
+                              compress: preset.compress,
+                              drive: preset.drive,
+                              reverb: preset.reverb,
+                            },
+                          })}
                           style={{
                             fontSize: 9, padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
                             border: active ? '1px solid rgba(255,138,138,0.6)' : '1px solid rgba(255,255,255,0.12)',
@@ -5100,17 +4887,31 @@ function MIDISequencer() {
                     })}
                   </div>
 
-                  {/* EQ bands */}
                   {EQ_BANDS.map(band => (
                     <div key={band.key}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#777', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                        <span>{band.label}</span>
-                        <span>{clipEq[band.key] > 0 ? '+' : ''}{clipEq[band.key]} dB</span>
+                        <span>{band.label} <span style={{ color: '#555' }}>{band.hint}</span></span>
+                        <span>{clipFx[band.key] > 0 ? '+' : ''}{clipFx[band.key]} dB</span>
                       </div>
                       <input
                         type="range" min={-EQ_GAIN_LIMIT} max={EQ_GAIN_LIMIT} step={1}
-                        value={clipEq[band.key]}
-                        onChange={e => patchClip({ eq: { ...clipEq, enabled: true, [band.key]: Number(e.target.value) } })}
+                        value={clipFx[band.key]}
+                        onChange={e => setFx({ enabled: true, [band.key]: Number(e.target.value) })}
+                        style={{ width: '100%', accentColor: clip.isVocal ? '#ff8a8a' : '#b7f36b' }}
+                      />
+                    </div>
+                  ))}
+
+                  {fxSliders.map(slider => (
+                    <div key={slider.key}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#777', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                        <span>{slider.label}</span>
+                        <span>{Math.round(clipFx[slider.key] * 100)}%</span>
+                      </div>
+                      <input
+                        type="range" min={0} max={1} step={0.01}
+                        value={clipFx[slider.key]}
+                        onChange={e => setFx({ enabled: true, [slider.key]: Number(e.target.value) })}
                         style={{ width: '100%', accentColor: clip.isVocal ? '#ff8a8a' : '#b7f36b' }}
                       />
                     </div>
@@ -5122,7 +4923,7 @@ function MIDISequencer() {
                       onClick={previewClip}
                       style={{
                         flex: 1, padding: '8px 0', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: 1,
-                        border: '1px solid rgba(0,209,255,0.4)', background: 'rgba(0,209,255,0.12)', color: '#7fdcf0',
+                        border: '1px solid rgba(245,245,247,0.4)', background: 'rgba(245,245,247,0.12)', color: '#D1D1D6',
                       }}
                     >
                       ▶ Прослушать
@@ -5144,50 +4945,46 @@ function MIDISequencer() {
           })()}
 
           {/* Bottom Mixer */}
-          <div style={{ 
-            height: 128, borderTop: '1px solid rgba(255,255,255,0.05)', 
-            display: 'flex', alignItems: 'center', padding: '0 40px', gap: 64, 
-            flexShrink: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(20px)'
-          }}>
+          <div className="st-mixer">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 200 }}>
-              <h3 style={{ fontSize: 14, fontStyle: 'italic', fontFamily: 'serif', color: '#00D1FF', margin: 0, letterSpacing: '1px' }}>MASTER FX</h3>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F7', margin: 0, letterSpacing: -0.02 }}>Master FX</h3>
               <div style={{ display: 'flex', gap: 16 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: '#636366', textTransform: 'uppercase', letterSpacing: 0.06 }}>
                     <span>Reverb</span>
                     <span>25%</span>
                   </div>
-                  <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', background: '#00D1FF', width: '25%', boxShadow: '0 0 10px #00D1FF' }} />
+                  <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: '#F5F5F7', width: '25%' }} />
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: '#636366', textTransform: 'uppercase', letterSpacing: 0.06 }}>
                     <span>Delay</span>
                     <span>33%</span>
                   </div>
-                  <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', background: '#BD00FF', width: '33%', boxShadow: '0 0 10px #BD00FF' }} />
+                  <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: '#8e8e93', width: '33%' }} />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div style={{ width: 1, height: 48, background: 'rgba(255,255,255,0.05)' }} />
+            <div style={{ width: 1, height: 48, background: 'rgba(255,255,255,0.08)' }} />
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#666', textTransform: 'uppercase', letterSpacing: '2px' }}>Waveform Monitor</div>
-              <div style={{ 
-                height: 48, background: 'rgba(0,0,0,0.8)', borderRadius: 8, 
-                border: '1px solid rgba(255,255,255,0.05)', display: 'flex', 
-                alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' 
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#636366', textTransform: 'uppercase', letterSpacing: 0.1 }}>Monitor</div>
+              <div style={{
+                height: 44, background: '#0a0a0a', borderRadius: 10,
+                border: '1px solid rgba(255,255,255,0.08)', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden'
               }}>
                 <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: '100%', padding: '0 16px', width: '100%' }}>
                   {Array.from({ length: 64 }).map((_, i) => (
-                    <div key={i} style={{ 
-                      flex: 1, 
-                      height: project.isPlaying ? `${Math.random() * 80 + 10}%` : '5%', 
-                      background: 'rgba(0,209,255,0.3)', 
+                    <div key={i} style={{
+                      flex: 1,
+                      height: project.isPlaying ? `${Math.random() * 80 + 10}%` : '5%',
+                      background: 'rgba(245,245,247,0.28)',
                       borderRadius: '2px 2px 0 0',
                       transition: 'height 0.1s'
                     }} />
@@ -5196,29 +4993,14 @@ function MIDISequencer() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 16 }}>
-              <button onClick={exportProject} style={{ 
-                padding: '12px 24px', background: 'rgba(0,209,255,0.1)', 
-                border: '1px solid rgba(0,209,255,0.2)', borderRadius: 16, 
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, 
-                cursor: 'pointer', color: '#00D1FF', transition: 'all 0.2s'
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,209,255,0.2)'; e.currentTarget.style.boxShadow = '0 0 20px rgba(0,209,255,0.3)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,209,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                <Download size={20} />
-                <span style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Export</span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" onClick={exportProject} className="st-chip" style={{ height: 52, flexDirection: 'column', gap: 4, padding: '0 18px' }}>
+                <Download size={18} />
+                <span style={{ fontSize: 9, letterSpacing: 0.08 }}>Export</span>
               </button>
-              
-              <label style={{ 
-                padding: '12px 24px', background: 'rgba(255,255,255,0.05)', 
-                border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, 
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, 
-                cursor: 'pointer', color: '#666', transition: 'all 0.2s'
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'white'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#666'; }}>
-                <Upload size={20} />
-                <span style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Import</span>
+              <label className="st-chip ghost" style={{ height: 52, flexDirection: 'column', gap: 4, padding: '0 18px', margin: 0 }}>
+                <Upload size={18} />
+                <span style={{ fontSize: 9, letterSpacing: 0.08 }}>Import</span>
                 <input type="file" accept=".json" onChange={importProject} style={{ display: 'none' }} />
               </label>
             </div>

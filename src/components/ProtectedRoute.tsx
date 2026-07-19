@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+/** Only allow in-app relative paths (block open redirects). */
+function safeNextPath(pathname: string, search: string): string {
+  const next = `${pathname}${search || ''}`;
+  if (!next.startsWith('/') || next.startsWith('//')) return '/dashboard';
+  return next;
+}
+
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const token = useAuthStore((state) => state.token);
   const checkAuth = useAuthStore((state) => state.checkAuth);
+  const location = useLocation();
   const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
   const [checking, setChecking] = useState(true);
 
@@ -51,7 +59,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!token) {
-    return <Navigate to="/login" replace />;
+    const next = encodeURIComponent(safeNextPath(location.pathname, location.search));
+    return <Navigate to={`/login?next=${next}`} replace />;
   }
 
   return <>{children}</>;

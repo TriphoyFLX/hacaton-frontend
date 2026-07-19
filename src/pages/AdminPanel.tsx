@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Users, FileText, Video, Trash2, Shield, Ban } from 'lucide-react';
+import { API_ORIGIN } from '../api/client';
+import { getAuthToken } from '../lib/authToken';
+
+const ADMIN_API = `${API_ORIGIN}/api/admin`;
+
+function authHeaders(): HeadersInit {
+  const token = getAuthToken();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'Content-Type': 'application/json',
+  };
+}
 
 interface User {
   id: string;
@@ -43,39 +55,40 @@ export default function AdminPanel() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [soundToks, setSoundToks] = useState<SoundTok[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [activeTab]);
 
   const fetchData = async () => {
     setLoading(true);
+    setError('');
     try {
-      const token = localStorage.getItem('token');
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
-
+      const headers = authHeaders();
       switch (activeTab) {
-        case 'users':
-          const usersResponse = await fetch('http://localhost:5002/api/admin/users', { headers });
-          const usersData = await usersResponse.json();
-          setUsers(usersData);
+        case 'users': {
+          const usersResponse = await fetch(`${ADMIN_API}/users`, { headers });
+          if (!usersResponse.ok) throw new Error(usersResponse.status === 403 ? 'Нужна роль ADMIN' : 'Не удалось загрузить пользователей');
+          setUsers(await usersResponse.json());
           break;
-        case 'posts':
-          const postsResponse = await fetch('http://localhost:5002/api/admin/posts', { headers });
-          const postsData = await postsResponse.json();
-          setPosts(postsData);
+        }
+        case 'posts': {
+          const postsResponse = await fetch(`${ADMIN_API}/posts`, { headers });
+          if (!postsResponse.ok) throw new Error(postsResponse.status === 403 ? 'Нужна роль ADMIN' : 'Не удалось загрузить посты');
+          setPosts(await postsResponse.json());
           break;
-        case 'soundtoks':
-          const soundToksResponse = await fetch('http://localhost:5002/api/admin/soundtoks', { headers });
-          const soundToksData = await soundToksResponse.json();
-          setSoundToks(soundToksData);
+        }
+        case 'soundtoks': {
+          const soundToksResponse = await fetch(`${ADMIN_API}/soundtoks`, { headers });
+          if (!soundToksResponse.ok) throw new Error(soundToksResponse.status === 403 ? 'Нужна роль ADMIN' : 'Не удалось загрузить видео');
+          setSoundToks(await soundToksResponse.json());
           break;
+        }
       }
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
+    } catch (e: any) {
+      console.error('Failed to fetch data:', e);
+      setError(e?.message || 'Ошибка загрузки');
     } finally {
       setLoading(false);
     }
@@ -83,69 +96,49 @@ export default function AdminPanel() {
 
   const deleteUser = async (userId: string) => {
     if (!confirm('Вы уверены, что хотите удалить этого пользователя?')) return;
-    
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5002/api/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await fetch(`${ADMIN_API}/users/${userId}`, { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) throw new Error('Не удалось удалить');
       setUsers(users.filter(u => u.id !== userId));
-    } catch (error) {
-      console.error('Failed to delete user:', error);
+    } catch (e) {
+      console.error('Failed to delete user:', e);
+      alert('Не удалось удалить пользователя');
     }
   };
 
   const banUser = async (userId: string) => {
     if (!confirm('Вы уверены, что хотите забанить этого пользователя?')) return;
-    
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5002/api/admin/users/${userId}/ban`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      setUsers(users.filter(u => u.id !== userId));
-    } catch (error) {
-      console.error('Failed to ban user:', error);
+      const res = await fetch(`${ADMIN_API}/users/${userId}/ban`, { method: 'PATCH', headers: authHeaders() });
+      if (!res.ok) throw new Error('Не удалось забанить');
+      await fetchData();
+    } catch (e) {
+      console.error('Failed to ban user:', e);
+      alert('Не удалось забанить пользователя');
     }
   };
 
   const deletePost = async (postId: string) => {
     if (!confirm('Вы уверены, что хотите удалить этот пост?')) return;
-    
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5002/api/admin/posts/${postId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await fetch(`${ADMIN_API}/posts/${postId}`, { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) throw new Error('Не удалось удалить');
       setPosts(posts.filter(p => p.id !== postId));
-    } catch (error) {
-      console.error('Failed to delete post:', error);
+    } catch (e) {
+      console.error('Failed to delete post:', e);
+      alert('Не удалось удалить пост');
     }
   };
 
   const deleteSoundTok = async (soundTokId: string) => {
     if (!confirm('Вы уверены, что хотите удалить это видео?')) return;
-    
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5002/api/admin/soundtoks/${soundTokId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await fetch(`${ADMIN_API}/soundtoks/${soundTokId}`, { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) throw new Error('Не удалось удалить');
       setSoundToks(soundToks.filter(s => s.id !== soundTokId));
-    } catch (error) {
-      console.error('Failed to delete soundtok:', error);
+    } catch (e) {
+      console.error('Failed to delete soundtok:', e);
+      alert('Не удалось удалить видео');
     }
   };
 
@@ -163,7 +156,6 @@ export default function AdminPanel() {
 
   return (
     <div className="h-full flex flex-col bg-gray-900 min-h-0">
-      {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700 p-3 sm:p-4">
         <h1 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
           <Shield size={22} className="sm:w-6 sm:h-6" />
@@ -171,7 +163,12 @@ export default function AdminPanel() {
         </h1>
       </div>
 
-      {/* Tabs */}
+      {error && (
+        <div className="mx-3 sm:mx-4 mt-3 p-3 rounded-lg bg-red-900/40 border border-red-700 text-red-200 text-sm">
+          {error}
+        </div>
+      )}
+
       <div className="bg-gray-800 border-b border-gray-700 overflow-x-auto">
         <div className="flex min-w-max sm:min-w-0">
           <button
@@ -210,7 +207,6 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4">
         {activeTab === 'users' && (
           <div className="space-y-4">
@@ -222,8 +218,8 @@ export default function AdminPanel() {
                     <p className="text-gray-400 text-sm">{user.email}</p>
                     <p className="text-gray-500 text-xs">{formatDate(user.createdAt)}</p>
                     <span className={`inline-block px-2 py-1 text-xs rounded ${
-                      user.role === 'ADMIN' 
-                        ? 'bg-purple-600 text-white' 
+                      user.role === 'ADMIN'
+                        ? 'bg-purple-600 text-white'
                         : 'bg-gray-600 text-gray-300'
                     }`}>
                       {user.role}

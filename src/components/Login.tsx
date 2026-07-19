@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import OAuthButtons from './OAuthButtons';
 import EmailVerifyStep from './EmailVerifyStep';
 import { authApi } from '../api/auth';
+import SeoHead from './SeoHead';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -332,9 +333,11 @@ export default function Login() {
 
   useEffect(() => {
     if (token) {
-      navigate('/dashboard');
+      const next = searchParams.get('next');
+      const dest = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+      navigate(dest);
     }
-  }, [token, navigate]);
+  }, [token, navigate, searchParams]);
 
   useEffect(() => {
     const err = searchParams.get('error');
@@ -364,7 +367,9 @@ export default function Login() {
         setPendingEmail(result.email);
         return;
       }
-      navigate('/dashboard');
+      const next = searchParams.get('next');
+      const dest = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+      navigate(dest);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Неверный email или пароль');
     } finally {
@@ -374,6 +379,11 @@ export default function Login() {
 
   return (
     <div className="login-root">
+      <SeoHead
+        title="Вход — SoundLab | Онлайн студия звукозаписи"
+        description="Войдите в SoundLab — онлайн студию звукозаписи. Записать трек онлайн, MIDI и вокал в браузере."
+        path="/login"
+      />
       <style>{css}</style>
 
       <div className="login-ambient">
@@ -386,12 +396,12 @@ export default function Login() {
 
       <div className="login-card">
         <div className="login-header">
-          <div className="login-brand">
+          <Link to="/" className="login-brand" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="brand-logo">
-              <img src="/soundlab.svg" alt="SoundLab" />
+              <img src="/soundlab.svg" alt="SoundLab — онлайн студия звукозаписи" />
             </div>
             <span className="brand-name">SoundLab</span>
-          </div>
+          </Link>
           <div className="login-subtitle">Вход в аккаунт</div>
         </div>
 

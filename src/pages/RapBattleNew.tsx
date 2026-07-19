@@ -1,7 +1,83 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save } from 'lucide-react';
+import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save, Headphones, Sliders } from 'lucide-react';
 import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, BattleRatingResult, User, Battle, BattleRecording } from '../api/battles';
 import { useAuthStore } from '../store/authStore';
+import { API_ORIGIN } from '../api/client';
+import {
+  type ClipFx,
+  VOCAL_FX_PRESETS,
+  EQ_BANDS,
+  EQ_GAIN_LIMIT,
+  normalizeClipFx,
+  VocalLiveSession,
+  presetNameForFx,
+} from '../lib/vocalFx';
+
+const VOICE_FX_STORAGE_KEY = 'soundlab_rap_battle_voice_fx';
+const DEFAULT_VOICE_FX = normalizeClipFx(VOCAL_FX_PRESETS.find(p => p.id === 'clean'));
+
+/** Absolute URL for /uploads/... beats & recordings (relative paths break on SPA origin). */
+function resolveMediaUrl(url?: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  try {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const u = new URL(url);
+      // Backend historically saved http://localhost:5002/uploads/... — rewrite to current API
+      if (
+        u.hostname === 'localhost'
+        || u.hostname === '127.0.0.1'
+        || u.port === '5002'
+        || u.hostname.endsWith('soundlab-studio.ru')
+      ) {
+        return `${API_ORIGIN}${u.pathname}${u.search}`;
+      }
+      return url;
+    }
+  } catch { /* fall through */ }
+  return `${API_ORIGIN}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
+/** Play beat on an <audio> element; avoid crossOrigin (breaks when CORS headers missing). */
+async function playBeatElement(el: HTMLAudioElement, src: string): Promise<void> {
+  const want = resolveMediaUrl(src);
+  if (!want) throw new Error('Пустой URL бита');
+
+  el.removeAttribute('crossorigin');
+  el.crossOrigin = null as any;
+  el.loop = true;
+  el.volume = 1;
+
+  let same = false;
+  try {
+    same = Boolean(el.src) && new URL(el.src).pathname === new URL(want, window.location.href).pathname
+      && !el.src.includes('localhost');
+  } catch { same = false; }
+
+  if (!same || el.error || el.readyState < 2) {
+    el.src = want;
+    el.load();
+    await new Promise<void>((resolve, reject) => {
+      const onReady = () => { cleanup(); resolve(); };
+      const onErr = () => { cleanup(); reject(new Error('Бит не загрузился (файл недоступен)')); };
+      const cleanup = () => {
+        el.removeEventListener('canplaythrough', onReady);
+        el.removeEventListener('canplay', onReady);
+        el.removeEventListener('error', onErr);
+      };
+      el.addEventListener('canplaythrough', onReady);
+      el.addEventListener('canplay', onReady);
+      el.addEventListener('error', onErr);
+      setTimeout(() => { cleanup(); resolve(); }, 4000);
+    });
+  }
+
+  try {
+    el.currentTime = 0;
+  } catch { /* ignore seek errors before metadata */ }
+
+  await el.play();
+}
 
 // ─────────────────────────────────────────────────────────
 // DESIGN SYSTEM — matches Sidebar & Profile exactly
@@ -591,8 +667,10 @@ const MixedTrackPlayer = ({ voiceUrl, beatUrl, label, playerKey }: { voiceUrl: s
     setLoading(true); setVoiceLoaded(false);
     const load = async () => {
       try {
-        const fullUrl = voiceUrl.startsWith('http') ? voiceUrl : `http://localhost:5002${voiceUrl}`;
-        voiceAudio.src = fullUrl; voiceAudio.crossOrigin = 'anonymous'; voiceAudio.load();
+        const fullUrl = resolveMediaUrl(voiceUrl);
+        voiceAudio.src = fullUrl;
+        voiceAudio.removeAttribute('crossorigin');
+        voiceAudio.load();
         await new Promise(res => { voiceAudio.oncanplay = () => res(void 0); voiceAudio.onerror = () => res(void 0); });
         setVoiceLoaded(true);
       } catch { setVoiceLoaded(true); } finally { setLoading(false); }
@@ -602,15 +680,20 @@ const MixedTrackPlayer = ({ voiceUrl, beatUrl, label, playerKey }: { voiceUrl: s
 
   useEffect(() => {
     const beatAudio = beatAudioRef.current;
-    if (!beatAudio || !beatUrl) return;
+    if (!beatAudio || !beatUrl) {
+      setBeatLoaded(false);
+      return;
+    }
     setLoading(true); setBeatLoaded(false);
     const load = async () => {
       try {
-        const fullUrl = beatUrl.startsWith('http') ? beatUrl : `http://localhost:5002${beatUrl}`;
-        beatAudio.src = fullUrl; beatAudio.crossOrigin = 'anonymous'; beatAudio.load();
+        const fullUrl = resolveMediaUrl(beatUrl);
+        beatAudio.src = fullUrl;
+        beatAudio.removeAttribute('crossorigin');
+        beatAudio.load();
         await new Promise(res => { beatAudio.oncanplay = () => res(void 0); beatAudio.onerror = () => res(void 0); });
-        setBeatLoaded(true);
-      } catch { setBeatLoaded(true); } finally { setLoading(false); }
+        setBeatLoaded(Boolean(beatAudio.duration) || beatAudio.readyState >= 2);
+      } catch { setBeatLoaded(false); } finally { setLoading(false); }
     };
     load();
   }, [beatUrl, token]);
@@ -640,14 +723,21 @@ const MixedTrackPlayer = ({ voiceUrl, beatUrl, label, playerKey }: { voiceUrl: s
 
   const playAudio = async () => {
     const v=voiceAudioRef.current, b=beatAudioRef.current;
-    if (!v||!b||!voiceLoaded||!beatLoaded) { setError('Аудио ещё загружается...'); return; }
+    if (!v || !voiceLoaded) { setError('Голос ещё загружается...'); return; }
     try {
-      v.currentTime=0; b.currentTime=0;
-      v.volume=(voiceVolume/100)*(masterVolume/100);
-      b.volume=(beatVolume/100)*(masterVolume/100);
-      await Promise.allSettled([v.play(), b.play()]);
+      v.currentTime = 0;
+      v.volume = (voiceVolume / 100) * (masterVolume / 100);
+      if (b && beatLoaded && beatUrl) {
+        b.currentTime = 0;
+        b.volume = (beatVolume / 100) * (masterVolume / 100);
+        // Start both in one gesture for tight sync
+        await Promise.all([v.play(), b.play()]);
+      } else {
+        await v.play();
+      }
       setIsPlaying(true);
-    } catch(e:any) { setError(`Ошибка: ${e.message}`); }
+      setError('');
+    } catch (e: any) { setError(`Ошибка: ${e.message}`); }
   };
 
   const stopAudio = () => {
@@ -667,7 +757,7 @@ const MixedTrackPlayer = ({ voiceUrl, beatUrl, label, playerKey }: { voiceUrl: s
   useEffect(()=>{ const v=voiceAudioRef.current; if(v) v.volume=(voiceVolume/100)*(masterVolume/100); },[voiceVolume,masterVolume]);
   useEffect(()=>{ const b=beatAudioRef.current;  if(b) b.volume=(beatVolume/100)*(masterVolume/100);  },[beatVolume,masterVolume]);
 
-  const ready = voiceLoaded && beatLoaded;
+  const ready = voiceLoaded && (!beatUrl || beatLoaded);
   const statusClass = ready ? 'rb-badge-green' : loading ? 'rb-badge-muted' : 'rb-badge-red';
   const statusText  = ready ? 'Готово' : loading ? 'Загрузка' : 'Ошибка';
 
@@ -854,6 +944,22 @@ export default function RapBattleNew() {
   const [recordingQuality, setRecordingQuality] = useState<'low'|'medium'|'high'>('high');
   const [showRecordingSettings, setShowRecordingSettings] = useState(false);
 
+  /** Voice check before REC — same quality path as MIDI vocals */
+  const [voiceReady, setVoiceReady] = useState(false);
+  const [voiceFx, setVoiceFx] = useState<ClipFx>(() => {
+    try {
+      const raw = localStorage.getItem(VOICE_FX_STORAGE_KEY);
+      if (raw) return normalizeClipFx(JSON.parse(raw));
+    } catch { /* noop */ }
+    return DEFAULT_VOICE_FX;
+  });
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState('');
+  const [micArmed, setMicArmed] = useState(false);
+  const [micMonitorOn, setMicMonitorOn] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [lastVoicePresetName, setLastVoicePresetName] = useState(() => presetNameForFx(DEFAULT_VOICE_FX));
+
   const [judgeResult, setJudgeResult] = useState<any>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -862,8 +968,92 @@ export default function RapBattleNew() {
   const timerRef         = useRef<number | null>(null);
   const streamRef        = useRef<MediaStream | null>(null);
   const recordingTimeRef = useRef(0);
+  const vocalSessionRef  = useRef<VocalLiveSession | null>(null);
+  const micLevelRafRef   = useRef<number | null>(null);
 
   const RECORDING_TIME_LIMIT = 30;
+
+  const disposeVocalSession = useCallback(() => {
+    if (micLevelRafRef.current) {
+      cancelAnimationFrame(micLevelRafRef.current);
+      micLevelRafRef.current = null;
+    }
+    vocalSessionRef.current?.dispose();
+    vocalSessionRef.current = null;
+    streamRef.current = null;
+    setMicArmed(false);
+    setMicLevel(0);
+  }, []);
+
+  const patchVoiceFx = useCallback((partial: Partial<ClipFx>) => {
+    setVoiceFx(prev => {
+      const next = normalizeClipFx({ ...prev, ...partial, enabled: true });
+      try { localStorage.setItem(VOICE_FX_STORAGE_KEY, JSON.stringify(next)); } catch { /* noop */ }
+      vocalSessionRef.current?.applyFx(next);
+      setLastVoicePresetName(presetNameForFx(next));
+      return next;
+    });
+  }, []);
+
+  const applyVoicePreset = useCallback((preset: typeof VOCAL_FX_PRESETS[number]) => {
+    const next = normalizeClipFx(preset);
+    setVoiceFx(next);
+    setLastVoicePresetName(preset.name);
+    try { localStorage.setItem(VOICE_FX_STORAGE_KEY, JSON.stringify(next)); } catch { /* noop */ }
+    vocalSessionRef.current?.applyFx(next);
+  }, []);
+
+  const refreshMicDevices = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setMicDevices(devices.filter(d => d.kind === 'audioinput'));
+    } catch { /* noop */ }
+  }, []);
+
+  const armMicrophone = useCallback(async () => {
+    try {
+      disposeVocalSession();
+      // Let tracks fully release before re-requesting (fixes second-turn / opponent ARM)
+      await new Promise(r => setTimeout(r, 50));
+      const session = await VocalLiveSession.create({
+        deviceId: selectedMicId || undefined,
+        fx: voiceFx,
+        monitor: micMonitorOn,
+      });
+      vocalSessionRef.current = session;
+      streamRef.current = session.rawStream;
+      setMicArmed(true);
+      await refreshMicDevices();
+      const tick = () => {
+        if (!vocalSessionRef.current) return;
+        setMicLevel(vocalSessionRef.current.getLevel());
+        micLevelRafRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch (e: any) {
+      console.error('armMicrophone', e);
+      setError(e?.message || 'Нет доступа к микрофону. Разрешите доступ в браузере.');
+      alert('Не удалось получить доступ к микрофону.');
+    }
+  }, [disposeVocalSession, selectedMicId, voiceFx, micMonitorOn, refreshMicDevices]);
+
+  const toggleMicMonitor = useCallback(() => {
+    setMicMonitorOn(prev => {
+      const next = !prev;
+      vocalSessionRef.current?.setMonitor(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => () => { disposeVocalSession(); }, [disposeVocalSession]);
+
+  // Reset voice check when entering a recording turn
+  useEffect(() => {
+    if (currentPhase === 'user1_turn' || currentPhase === 'user2_turn') {
+      setVoiceReady(false);
+      disposeVocalSession();
+    }
+  }, [currentPhase, currentRound]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── STATE RESTORE ──
   useEffect(() => {
@@ -873,11 +1063,17 @@ export default function RapBattleNew() {
       if (saved.currentPhase)    setCurrentPhase(saved.currentPhase as any);
       if (saved.user1Recording)  setUser1Recording(saved.user1Recording);
       if (saved.user2Recording)  setUser2Recording(saved.user2Recording);
-      if (saved.beatUrl)         setBeatUrl(saved.beatUrl);
+      if (saved.beatUrl) {
+        // Drop stale blob: URLs from previous session — they never work after reload
+        const b = saved.beatUrl.startsWith('blob:')
+          ? resolveMediaUrl(saved.currentBattle?.beatUrl || '')
+          : resolveMediaUrl(saved.beatUrl);
+        if (b) setBeatUrl(b);
+      } else if (saved.currentBattle?.beatUrl) {
+        setBeatUrl(resolveMediaUrl(saved.currentBattle.beatUrl));
+      }
       if (saved.recordingTime)   setRecordingTime(saved.recordingTime);
       if (saved.recordingQuality)setRecordingQuality(saved.recordingQuality);
-      if (saved.isRecording  !== undefined) setIsRecording(saved.isRecording);
-      if (saved.isPlayingBeat!== undefined) setIsPlayingBeat(saved.isPlayingBeat);
       if (saved.hasRated     !== undefined) setHasRated(saved.hasRated);
       if (saved.currentRound)    setCurrentRound(saved.currentRound);
       if (saved.error)           setError(saved.error);
@@ -904,7 +1100,11 @@ export default function RapBattleNew() {
       if (currentBattle) return;
       const invs = await getBattleInvitations();
       setPendingInvitations(invs);
-      if (invs.length > 0) { setCurrentBattle(invs[0]); setCurrentPhase('inviting'); }
+      if (invs.length > 0) {
+        setCurrentBattle(invs[0]);
+        setCurrentPhase('inviting');
+        if (invs[0].beatUrl) setBeatUrl(resolveMediaUrl(invs[0].beatUrl));
+      }
     } catch {}
   };
 
@@ -913,13 +1113,28 @@ export default function RapBattleNew() {
     try {
       const battles = await getUserBattles();
       const upd = battles.find(b => b.id === currentBattle.id);
-      if (upd && upd.status !== currentBattle.status) {
-        setCurrentBattle(upd);
+      if (!upd) return;
+      // Always refresh beatUrl / metadata even when status is unchanged
+      setCurrentBattle(prev => {
+        if (!prev || prev.id !== upd.id) return prev;
+        const beatChanged = (upd.beatUrl || '') !== (prev.beatUrl || '');
+        const statusChanged = upd.status !== prev.status;
+        if (!beatChanged && !statusChanged) return prev;
+        return { ...prev, ...upd };
+      });
+      if (upd.beatUrl) {
+        setBeatUrl(prev => {
+          // Don't clobber a local blob preview with the same server file unless empty/stale
+          if (prev.startsWith('blob:')) return prev;
+          return resolveMediaUrl(upd.beatUrl);
+        });
+      }
+      if (upd.status !== currentBattle.status) {
         if (upd.status === 'USER1_TURN')  setCurrentPhase('user1_turn');
         else if (upd.status === 'USER2_TURN') setCurrentPhase('user2_turn');
         else if (upd.status === 'JUDGING')    setCurrentPhase('mutual_judging');
         else if (upd.status === 'FINISHED')   setCurrentPhase('mutual_judging');
-        else if (upd.status === 'CANCELLED')  { setCurrentPhase('waiting'); setCurrentBattle(null); }
+        else if (upd.status === 'CANCELLED')  { setCurrentPhase('waiting'); setCurrentBattle(null); setBeatUrl(''); }
       }
     } catch {}
   };
@@ -978,6 +1193,8 @@ export default function RapBattleNew() {
       const battle = await createBattle(battleTitle, battleDescription, selectedOpponent.id);
       setCurrentBattle(battle);
       await updateBattleBeat(battle.id, serverBeatUrl, beatFile.name);
+      const resolved = resolveMediaUrl(serverBeatUrl);
+      setBeatUrl(resolved);
       setCurrentBattle({ ...battle, beatUrl: serverBeatUrl, beatName: beatFile.name, status: 'INVITING' as const });
       setCurrentPhase('waiting_for_opponent');
     } catch (e: any) { setError(e.message || 'Не удалось создать баттл'); }
@@ -992,7 +1209,9 @@ export default function RapBattleNew() {
       if (accept) {
         const upd = { ...currentBattle, status: 'USER1_TURN' as const };
         setCurrentBattle(upd); setCurrentPhase('user1_turn'); setCurrentTurn('user1');
-      } else { setCurrentPhase('waiting'); setCurrentBattle(null); loadPendingInvitations(); }
+        if (upd.beatUrl) setBeatUrl(resolveMediaUrl(upd.beatUrl));
+        setVoiceReady(false);
+      } else { setCurrentPhase('waiting'); setCurrentBattle(null); setBeatUrl(''); loadPendingInvitations(); }
       loadUserBattles();
     } catch (e: any) { setError(e.message || 'Не удалось ответить на приглашение'); }
     finally { setLoading(false); }
@@ -1008,58 +1227,133 @@ export default function RapBattleNew() {
   };
 
   const toggleBeatPlayback = async () => {
-    const url = beatUrl || currentBattle?.beatUrl;
+    const url = resolveMediaUrl(beatUrl || currentBattle?.beatUrl || '');
     if (!beatAudioRef.current || !url) return;
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (ctx.state === 'suspended') await ctx.resume();
-      if (isPlayingBeat) { beatAudioRef.current.pause(); setIsPlayingBeat(false); }
-      else { await beatAudioRef.current.play(); setIsPlayingBeat(true); beatAudioRef.current.onended = () => setIsPlayingBeat(false); }
-    } catch {}
+      const el = beatAudioRef.current;
+      if (el.paused === false && isPlayingBeat) {
+        el.pause();
+        setIsPlayingBeat(false);
+      } else {
+        await playBeatElement(el, url);
+        setIsPlayingBeat(true);
+        el.onended = () => setIsPlayingBeat(false);
+      }
+    } catch (e) {
+      console.error('toggleBeatPlayback', e);
+      setError('Не удалось воспроизвести бит');
+    }
   };
 
   const startRecording = async () => {
     try {
-      const constraints = {
-        echoCancellation:false, noiseSuppression:false, autoGainControl:false,
-        sampleRate: recordingQuality==='high'?48000:recordingQuality==='medium'?44100:22050,
-        channelCount: recordingQuality==='high'?2:1
-      };
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
-      streamRef.current = stream;
-      const url = beatUrl || currentBattle?.beatUrl;
-      if (beatAudioRef.current && url) { beatAudioRef.current.currentTime=0; beatAudioRef.current.loop=true; await beatAudioRef.current.play(); setIsPlayingBeat(true); }
+      const beatSrc = resolveMediaUrl(beatUrl || currentBattle?.beatUrl || '');
+      if (!beatSrc) {
+        setError('Бит не загружен. Обновите страницу или дождитесь бита от создателя.');
+        alert('Бит не найден — запись без бита недоступна.');
+        return;
+      }
+
+      // Ensure live FX session is running (processed stream for MediaRecorder)
+      let session = vocalSessionRef.current;
+      if (!session || session.rawStream.getTracks().every(t => t.readyState === 'ended')) {
+        disposeVocalSession();
+        await new Promise(r => setTimeout(r, 50));
+        session = await VocalLiveSession.create({
+          deviceId: selectedMicId || undefined,
+          fx: voiceFx,
+          monitor: micMonitorOn,
+        });
+        vocalSessionRef.current = session;
+        setMicArmed(true);
+      } else {
+        session.applyFx(voiceFx);
+        session.setMonitor(micMonitorOn);
+      }
+
+      const recordStream = session.recordStream;
+      streamRef.current = session.rawStream;
+
       const mime = 'audio/webm;codecs=opus';
       let actualMime = mime;
       if (!MediaRecorder.isTypeSupported(mime)) {
-        for (const t of ['audio/webm','audio/ogg','audio/wav','audio/mp4']) { if (MediaRecorder.isTypeSupported(t)) { actualMime=t; break; } }
+        for (const t of ['audio/webm', 'audio/ogg', 'audio/wav', 'audio/mp4']) {
+          if (MediaRecorder.isTypeSupported(t)) { actualMime = t; break; }
+        }
       }
-      const mr = new MediaRecorder(stream, { mimeType:actualMime, audioBitsPerSecond:recordingQuality==='high'?128000:recordingQuality==='medium'?96000:64000 });
-      mediaRecorderRef.current = mr; audioChunksRef.current = [];
-      mr.onerror = (e:any) => { setError(`Ошибка записи: ${e.error?.message||''}`); stopRecording(); };
-      mr.ondataavailable = (e) => { if(e.data?.size>0) audioChunksRef.current.push(e.data); };
+      const bitrate = recordingQuality === 'high' ? 160000 : recordingQuality === 'medium' ? 128000 : 96000;
+      let mr: MediaRecorder;
+      try {
+        mr = new MediaRecorder(recordStream, { mimeType: actualMime, audioBitsPerSecond: bitrate });
+      } catch {
+        mr = new MediaRecorder(recordStream, { mimeType: actualMime });
+      }
+      mediaRecorderRef.current = mr;
+      audioChunksRef.current = [];
+      mr.onerror = (e: any) => { setError(`Ошибка записи: ${e.error?.message || ''}`); stopRecording(); };
+      mr.ondataavailable = (e) => { if (e.data?.size > 0) audioChunksRef.current.push(e.data); };
       mr.onstop = async () => {
-        if (beatAudioRef.current) { beatAudioRef.current.pause(); beatAudioRef.current.currentTime=0; beatAudioRef.current.loop=false; setIsPlayingBeat(false); }
-        if (audioChunksRef.current.length===0) { setError('Ошибка записи: нет данных. Попробуйте снова.'); return; }
-        const blob = new Blob(audioChunksRef.current, { type:actualMime });
-        if (blob.size===0) { setError('Ошибка записи: пустой файл.'); return; }
+        if (beatAudioRef.current) {
+          beatAudioRef.current.pause();
+          beatAudioRef.current.currentTime = 0;
+          beatAudioRef.current.loop = false;
+          setIsPlayingBeat(false);
+        }
+        if (audioChunksRef.current.length === 0) {
+          setError('Ошибка записи: нет данных. Попробуйте снова.');
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: actualMime });
+        if (blob.size === 0) { setError('Ошибка записи: пустой файл.'); return; }
         setRecordedVoice(URL.createObjectURL(blob));
+        setLastVoicePresetName(presetNameForFx(voiceFx));
         if (currentBattle) {
           try {
-            const ext = actualMime.includes('webm')?'webm':actualMime.includes('ogg')?'ogg':actualMime.includes('wav')?'wav':'m4a';
-            const file = new File([blob],`recording-${Date.now()}.${ext}`,{type:actualMime});
+            const ext = actualMime.includes('webm') ? 'webm' : actualMime.includes('ogg') ? 'ogg' : actualMime.includes('wav') ? 'wav' : 'm4a';
+            const file = new File([blob], `recording-${Date.now()}.${ext}`, { type: actualMime });
             const dur = Math.max(1, recordingTimeRef.current || recordingTime);
-            const rec = await saveBattleRecording(currentBattle.id, file, currentBattle.beatUrl||'', dur, recordingQuality, currentRound);
+            // Persist relative path so review works for everyone
+            let savedBeat = currentBattle.beatUrl || beatUrl || '';
+            try {
+              const u = new URL(resolveMediaUrl(savedBeat));
+              savedBeat = u.pathname;
+            } catch { /* keep as-is */ }
+            const rec = await saveBattleRecording(currentBattle.id, file, savedBeat, dur, recordingQuality, currentRound);
             setRecordingTime(0);
             recordingTimeRef.current = 0;
+            disposeVocalSession();
             const role = getCurrentUserRole();
-            if (role==='CREATOR') { setUser1Recording(rec); setCurrentPhase('reviewing_recording'); }
-            else if (role==='OPPONENT') { setUser2Recording(rec); setCurrentPhase('reviewing_recording'); await updateBattleStatus(currentBattle.id,'JUDGING'); setTimeout(()=>checkBattleStatus(),500); }
-          } catch(e:any) { setError(e.message||'Не удалось сохранить запись'); }
+            if (role === 'CREATOR') { setUser1Recording(rec); setCurrentPhase('reviewing_recording'); }
+            else if (role === 'OPPONENT') {
+              setUser2Recording(rec);
+              setCurrentPhase('reviewing_recording');
+              await updateBattleStatus(currentBattle.id, 'JUDGING');
+              setTimeout(() => checkBattleStatus(), 500);
+            }
+          } catch (e: any) { setError(e.message || 'Не удалось сохранить запись'); }
         }
       };
-      mr.start(100); setIsRecording(true); setRecordingTime(0); recordingTimeRef.current = 0;
-      timerRef.current = setInterval(() => {
+
+      // Start recorder + beat together (beat play must succeed before we count as recording)
+      const beatEl = beatAudioRef.current;
+      if (!beatEl) {
+        setError('Плеер бита не готов. Нажмите «Начать раунд» ещё раз.');
+        return;
+      }
+      try {
+        await playBeatElement(beatEl, beatSrc);
+        setIsPlayingBeat(true);
+      } catch (beatErr: any) {
+        console.error('beat play', beatErr, beatSrc);
+        setError(`Не удалось запустить бит: ${beatErr?.message || beatSrc}`);
+        alert('Не удалось запустить бит. Обновите страницу и попробуйте снова.');
+        return;
+      }
+      mr.start(100);
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingTimeRef.current = 0;
+      timerRef.current = window.setInterval(() => {
         setRecordingTime(p => {
           const next = p >= RECORDING_TIME_LIMIT ? p : p + 1;
           recordingTimeRef.current = next;
@@ -1067,14 +1361,23 @@ export default function RapBattleNew() {
           return next;
         });
       }, 1000);
-    } catch { alert('Не удалось получить доступ к микрофону.'); }
+    } catch (e: any) {
+      console.error('startRecording', e);
+      const msg = e?.message || 'Не удалось начать запись';
+      setError(msg);
+      alert(msg.includes('Permission') || msg.includes('NotAllowed') || msg.includes('getUserMedia')
+        ? 'Не удалось получить доступ к микрофону.'
+        : `Ошибка записи: ${msg}`);
+    }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop(); setIsRecording(false);
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current=null; }
-      if (streamRef.current) { streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null; }
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      // Don't stop mic tracks here — onstop disposes after upload; if cancel mid-record:
+      vocalSessionRef.current?.setMonitor(false);
     }
   };
 
@@ -1106,13 +1409,24 @@ export default function RapBattleNew() {
   };
 
   const startNewBattle = () => {
+    disposeVocalSession();
+    if (beatAudioRef.current) {
+      beatAudioRef.current.pause();
+      beatAudioRef.current.removeAttribute('src');
+      beatAudioRef.current.load();
+    }
+    if (beatUrl.startsWith('blob:')) {
+      try { URL.revokeObjectURL(beatUrl); } catch { /* noop */ }
+    }
+    clearBattleState();
     setCurrentPhase('waiting'); setCurrentBattle(null); setSelectedOpponent(null);
     setBattleTitle(''); setBattleDescription(''); setBeatFile(null); setBeatUrl('');
     setUser1Recording(null); setUser2Recording(null); setRecordedVoice('');
-    setCurrentTurn('user1'); setRecordingTime(0); recordingTimeRef.current = 0;
+    setCurrentTurn('user1'); setCurrentRound(1); setRecordingTime(0); recordingTimeRef.current = 0;
     setJudgeResult(null); setError('');
     setHasRated(false); setOpponentHasRated(false);
     setUser1Rating(null); setUser2Rating(null);
+    setVoiceReady(false); setIsPlayingBeat(false); setIsRecording(false);
   };
 
   useEffect(() => {
@@ -1136,7 +1450,22 @@ export default function RapBattleNew() {
   }, [currentPhase, currentBattle?.id]);
 
   useEffect(() => {
-    if (beatAudioRef.current) { const u=beatUrl||currentBattle?.beatUrl; beatAudioRef.current.src=u||''; beatAudioRef.current.load(); }
+    const el = beatAudioRef.current;
+    if (!el) return;
+    const u = resolveMediaUrl(beatUrl || currentBattle?.beatUrl || '');
+    if (!u) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+      return;
+    }
+    try {
+      if (new URL(el.src || '', window.location.href).href === new URL(u, window.location.href).href) return;
+    } catch { /* reload */ }
+    el.crossOrigin = '';
+    el.removeAttribute('crossorigin');
+    el.src = u;
+    el.load();
   }, [beatUrl, currentBattle?.beatUrl]);
 
   const passTurnToOpponent = useCallback(async () => {
@@ -1363,6 +1692,169 @@ export default function RapBattleNew() {
     const timeLeft = RECORDING_TIME_LIMIT - recordingTime;
     const pct = (recordingTime / RECORDING_TIME_LIMIT) * 100;
 
+    // Pre-round voice check (MIDI-quality mic + FX presets)
+    if (canRecord && !voiceReady && !isRecording) {
+      return (
+        <div>
+          <div className="rb-centered rb-mt24" style={{ marginBottom: 28 }}>
+            <div className="rb-turn-indicator yours">
+              <span className="rb-rec-dot" /> Проверка голоса
+            </div>
+          </div>
+
+          <div className="rb-card">
+            <div className="rb-card-hd">
+              <div>
+                <div className="rb-card-title">Настройте голос</div>
+                <div className="rb-card-sub">Пресет запекается в запись — оппонент услышит тот же звук</div>
+              </div>
+              <Sliders style={{ width: 18, height: 18, color: 'var(--t3)' }} />
+            </div>
+
+            <label className="rb-label">Микрофон</label>
+            <select
+              value={selectedMicId}
+              onChange={e => setSelectedMicId(e.target.value)}
+              className="rb-input"
+              style={{ marginBottom: 12 }}
+            >
+              <option value="">По умолчанию</option>
+              {micDevices.map(d => (
+                <option key={d.deviceId} value={d.deviceId}>{d.label || `Микрофон ${d.deviceId.slice(0, 6)}`}</option>
+              ))}
+            </select>
+
+            <div className="rb-row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              <button
+                type="button"
+                className={`rb-btn ${micArmed ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
+                onClick={() => { if (micArmed) disposeVocalSession(); else void armMicrophone(); }}
+              >
+                <Mic style={{ width: 14, height: 14 }} />
+                {micArmed ? 'MIC ON' : 'ARM MIC'}
+              </button>
+              <button
+                type="button"
+                className={`rb-btn ${micMonitorOn ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
+                onClick={toggleMicMonitor}
+                disabled={!micArmed}
+                title="Слышать себя (лучше в наушниках)"
+              >
+                <Headphones style={{ width: 14, height: 14 }} />
+                {micMonitorOn ? 'MONITOR' : 'MON'}
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 8, fontSize: 11, color: 'var(--t3)' }}>
+              Уровень · монитор лучше в наушниках
+            </div>
+            <div style={{
+              height: 8, borderRadius: 4, background: 'var(--b2)', overflow: 'hidden', marginBottom: 16,
+              border: '1px solid var(--b3)',
+            }}>
+              <div style={{
+                width: `${Math.round(micLevel * 100)}%`, height: '100%',
+                background: micLevel > 0.85 ? 'var(--red)' : micLevel > 0.55 ? 'var(--amber)' : 'var(--green)',
+                transition: 'width 0.05s linear',
+              }} />
+            </div>
+
+            {micArmed && (
+              <AudioVisualizer stream={streamRef.current || undefined} isActive={micArmed} />
+            )}
+
+            <label className="rb-label" style={{ marginTop: 16 }}>Пресеты голоса</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {VOCAL_FX_PRESETS.map(preset => {
+                const active = presetNameForFx(voiceFx) === preset.name;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`rb-btn ${active ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
+                    style={{ height: 30, fontSize: 11, padding: '0 10px' }}
+                    onClick={() => applyVoicePreset(preset)}
+                  >
+                    {preset.name}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span className="rb-label" style={{ margin: 0 }}>FX</span>
+              <button
+                type="button"
+                className={`rb-btn ${voiceFx.enabled ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
+                style={{ height: 28, fontSize: 11 }}
+                onClick={() => {
+                  const next = normalizeClipFx({ ...voiceFx, enabled: !voiceFx.enabled });
+                  setVoiceFx(next);
+                  try { localStorage.setItem(VOICE_FX_STORAGE_KEY, JSON.stringify(next)); } catch { /* noop */ }
+                  vocalSessionRef.current?.applyFx(next);
+                  setLastVoicePresetName(presetNameForFx(next));
+                }}
+              >
+                {voiceFx.enabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
+            {EQ_BANDS.map(band => (
+              <div key={band.key} style={{ marginBottom: 10, opacity: voiceFx.enabled ? 1 : 0.45 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t3)', marginBottom: 4 }}>
+                  <span>{band.label} <span style={{ color: 'var(--t4)' }}>{band.hint}</span></span>
+                  <span>{voiceFx[band.key] > 0 ? '+' : ''}{voiceFx[band.key]} dB</span>
+                </div>
+                <input
+                  type="range" min={-EQ_GAIN_LIMIT} max={EQ_GAIN_LIMIT} step={1}
+                  value={voiceFx[band.key]}
+                  onChange={e => patchVoiceFx({ [band.key]: Number(e.target.value) })}
+                  className="rb-slider"
+                />
+              </div>
+            ))}
+
+            {([
+              { key: 'compress' as const, label: 'Компрессор' },
+              { key: 'drive' as const, label: 'Дисторшн' },
+              { key: 'reverb' as const, label: 'Реверб' },
+            ]).map(s => (
+              <div key={s.key} style={{ marginBottom: 10, opacity: voiceFx.enabled ? 1 : 0.45 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t3)', marginBottom: 4 }}>
+                  <span>{s.label}</span>
+                  <span>{Math.round(voiceFx[s.key] * 100)}%</span>
+                </div>
+                <input
+                  type="range" min={0} max={1} step={0.01}
+                  value={voiceFx[s.key]}
+                  onChange={e => patchVoiceFx({ [s.key]: Number(e.target.value) })}
+                  className="rb-slider"
+                />
+              </div>
+            ))}
+
+            <button
+              type="button"
+              className="rb-btn rb-btn-primary tall rb-mt16"
+              style={{ width: '100%' }}
+              disabled={!micArmed}
+              onClick={() => {
+                setLastVoicePresetName(presetNameForFx(voiceFx));
+                setVoiceReady(true);
+              }}
+            >
+              <Mic /> Начать раунд
+            </button>
+            {!micArmed && (
+              <div style={{ marginTop: 10, fontSize: 12, color: 'var(--t3)', textAlign: 'center' }}>
+                Сначала нажмите ARM MIC и проверьте уровень / монитор
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div>
         {/* Turn indicator */}
@@ -1380,9 +1872,22 @@ export default function RapBattleNew() {
           <div className="rb-card">
             <div className="rb-card-hd rb-mb0" style={{marginBottom:12}}>
               <span className="rb-section-label" style={{marginBottom:0}}>Бит</span>
-              <button onClick={()=>setShowRecordingSettings(!showRecordingSettings)} className="rb-btn rb-btn-ghost" style={{height:28,padding:'0 10px',fontSize:'11px'}}>
-                Настройки
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {canRecord && (
+                  <button
+                    type="button"
+                    onClick={() => { setVoiceReady(false); }}
+                    className="rb-btn rb-btn-ghost"
+                    style={{ height: 28, padding: '0 10px', fontSize: '11px' }}
+                    title="Вернуться к настройке голоса"
+                  >
+                    Голос: {lastVoicePresetName}
+                  </button>
+                )}
+                <button onClick={()=>setShowRecordingSettings(!showRecordingSettings)} className="rb-btn rb-btn-ghost" style={{height:28,padding:'0 10px',fontSize:'11px'}}>
+                  Настройки
+                </button>
+              </div>
             </div>
             <div className="rb-beat-row">
               <Disc style={{width:14,height:14,color:isPlayingBeat?'var(--t1)':'var(--t3)',flexShrink:0}}/>
@@ -1398,13 +1903,15 @@ export default function RapBattleNew() {
                     <button key={q} onClick={()=>setRecordingQuality(q)}
                       className={`rb-quality-btn${recordingQuality===q?` sel-${q}`:''}`}>
                       <div className="rb-quality-btn-label">{q==='low'?'Низкое':q==='medium'?'Среднее':'Высокое'}</div>
-                      <div className="rb-quality-btn-sub">{q==='low'?'22kHz · 64k':q==='medium'?'44kHz · 96k':'48kHz · 128k'}</div>
+                      <div className="rb-quality-btn-sub">
+                        {q === 'low' ? '96k' : q === 'medium' ? '128k' : '160k Opus'}
+                      </div>
                     </button>
                   ))}
                 </div>
               </div>
             )}
-            <audio ref={beatAudioRef} src={beatUrl||currentBattle?.beatUrl} preload="auto" className="hidden"/>
+            <audio ref={beatAudioRef} src={resolveMediaUrl(beatUrl || currentBattle?.beatUrl || '') || undefined} preload="auto" className="hidden"/>
           </div>
         )}
 
@@ -1417,7 +1924,7 @@ export default function RapBattleNew() {
             <div className={`rb-progress-bar${pct>70?' warn':pct>40?' mid':''}`} style={{width:`${pct}%`}}/>
           </div>
 
-          <AudioVisualizer stream={streamRef.current||undefined} isActive={isRecording}/>
+          <AudioVisualizer stream={streamRef.current||undefined} isActive={isRecording || micArmed}/>
 
           <button
             onClick={isRecording ? stopRecording : startRecording}
@@ -1428,7 +1935,7 @@ export default function RapBattleNew() {
           </button>
 
           <div style={{marginTop:12,fontFamily:"'DM Mono',monospace",fontSize:'10px',letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t3)'}}>
-            {isRecording ? 'Нажмите для остановки' : canRecord ? 'Нажмите для записи' : 'Ожидайте очереди'}
+            {isRecording ? 'Нажмите для остановки' : canRecord ? `Пресет: ${lastVoicePresetName} · нажмите для записи` : 'Ожидайте очереди'}
           </div>
         </div>
 
@@ -1496,10 +2003,19 @@ export default function RapBattleNew() {
             <span className="rb-info-lbl">Качество</span>
             <span>{rec.recordingQuality||'medium'}</span>
           </div>
+          <div className="rb-info-row">
+            <span className="rb-info-lbl">Голос FX</span>
+            <span>{lastVoicePresetName}</span>
+          </div>
         </div>
 
         <div className="rb-row rb-row center rb-mt16">
-          <button onClick={()=>{ if(role==='CREATOR'){setCurrentPhase('user1_turn');setUser1Recording(null);}else{setCurrentPhase('user2_turn');setUser2Recording(null);} }} className="rb-btn rb-btn-ghost">
+          <button onClick={()=>{
+            setVoiceReady(false);
+            disposeVocalSession();
+            if(role==='CREATOR'){setCurrentPhase('user1_turn');setUser1Recording(null);}
+            else{setCurrentPhase('user2_turn');setUser2Recording(null);}
+          }} className="rb-btn rb-btn-ghost">
             <Mic/> Перезаписать
           </button>
           <button onClick={passTurnToOpponent} className="rb-btn rb-btn-primary tall">

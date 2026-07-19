@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Allow: /online-studiya-zvukozapisi
+Allow: /zapisat-trek-online
+
+Disallow: /dashboard
+Disallow: /studio
+Disallow: /projects
+Disallow: /midi
+Disallow: /chats
+Disallow: /chats/
+Disallow: /admin
+Disallow: /ai
+Disallow: /profile
+Disallow: /rap-battle
+Disallow: /auth/
+
+Sitemap: https://soundlab-studio.ru/sitemap.xml
+Host: https://soundlab-studio.ru

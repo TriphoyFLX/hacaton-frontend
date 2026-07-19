@@ -4,6 +4,7 @@ import Register from './components/Register';
 import AuthCallback from './components/AuthCallback';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import Dashboard from './components/Dashboard';
 import Studio from './pages/Studio';
 import Feed from './pages/Feed';
@@ -17,21 +18,28 @@ import AdminPanel from './pages/AdminPanel';
 import AI from './pages/AI';
 import RapBattle from './pages/RapBattleNew';
 import MIDI from './pages/MIDI';
+import Landing from './pages/Landing';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public SEO / marketing — crawlable without login */}
+        <Route path="/" element={<Landing variant="home" />} />
+        <Route path="/online-studiya-zvukozapisi" element={<Landing variant="studio" />} />
+        <Route path="/zapisat-trek-online" element={<Landing variant="record" />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+        {/* Authenticated app shell */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="studio" element={<Studio />} />
           <Route path="feed" element={<Feed />} />
@@ -41,11 +49,20 @@ function App() {
           <Route path="profile/:username" element={<PublicProfile />} />
           <Route path="chats" element={<Chats />} />
           <Route path="chats/:chatId" element={<ChatPage />} />
-          <Route path="admin" element={<AdminPanel />} />
+          <Route
+            path="admin"
+            element={
+              <AdminRoute>
+                <AdminPanel />
+              </AdminRoute>
+            }
+          />
           <Route path="ai" element={<AI />} />
           <Route path="rap-battle" element={<RapBattle />} />
           <Route path="midi" element={<MIDI />} />
         </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
