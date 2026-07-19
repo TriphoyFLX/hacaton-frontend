@@ -426,6 +426,12 @@ const IconMusic = () => (
     <circle cx="18" cy="16" r="3" />
   </svg>
 );
+const IconBag = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <path d="M6 8h12l1 12H5L6 8z" />
+    <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+  </svg>
+);
 const IconVideo = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
     <polygon points="23 7 16 12 23 17 23 7" />
@@ -469,6 +475,7 @@ const CONTENT_NAV = [
   { path: '/soundtok', label: 'SoundTok',     icon: <IconVideo />,  badge: <span className="sb-badge sb-badge-new">NEW</span> },
   { path: '/rap-battle', label: 'Rap Battle',  icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-hot">HOT</span> },
   { path: '/midi',      label: 'MIDI',         icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-beta">β</span> },
+  { path: '/presets',   label: 'Пресеты',      icon: <IconBag /> },
   { path: '/chats',    label: 'Чаты',          icon: <IconChat /> },
 ];
 

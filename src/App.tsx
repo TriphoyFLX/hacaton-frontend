@@ -19,6 +19,7 @@ import AI from './pages/AI';
 import RapBattle from './pages/RapBattleNew';
 import MIDI from './pages/MIDI';
 import Landing from './pages/Landing';
+import PresetsMarketplace from './pages/PresetsMarketplace';
 
 function App() {
   return (
@@ -60,6 +61,7 @@ function App() {
           <Route path="ai" element={<AI />} />
           <Route path="rap-battle" element={<RapBattle />} />
           <Route path="midi" element={<MIDI />} />
+          <Route path="presets" element={<PresetsMarketplace />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
