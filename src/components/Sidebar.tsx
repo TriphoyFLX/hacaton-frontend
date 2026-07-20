@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 
@@ -318,6 +318,10 @@ ${FONT_IMPORT}
 }
 
 /* ── MOBILE APPBAR (≤768px) ── */
+.sb-mobile-nav {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .sb-root {
     position: fixed;
@@ -337,42 +341,46 @@ ${FONT_IMPORT}
 
   .sb-logo,
   .sb-footer,
+  .sb-nav,
   .sb-section-label,
   .sb-divider,
-  .sb-item-label,
-  .sb-badge,
-  .sb-ai,
-  .sb-admin {
+  .sb-badge {
     display: none !important;
   }
 
-  .sb-nav {
+  .sb-mobile-nav {
     display: flex;
     justify-content: space-around;
     align-items: center;
+    width: 100%;
     padding: 0;
     gap: 0;
   }
 
-  .sb-item {
+  .sb-mobile-item {
     flex: 1;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 8px 4px !important;
-    min-height: 60px !important;
-    border-radius: 0 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    padding: 5px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
     transition: all 0.2s;
     position: relative;
   }
 
-  .sb-item.active {
-    background: transparent !important;
-    border-left: none !important;
+  .sb-mobile-item.active,
+  .sb-mobile-item:hover {
+    color: var(--text-primary);
   }
 
-  .sb-item.active::before {
+  .sb-mobile-item.active::before {
     content: '';
     position: absolute;
     top: 0;
@@ -384,23 +392,63 @@ ${FONT_IMPORT}
     border-radius: 50%;
   }
 
-  .sb-item-icon {
-    width: 22px !important;
-    height: 22px !important;
-    margin-bottom: 4px !important;
-    color: var(--text-muted) !important;
+  .sb-mobile-icon {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
   }
 
-  .sb-item.active .sb-item-icon {
-    color: var(--text-primary) !important;
+  .sb-mobile-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.7;
   }
 
-  .sb-item:hover {
-    background: var(--bg-hover) !important;
+  .sb-mobile-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.02em;
   }
 
-  .sb-item:hover .sb-item-icon {
-    color: var(--text-secondary) !important;
+  .sb-mobile-more-menu {
+    position: fixed;
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    width: min(240px, calc(100vw - 24px));
+    padding: 8px;
+    border: 1px solid var(--border-hover);
+    border-radius: 12px;
+    background: var(--bg-elevated);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .sb-mobile-more-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 8px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-decoration: none;
+  }
+
+  .sb-mobile-more-link.active,
+  .sb-mobile-more-link:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .sb-mobile-more-link svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 1.7;
   }
 }
 
@@ -438,6 +486,24 @@ const IconVideo = () => (
     <rect x="1" y="5" width="15" height="14" rx="2" />
   </svg>
 );
+const IconFolder = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  </svg>
+);
+const IconWaveform = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <path d="M3 12h2l2-6 4 12 3-9 2 3h5" />
+  </svg>
+);
+const IconGrid = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <rect x="4" y="4" width="6" height="6" rx="1" />
+    <rect x="14" y="4" width="6" height="6" rx="1" />
+    <rect x="4" y="14" width="6" height="6" rx="1" />
+    <rect x="14" y="14" width="6" height="6" rx="1" />
+  </svg>
+);
 const IconChat = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -468,13 +534,13 @@ const IconChevron = () => (
 
 const MAIN_NAV = [
   { path: '/feed',     label: 'Лента',     icon: <IconHome /> },
-  { path: '/projects', label: 'Проекты',   icon: <IconVideo /> },
+  { path: '/projects', label: 'Проекты',   icon: <IconFolder /> },
 ];
 
 const CONTENT_NAV = [
   { path: '/soundtok', label: 'SoundTok',     icon: <IconVideo />,  badge: <span className="sb-badge sb-badge-new">NEW</span> },
   { path: '/rap-battle', label: 'Rap Battle',  icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-hot">HOT</span> },
-  { path: '/midi',      label: 'MIDI',         icon: <IconMusic />,  badge: <span className="sb-badge sb-badge-beta">β</span> },
+  { path: '/midi',      label: 'MIDI',         icon: <IconWaveform />,  badge: <span className="sb-badge sb-badge-beta">β</span> },
   { path: '/presets',   label: 'Пресеты',      icon: <IconBag /> },
   { path: '/chats',    label: 'Чаты',          icon: <IconChat /> },
 ];
@@ -484,6 +550,7 @@ export default function Sidebar() {
   const totalUnread = useChatUnreadStore((s) => s.totalUnread);
   const refreshUnread = useChatUnreadStore((s) => s.refresh);
   const isAdmin = user?.role === 'ADMIN';
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -560,6 +627,59 @@ export default function Sidebar() {
             <span className="sb-item-icon"><IconShield /></span>
             <span className="sb-item-label">Админ</span>
           </NavLink>
+        )}
+      </nav>
+
+      <nav className="sb-mobile-nav" aria-label="Основная навигация">
+        <NavLink to="/feed" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+          <span className="sb-mobile-icon"><IconHome /></span>
+          <span className="sb-mobile-label">Лента</span>
+        </NavLink>
+        <NavLink to="/projects" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+          <span className="sb-mobile-icon"><IconFolder /></span>
+          <span className="sb-mobile-label">Проекты</span>
+        </NavLink>
+        <NavLink to="/soundtok" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+          <span className="sb-mobile-icon"><IconVideo /></span>
+          <span className="sb-mobile-label">SoundTok</span>
+        </NavLink>
+        <NavLink to="/chats" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+          <span className="sb-mobile-icon"><IconChat /></span>
+          <span className="sb-mobile-label">Чаты</span>
+        </NavLink>
+        <button
+          type="button"
+          className={`sb-mobile-item${isMoreOpen ? ' active' : ''}`}
+          onClick={() => setIsMoreOpen((open) => !open)}
+          aria-expanded={isMoreOpen}
+          aria-controls="mobile-more-menu"
+        >
+          <span className="sb-mobile-icon"><IconGrid /></span>
+          <span className="sb-mobile-label">Ещё</span>
+        </button>
+        {isMoreOpen && (
+          <div id="mobile-more-menu" className="sb-mobile-more-menu">
+            <NavLink to="/rap-battle" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <IconMusic />Rap Battle
+            </NavLink>
+            <NavLink to="/midi" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <IconWaveform />MIDI
+            </NavLink>
+            <NavLink to="/presets" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <IconBag />Пресеты
+            </NavLink>
+            <NavLink to="/ai" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <IconAI />AI генерация
+            </NavLink>
+            <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <IconUser />Профиль
+            </NavLink>
+            {isAdmin && (
+              <NavLink to="/admin" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <IconShield />Админ
+              </NavLink>
+            )}
+          </div>
         )}
       </nav>
 
