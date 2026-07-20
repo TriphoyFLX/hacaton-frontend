@@ -1,21 +1,4 @@
-import axios from 'axios';
-import { getAuthToken } from '../lib/authToken';
-import { API_ORIGIN } from './client';
-
-const api = axios.create({
-  baseURL: `${API_ORIGIN}/api`,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-api.interceptors.request.use((config) => {
-  const token = getAuthToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import api from './client';
 
 export interface Media {
   id: string;
@@ -30,10 +13,28 @@ export interface Post {
   authorId: string;
   createdAt: string;
   updatedAt: string;
+  likes: number;
+  commentsCount: number;
+  views: number;
+  isLiked: boolean;
   media: Media[];
   author: {
     id: string;
     username: string;
+  };
+}
+
+export interface PostComment {
+  id: string;
+  text: string;
+  authorId: string;
+  postId: string;
+  createdAt: string;
+  author: {
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
   };
 }
 
@@ -55,6 +56,14 @@ export const postsApi = {
     const response = await api.get('/posts');
     return response.data;
   },
+
+  getPost: async (id: string): Promise<Post> => (await api.get(`/posts/${id}`)).data,
+  likePost: async (id: string) => (await api.post(`/posts/${id}/like`)).data,
+  unlikePost: async (id: string) => (await api.delete(`/posts/${id}/like`)).data,
+  recordView: async (id: string): Promise<{ id: string; views: number }> => (await api.post(`/posts/${id}/view`)).data,
+  getComments: async (id: string): Promise<PostComment[]> => (await api.get(`/posts/${id}/comments`)).data,
+  createComment: async (id: string, text: string): Promise<{ comment: PostComment; commentsCount: number }> =>
+    (await api.post(`/posts/${id}/comments`, { text })).data,
 };
 
 export default api;
