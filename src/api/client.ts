@@ -1,7 +1,13 @@
 import axios from 'axios';
 import { getAuthToken } from '../lib/authToken';
 
-export const API_ORIGIN = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5002';
+const configuredApiOrigin = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '');
+
+// In production the API is reverse-proxied by Nginx under the same domain.
+// Falling back to the current origin avoids requests from a visitor's phone
+// being sent to its own localhost:5002.
+export const API_ORIGIN = configuredApiOrigin
+  || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5002');
 
 export const api = axios.create({
   baseURL: `${API_ORIGIN}/api`,

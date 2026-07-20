@@ -1,6 +1,7 @@
 import { getAuthToken } from '../lib/authToken';
+import { API_ORIGIN } from './client';
 
-const API_BASE = `${import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5002'}/api`;
+const API_BASE = `${API_ORIGIN}/api`;
 
 const getAuthHeaders = () => {
   const token = getAuthToken();

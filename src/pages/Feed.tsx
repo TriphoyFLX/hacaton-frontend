@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { postsApi, Post } from '../api/posts';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { postsApi, Post, PostComment } from '../api/posts';
 import { API_ORIGIN } from '../api/client';
+import { Chat, chatsApi } from '../api/chats';
 import {
   Image, Video, Music, Heart, MessageCircle, Share2,
   MoreHorizontal, TrendingUp, Clock, Bookmark, Send,
@@ -757,15 +758,25 @@ ${FONT_IMPORT}
   font-size: 13px;
   color: var(--text-secondary);
 }
+.post-comments-panel { margin: 0 18px 16px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: rgba(0,0,0,.16); }
+.post-comment-list { display: grid; gap: 10px; max-height: 260px; overflow-y: auto; margin-bottom: 12px; }
+.post-comment { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+.post-comment b { color: var(--text-primary); margin-right: 6px; }
+.post-comment-form { display: flex; gap: 8px; }
+.post-comment-form input { flex: 1; min-width: 0; border: 1px solid var(--border-mid); border-radius: 7px; padding: 8px 10px; color: var(--text-primary); background: var(--bg); font: 12px 'Syne', sans-serif; }
+.post-comment-form button { border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer; background: var(--text-primary); color: var(--bg); font-weight: 700; }
+.post-action-error { margin-top: 8px; color: var(--red); font: 10px 'DM Mono', monospace; }
+.post-copy-status { font: 10px 'DM Mono', monospace; color: #86b892; margin-left: 5px; }
+.post-more-wrap { position: relative; }
+.post-more-menu { position: absolute; right: 0; top: 30px; z-index: 30; width: 190px; padding: 6px; border: 1px solid var(--border-mid); border-radius: 9px; background: var(--bg-elevated); box-shadow: 0 14px 30px rgba(0,0,0,.4); }
+.post-more-menu button { width: 100%; padding: 9px 10px; text-align: left; cursor: pointer; color: var(--text-primary); background: transparent; border: 0; border-radius: 6px; font: 12px 'Syne', sans-serif; }
+.post-more-menu button:hover { background: var(--bg-hover); }
+.post-share-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.68); }
+.post-share-dialog { width: min(420px, 100%); max-height: 75vh; overflow: auto; padding: 18px; border: 1px solid var(--border-mid); border-radius: 13px; background: var(--bg-surface); }
+.post-share-dialog h3 { margin: 0 0 5px; font-size: 18px; }.post-share-dialog p { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; }
+.post-share-chat { display: block; width: 100%; margin: 6px 0; padding: 11px; cursor: pointer; color: var(--text-primary); text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px 'Syne', sans-serif; }
+.post-share-chat:hover { border-color: var(--border-hover); background: var(--bg-hover); }.post-share-close { float: right; background: transparent; color: var(--text-secondary); border: 0; cursor: pointer; }
 `;
-
-// ── SVG Icons ──
-const IconSend = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <line x1="22" y1="2" x2="11" y2="13"/>
-    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-  </svg>
-);
 
 // ── Utils ──
 function formatCount(n: number): string {
@@ -945,6 +956,27 @@ function PostCard({ post, index }: { post: Post; index: number }) {
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [liked, setLiked] = useState(post.isLiked);
+  const [likes, setLikes] = useState(post.likes);
+  const [views, setViews] = useState(post.views);
+  const [commentsCount, setCommentsCount] = useState(post.commentsCount);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [comments, setComments] = useState<PostComment[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [commentError, setCommentError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [shareStatus, setShareStatus] = useState('');
+
+  useEffect(() => {
+    void postsApi.recordView(post.id)
+      .then((result) => setViews(result.views))
+      .catch(() => undefined);
+  }, [post.id]);
 
   const contentTruncated = (post.content?.length ?? 0) > 200;
   const displayContent = contentTruncated && !showMore
@@ -988,11 +1020,96 @@ function PostCard({ post, index }: { post: Post; index: number }) {
     }
   };
 
-  const stats = post as any;
-  const likes = stats.likes ?? 0;
-  const comments = stats.comments ?? 0;
-  const shares = stats.shares ?? 0;
-  const views = stats.views ?? 0;
+  const toggleLike = async () => {
+    if (isLiking) return;
+    const previousLiked = liked;
+    const previousLikes = likes;
+    setActionError('');
+    setIsLiking(true);
+    setLiked(!previousLiked);
+    setLikes(Math.max(0, previousLikes + (previousLiked ? -1 : 1)));
+    try {
+      const response = previousLiked ? await postsApi.unlikePost(post.id) : await postsApi.likePost(post.id);
+      setLiked(response.isLiked);
+      setLikes(response.likes);
+    } catch (error: any) {
+      setLiked(previousLiked);
+      setLikes(previousLikes);
+      setActionError(error?.response?.data?.error || 'Не удалось обновить лайк. Попробуйте ещё раз.');
+    } finally {
+      setIsLiking(false);
+    }
+  };
+  const toggleComments = async () => {
+    const nextOpen = !commentsOpen;
+    setCommentsOpen(nextOpen);
+    if (!nextOpen) return;
+    try { setComments(await postsApi.getComments(post.id)); } catch { setCommentError('Не удалось загрузить комментарии'); }
+  };
+  const submitComment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const text = commentText.trim();
+    if (!text) return;
+    setCommentError('');
+    try {
+      const result = await postsApi.createComment(post.id, text);
+      setComments((current) => [...current, result.comment]);
+      setCommentsCount(result.commentsCount);
+      setCommentText('');
+    } catch (error: any) {
+      setCommentError(error?.response?.data?.error || 'Не удалось отправить комментарий');
+    }
+  };
+  const copyLink = async () => {
+    const url = `${window.location.origin}/feed?p=${post.id}`;
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = url;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        const copiedWithFallback = document.execCommand('copy');
+        document.body.removeChild(input);
+        if (!copiedWithFallback) throw new Error('Clipboard is unavailable');
+      }
+      setCopied(true);
+      setActionError('');
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setActionError('Не удалось скопировать ссылку. Скопируйте адрес из браузера.');
+    }
+  };
+  const openShare = async () => {
+    setShowMoreMenu(false);
+    setShareStatus('');
+    setShareOpen(true);
+    try {
+      setChats(await chatsApi.getChats());
+    } catch {
+      setShareStatus('Не удалось загрузить список чатов');
+    }
+  };
+  const shareToChat = async (chat: Chat) => {
+    setShareStatus('Отправляем…');
+    const url = `${window.location.origin}/feed?p=${post.id}`;
+    try {
+      await chatsApi.sendMessage(
+        chat.id,
+        `Смотри публикацию @${post.author.username}: ${url}`,
+        undefined,
+        `post_share_${post.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      );
+      setShareStatus('Отправлено');
+      window.setTimeout(() => setShareOpen(false), 700);
+    } catch {
+      setShareStatus('Не удалось отправить публикацию');
+    }
+  };
 
   return (
     <motion.article
@@ -1027,9 +1144,15 @@ function PostCard({ post, index }: { post: Post; index: number }) {
 
           <div className="post-actions-top">
             <button className="btn-follow">Follow</button>
-            <button className="btn-more">
-              <MoreHorizontal size={16} />
-            </button>
+            <div className="post-more-wrap">
+              <button className="btn-more" onClick={() => setShowMoreMenu((value) => !value)} aria-label="Действия с публикацией">
+                <MoreHorizontal size={16} />
+              </button>
+              {showMoreMenu && <div className="post-more-menu">
+                <button onClick={() => { void copyLink(); setShowMoreMenu(false); }}>Копировать ссылку</button>
+                <button onClick={() => void openShare()}>Поделиться в чате</button>
+              </div>}
+            </div>
           </div>
         </div>
       </div>
@@ -1050,17 +1173,17 @@ function PostCard({ post, index }: { post: Post; index: number }) {
 
       <div className="post-card-footer">
         <div className="post-footer-row">
-          <button className="stat-btn" disabled title="Лайки для постов скоро появятся">
-            <Heart size={15} />
+          <button className={`stat-btn ${liked ? 'liked' : ''}`} onClick={() => void toggleLike()} title="Нравится" disabled={isLiking} aria-pressed={liked}>
+            <Heart size={15} fill={liked ? 'currentColor' : 'none'} />
             <span className="stat-count">{formatCount(likes)}</span>
           </button>
-          <button className="stat-btn">
+          <button className="stat-btn" onClick={() => void toggleComments()} title="Комментарии">
             <MessageCircle size={15} />
-            <span className="stat-count">{formatCount(comments)}</span>
+            <span className="stat-count">{formatCount(commentsCount)}</span>
           </button>
-          <button className="stat-btn">
+          <button className="stat-btn" onClick={() => void copyLink()} title="Копировать ссылку">
             <Share2 size={15} />
-            <span className="stat-count">{formatCount(shares)}</span>
+            {copied && <span className="post-copy-status">Скопировано</span>}
           </button>
           <span className="stat-spacer" />
           <button
@@ -1070,11 +1193,31 @@ function PostCard({ post, index }: { post: Post; index: number }) {
           >
             <Heart size={15} style={{ transform: 'rotate(-45deg)' }} />
           </button>
-          <button className="btn-send">
-            <IconSend />
-          </button>
         </div>
       </div>
+      {actionError && <div className="post-action-error" role="alert">{actionError}</div>}
+      {commentsOpen && <div className="post-comments-panel">
+        <div className="post-comment-list">
+          {comments.length ? comments.map((comment) => <div className="post-comment" key={comment.id}><b>@{comment.author.username}</b>{comment.text}</div>) : <div className="post-comment">Комментариев пока нет.</div>}
+        </div>
+        <form className="post-comment-form" onSubmit={submitComment}>
+          <input value={commentText} onChange={(event) => setCommentText(event.target.value)} maxLength={1000} placeholder="Написать комментарий…" />
+          <button type="submit">Отправить</button>
+        </form>
+        {commentError && <div className="post-comment">{commentError}</div>}
+      </div>}
+      {shareOpen && <div className="post-share-overlay" role="dialog" aria-modal="true">
+        <div className="post-share-dialog">
+          <button className="post-share-close" onClick={() => setShareOpen(false)} aria-label="Закрыть"><X size={18}/></button>
+          <h3>Поделиться в чате</h3>
+          <p>Выберите чат, куда отправить ссылку на публикацию.</p>
+          {chats.map((chat) => <button className="post-share-chat" key={chat.id} onClick={() => void shareToChat(chat)}>
+            {chat.type === 'GROUP' ? chat.name || 'Группа без названия' : `@${chat.otherUser?.username || 'пользователь'}`}
+          </button>)}
+          {!chats.length && !shareStatus && <p>Нет доступных чатов.</p>}
+          {shareStatus && <p>{shareStatus}</p>}
+        </div>
+      </div>}
     </motion.article>
   );
 }
@@ -1094,6 +1237,7 @@ function TrendingTag({ label, count }: { label: string; count: string }) {
 
 // ── Main Feed ──
 export default function Feed() {
+  const location = useLocation();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'trending' | 'latest'>('trending');
@@ -1113,6 +1257,14 @@ export default function Feed() {
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
+
+  useEffect(() => {
+    const postId = new URLSearchParams(location.search).get('p');
+    if (!postId) return;
+    void postsApi.getPost(postId)
+      .then((post) => setPosts((current) => current.some((item) => item.id === post.id) ? current : [post, ...current]))
+      .catch(() => undefined);
+  }, [location.search]);
 
   return (
     <div className="feed-root">
