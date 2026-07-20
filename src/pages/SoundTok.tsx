@@ -127,6 +127,13 @@ ${FONT_IMPORT}
   font-weight: 500;
 }
 
+.st-btn svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke-width: 1.8;
+}
+
 .st-btn-primary {
   background: var(--text-primary);
   border-color: var(--text-primary);
@@ -691,15 +698,15 @@ ${FONT_IMPORT}
   }
 
   .st-overlay {
-    align-items: flex-end;
-    padding: 12px;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    align-items: center;
+    padding: 16px;
+    padding-bottom: calc(var(--app-bottom-nav) + 16px);
   }
 
   .st-modal {
-    max-height: calc(100dvh - 24px);
+    max-height: calc(100dvh - var(--app-bottom-nav) - 32px);
     overflow-y: auto;
-    padding: 20px;
+    padding: 18px;
     border-radius: 16px;
   }
 
@@ -708,8 +715,26 @@ ${FONT_IMPORT}
   }
 
   .st-file-label {
-    min-height: 150px;
-    padding: 18px 14px;
+    flex-direction: row;
+    min-height: 112px;
+    padding: 14px;
+    text-align: left;
+  }
+
+  .st-file-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    box-shadow: none;
+  }
+
+  .st-file-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .st-file-name {
+    font-size: 12px;
   }
 }
 
