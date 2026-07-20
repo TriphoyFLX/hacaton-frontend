@@ -26,7 +26,7 @@ ${FONT_IMPORT}
   align-items: flex-start;
   justify-content: center;
   padding-top: 20vh;
-  z-index: 50;
+  z-index: 1200;
 }
 
 .search-modal {

@@ -622,6 +622,36 @@ const STUDIO_CSS = `
   background: rgba(14,14,15,0.96);
 }
 
+@media (max-width: 1024px) {
+  .midi-studio { height: 100%; min-height: 0; }
+  .st-topbar { padding: 8px 12px; gap: 8px; }
+  .st-project-name { width: 110px; }
+  .st-meta { padding-left: 8px; }
+  .st-field { padding: 0 8px; }
+  .st-side { width: 220px; }
+  .st-side-scroll { padding: 12px 10px 18px; gap: 12px; }
+  .st-toolbar { padding: 0 12px; gap: 10px; overflow-x: auto; }
+  .st-mixer { padding: 0 16px; gap: 20px; overflow-x: auto; }
+}
+
+@media (max-width: 640px) {
+  .st-body { overflow-x: auto; }
+  .st-side { width: 196px; }
+  .st-main { min-width: 520px; }
+  .st-topbar { align-items: flex-start; }
+  .st-brand { min-width: 0; }
+  .st-project-name { width: 88px; }
+  .st-actions { gap: 4px; }
+  .st-chip { padding: 0 7px; }
+  .st-toolbar { height: 38px; }
+  .st-mixer { height: 104px; }
+}
+
+@media (pointer: coarse) {
+  .midi-studio [data-note],
+  .midi-studio [data-clip] { touch-action: none; }
+}
+
 @keyframes st-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }

@@ -34,7 +34,7 @@ export default function Layout() {
 
       <Sidebar />
 
-      <div className="flex flex-1 flex-col ml-0 pb-[72px] md:ml-[200px] lg:ml-[220px] md:pb-0 min-h-0 min-w-0">
+      <div className="flex flex-1 flex-col ml-0 pb-[var(--app-bottom-nav)] md:ml-[200px] lg:ml-[220px] md:pb-0 min-h-0 min-w-0">
 
         {!hideHeader && <Header />}
 

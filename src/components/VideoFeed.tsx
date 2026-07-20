@@ -411,7 +411,7 @@ const css = `
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);
-  z-index: 200;
+  z-index: 1100;
   animation: vf-fade-in 0.25s ease;
 }
 
@@ -426,10 +426,10 @@ const css = `
   bottom: 0;
   transform: translateX(-50%);
   width: min(100%, 480px);
-  max-height: min(75vh, 640px);
+  max-height: min(75dvh, 640px);
   background: #121212;
   border-radius: 12px 12px 0 0;
-  z-index: 201;
+  z-index: 1101;
   display: flex;
   flex-direction: column;
   animation: vf-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
@@ -624,12 +624,12 @@ const css = `
 
   .vf-actions {
     right: 8px;
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   .vf-bottom-info {
     right: 56px;
-    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   .vf-progress-indicator {

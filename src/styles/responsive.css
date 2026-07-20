@@ -9,6 +9,7 @@
 
 @media (max-width: 768px) {
   :root {
+    --app-bottom-nav: calc(72px + env(safe-area-inset-bottom, 0px));
     --app-header-h: 48px;
     --page-pad-x: 16px;
     --page-pad-top: 20px;
@@ -496,5 +497,158 @@ select {
 
   .desktop-only-screen {
     padding: 12px !important;
+  }
+}
+
+/* ── Responsive hardening for dense screens ── */
+@media (max-width: 1024px) {
+  .rb-quality-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .cp-toolbar,
+  .post-author-row,
+  .chats-topbar,
+  .rb-card-hd,
+  .rb-history-top {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  .cp-toolbar {
+    align-items: stretch !important;
+  }
+
+  .cp-media-btns {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .cp-submit {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .post-author-row > * {
+    min-width: 0;
+  }
+
+  .result-actions,
+  .history-item-actions,
+  .group-modal-actions {
+    flex-wrap: wrap !important;
+  }
+
+  .result-actions > *,
+  .history-item-actions > * {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+
+  .projects-tabs {
+    width: 100% !important;
+    overflow-x: auto;
+  }
+
+  .projects-tab {
+    flex: 1 0 max-content;
+  }
+
+  .chat-root {
+    height: 100% !important;
+  }
+
+  .chat-header {
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    padding: 10px 12px !important;
+  }
+
+  .message-input,
+  .post-comment-form input {
+    font-size: 16px !important;
+  }
+
+  .mention-suggest {
+    left: 12px !important;
+    right: 12px !important;
+    max-height: 40dvh;
+    overflow-y: auto;
+  }
+
+  .error-toast,
+  .save-status {
+    bottom: calc(var(--app-bottom-nav) + 16px) !important;
+  }
+
+  .group-modal-overlay,
+  .follow-list-overlay {
+    align-items: flex-end !important;
+    padding: 12px !important;
+    padding-bottom: calc(var(--app-bottom-nav) + 12px) !important;
+  }
+
+  .group-modal,
+  .follow-list-modal {
+    width: 100% !important;
+    max-height: min(82dvh, 680px) !important;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .cp-media-btn {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 0 8px !important;
+  }
+
+  .cp-media-btn span {
+    display: none;
+  }
+
+  .preset-grid,
+  .rb-quality-grid,
+  .rb-score-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .preset-card-foot,
+  .rb-row {
+    flex-wrap: wrap !important;
+  }
+
+  .rb-row > * {
+    flex: 1 1 100%;
+  }
+
+  .rb-info-row {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .rb-info-lbl {
+    min-width: 0 !important;
+  }
+
+  .create-group-btn {
+    padding: 0 10px !important;
+  }
+
+  .create-group-btn span {
+    display: none;
+  }
+}
+
+@media (hover: none) {
+  .project-card-overlay {
+    opacity: 1 !important;
+    background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.58)) !important;
   }
 }

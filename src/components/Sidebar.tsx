@@ -416,7 +416,7 @@ ${FONT_IMPORT}
   .sb-mobile-more-menu {
     position: fixed;
     right: 12px;
-    bottom: calc(72px + env(safe-area-inset-bottom));
+    bottom: calc(var(--app-bottom-nav) + 8px);
     width: min(240px, calc(100vw - 24px));
     padding: 8px;
     border: 1px solid var(--border-hover);
@@ -426,6 +426,15 @@ ${FONT_IMPORT}
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
+    z-index: 2;
+  }
+
+  .sb-mobile-more-backdrop {
+    position: fixed;
+    inset: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.32);
+    z-index: 1;
   }
 
   .sb-mobile-more-link {
@@ -658,28 +667,31 @@ export default function Sidebar() {
           <span className="sb-mobile-label">Ещё</span>
         </button>
         {isMoreOpen && (
-          <div id="mobile-more-menu" className="sb-mobile-more-menu">
-            <NavLink to="/rap-battle" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
-              <IconMusic />Rap Battle
-            </NavLink>
-            <NavLink to="/midi" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
-              <IconWaveform />MIDI
-            </NavLink>
-            <NavLink to="/presets" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
-              <IconBag />Пресеты
-            </NavLink>
-            <NavLink to="/ai" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
-              <IconAI />AI генерация
-            </NavLink>
-            <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
-              <IconUser />Профиль
-            </NavLink>
-            {isAdmin && (
-              <NavLink to="/admin" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
-                <IconShield />Админ
+          <>
+            <button type="button" className="sb-mobile-more-backdrop" onClick={() => setIsMoreOpen(false)} aria-label="Закрыть меню" />
+            <div id="mobile-more-menu" className="sb-mobile-more-menu">
+              <NavLink to="/rap-battle" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <IconMusic />Rap Battle
               </NavLink>
-            )}
-          </div>
+              <NavLink to="/midi" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <IconWaveform />MIDI
+              </NavLink>
+              <NavLink to="/presets" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <IconBag />Пресеты
+              </NavLink>
+              <NavLink to="/ai" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <IconAI />AI генерация
+              </NavLink>
+              <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <IconUser />Профиль
+              </NavLink>
+              {isAdmin && (
+                <NavLink to="/admin" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                  <IconShield />Админ
+                </NavLink>
+              )}
+            </div>
+          </>
         )}
       </nav>
 

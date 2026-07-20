@@ -170,53 +170,144 @@ ${FONT_IMPORT}
 
 /* ── EMPTY STATE ── */
 .st-empty {
-  border: 1px dashed var(--border-mid);
-  border-radius: 14px;
-  padding: 80px 24px;
+  position: relative;
+  overflow: hidden;
+  min-height: 420px;
+  border: 1px solid var(--border-mid);
+  border-radius: 20px;
+  padding: 56px 24px 40px;
   text-align: center;
-  background: var(--bg-surface);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(155, 127, 212, 0.20), transparent 42%),
+    linear-gradient(145deg, #15121d, var(--bg-surface) 58%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .st-empty-icon {
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 24px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: var(--text-primary);
+  box-shadow: 0 16px 40px rgba(155, 127, 212, 0.28);
+  transform: rotate(-5deg);
 }
 
 .st-empty-icon svg {
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
 }
 
 .st-empty-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 8px;
+  max-width: 430px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin-bottom: 10px;
 }
 
 .st-empty-desc {
   font-family: 'DM Mono', monospace;
+  max-width: 390px;
   font-size: 11px;
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
-  margin-bottom: 32px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+  margin: 0 0 24px;
 }
 
 .st-empty-hint {
   font-family: 'DM Mono', monospace;
   font-size: 9px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  margin-top: 12px;
+  margin: 14px 0 0;
+}
+
+.st-empty-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.st-empty-step {
+  min-width: 104px;
+  padding: 10px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+}
+
+.st-empty-step strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--pink);
+  font-size: 10px;
+}
+
+@media (max-width: 768px) {
+  .st-wrapper {
+    padding-top: 20px;
+  }
+
+  .st-header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+  }
+
+  .st-header-left {
+    gap: 12px;
+  }
+
+  .st-title {
+    font-size: 22px;
+  }
+
+  .st-logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .st-empty {
+    min-height: calc(100dvh - var(--app-bottom-nav) - 174px);
+    padding: 36px 18px 28px;
+    border-radius: 16px;
+  }
+
+  .st-empty-title {
+    font-size: 24px;
+    line-height: 1.12;
+  }
+
+  .st-empty-desc {
+    font-size: 10px;
+  }
+
+  .st-empty-steps {
+    width: 100%;
+    gap: 6px;
+  }
+
+  .st-empty-step {
+    min-width: 0;
+    flex: 1;
+    padding: 9px 4px;
+    font-size: 8px;
+  }
 }
 
 /* ── MODAL ── */
@@ -227,7 +318,7 @@ ${FONT_IMPORT}
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 1100;
   backdrop-filter: blur(8px);
   animation: st-fade-in 0.2s ease;
 }
@@ -238,12 +329,15 @@ ${FONT_IMPORT}
 }
 
 .st-modal {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-mid);
-  border-radius: 14px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(155, 127, 212, 0.15), transparent 35%),
+    var(--bg-surface);
+  border: 1px solid var(--border-hover);
+  border-radius: 20px;
   width: 100%;
-  max-width: 480px;
-  padding: 28px;
+  max-width: 520px;
+  padding: 24px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
   animation: st-scale-in 0.2s ease;
 }
 
@@ -256,15 +350,13 @@ ${FONT_IMPORT}
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 28px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
 }
 
 .st-modal-title {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
 }
 
 .st-modal-subtitle {
@@ -273,7 +365,8 @@ ${FONT_IMPORT}
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 4px;
+  letter-spacing: 0.07em;
 }
 
 .st-modal-close {
@@ -306,7 +399,7 @@ ${FONT_IMPORT}
 .st-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .st-field {
@@ -328,12 +421,12 @@ ${FONT_IMPORT}
   box-sizing: border-box;
   background: var(--bg-elevated);
   border: 1px solid var(--border-mid);
-  border-radius: 8px;
+  border-radius: 12px;
   color: var(--text-primary);
   font-family: 'Syne', sans-serif;
   font-size: 14px;
   line-height: 1.6;
-  padding: 14px 16px;
+  padding: 13px 14px;
   resize: none;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -361,44 +454,47 @@ ${FONT_IMPORT}
 
 .st-file-label {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--bg-elevated);
-  border: 2px dashed var(--border-mid);
-  border-radius: 8px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 176px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px dashed var(--border-hover);
+  border-radius: 16px;
   cursor: pointer;
   transition: all 0.15s;
-  min-height: 48px;
+  text-align: center;
 }
 
 .st-file-label:hover {
   border-color: var(--purple);
-  background: var(--bg-hover);
+  background: rgba(155, 127, 212, 0.08);
 }
 
 .st-file-label.has-file {
   border-style: solid;
-  border-color: var(--border-hover);
-  background: var(--bg-hover);
+  border-color: var(--purple);
+  background: rgba(155, 127, 212, 0.08);
 }
 
 .st-file-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  border: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--text-primary);
+  box-shadow: 0 10px 28px rgba(155, 127, 212, 0.2);
 }
 
 .st-file-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
 }
 
 .st-file-info {
@@ -407,9 +503,9 @@ ${FONT_IMPORT}
 }
 
 .st-file-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -418,20 +514,48 @@ ${FONT_IMPORT}
 .st-file-hint {
   font-family: 'DM Mono', monospace;
   font-size: 9px;
-  color: var(--text-faint);
-  letter-spacing: 0.06em;
-  margin-top: 2px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  margin-top: 4px;
 }
 
 .st-actions {
   display: flex;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 
 .st-actions .st-btn {
+  min-height: 46px;
   flex: 1;
   justify-content: center;
+}
+
+.st-upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(155, 127, 212, 0.1);
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.st-upload-progress::before {
+  content: '✓';
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--purple);
+  color: #fff;
+  font-size: 10px;
 }
 
 /* ── LOADING ── */
@@ -520,7 +644,7 @@ ${FONT_IMPORT}
 /* ── TOAST ── */
 .st-toast {
   position: fixed;
-  bottom: 100px;
+  bottom: calc(var(--app-bottom-nav) + 16px);
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 20px;
@@ -535,6 +659,58 @@ ${FONT_IMPORT}
 @keyframes st-toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(10px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .st-header {
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .st-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .st-fab {
+    left: auto;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: none;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    border-color: transparent;
+    color: #fff;
+  }
+
+  .st-fab:hover {
+    transform: scale(1.06);
+  }
+
+  .st-overlay {
+    align-items: flex-end;
+    padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .st-modal {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    padding: 20px;
+    border-radius: 16px;
+  }
+
+  .st-textarea {
+    font-size: 16px;
+  }
+
+  .st-file-label {
+    min-height: 150px;
+    padding: 18px 14px;
+  }
 }
 
 .st-toast-success {
@@ -755,17 +931,22 @@ export default function SoundTok() {
 
           <div className="st-empty">
             <div className="st-empty-icon">
-              <IconVideo />
+              <IconPlay />
             </div>
-            <div className="st-empty-title">Пока нет видео</div>
+            <div className="st-empty-title">Запусти свой первый музыкальный клип</div>
             <div className="st-empty-desc">
-              Будьте первым — загрузите своё музыкальное видео и начните движение
+              Поделись треком, покажи процесс создания или собери первые реакции от сообщества.
             </div>
             <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
               <IconUpload />
-              Загрузить первое видео
+              Опубликовать видео
             </button>
-            <div className="st-empty-hint">Поддерживаются MP4, MOV, WebM</div>
+            <div className="st-empty-hint">MP4 · MOV · WebM</div>
+            <div className="st-empty-steps" aria-label="Как начать">
+              <div className="st-empty-step"><strong>01</strong>Выбери клип</div>
+              <div className="st-empty-step"><strong>02</strong>Добавь описание</div>
+              <div className="st-empty-step"><strong>03</strong>Получи фидбек</div>
+            </div>
           </div>
         </div>
       ) : (
@@ -810,28 +991,7 @@ export default function SoundTok() {
 
             <form onSubmit={handleUpload} className="st-form">
               <div className="st-field">
-                <label className="st-label">Описание</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Расскажите о вашем видео..."
-                  className="st-textarea"
-                  rows={4}
-                  maxLength={500}
-                />
-                <div style={{ 
-                  fontFamily: "'DM Mono', monospace", 
-                  fontSize: 9, 
-                  color: 'var(--text-faint)', 
-                  textAlign: 'right',
-                  marginTop: 4 
-                }}>
-                  {description.length}/500
-                </div>
-              </div>
-
-              <div className="st-field">
-                <label className="st-label">Видео файл</label>
+                <label className="st-label">1. Выберите видео</label>
                 <div className="st-file-upload">
                   <input
                     type="file"
@@ -858,12 +1018,36 @@ export default function SoundTok() {
                         </>
                       ) : (
                         <>
-                          <div className="st-file-name">Выберите файл</div>
-                          <div className="st-file-hint">MP4, MOV, WebM до 100MB</div>
+                          <div className="st-file-name">Нажмите, чтобы выбрать клип</div>
+                          <div className="st-file-hint">MP4 · MOV · WebM · до 100 MB</div>
                         </>
                       )}
                     </div>
                   </label>
+                </div>
+                {videoFile && (
+                  <div className="st-upload-progress">Видео готово к публикации</div>
+                )}
+              </div>
+
+              <div className="st-field">
+                <label className="st-label">2. Добавьте описание</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="О чём этот трек или клип?"
+                  className="st-textarea"
+                  rows={3}
+                  maxLength={500}
+                />
+                <div style={{ 
+                  fontFamily: "'DM Mono', monospace", 
+                  fontSize: 9, 
+                  color: 'var(--text-faint)', 
+                  textAlign: 'right',
+                  marginTop: 4 
+                }}>
+                  {description.length}/500
                 </div>
               </div>
 
