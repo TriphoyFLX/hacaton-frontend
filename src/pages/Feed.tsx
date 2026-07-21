@@ -807,6 +807,9 @@ ${FONT_IMPORT}
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
 }
 .post-comment-main { min-width: 0; flex: 1; }
 .post-comment-delete {
