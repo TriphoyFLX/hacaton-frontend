@@ -1095,10 +1095,6 @@ export default function AI() {
       console.log("GENERATION RESPONSE FROM BACKEND:", data);
       void refreshBilling();
 
-      // Сохраняем полный ответ API для отображения
-      setApiResponse(data);
-      setShowApiResponse(true);
-
       const requestId = data.request_id || data.id;
       if (!requestId) {
         throw new Error('Сервис не вернул идентификатор генерации.');
