@@ -1,13 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { billingApi, type PaymentKind } from '../api/billing';
 import { useBilling } from '../hooks/useBilling';
 import { useAuthStore } from '../store/authStore';
 
+const TOKEN_PACK_UI: Array<{
+  kind: Extract<PaymentKind, `TOKENS_${number}`>;
+  tokens: number;
+  gens: number;
+  price: number;
+  badge: string | null;
+  highlight?: boolean;
+}> = [
+  { kind: 'TOKENS_400', tokens: 400, gens: 4, price: 199, badge: null },
+  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 359, badge: '−10%' },
+  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 499, badge: '−16%', highlight: true },
+  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 899, badge: '−25%' },
+];
+
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .pr {
   --bg:#0c0b0a; --ink:#f3efe8; --muted:#9a948c; --line:rgba(243,239,232,.12); --accent:#e8a87c;
+  --save:#9dffa8; --save-dim:rgba(157,255,168,.12);
   min-height:100%; background:var(--bg); color:var(--ink);
   font-family:'Instrument Sans',sans-serif; padding:28px 24px 64px;
 }
@@ -37,11 +52,33 @@ const css = `
 }
 .pr-btn.primary{background:var(--ink);color:#12100e;border-color:var(--ink)}
 .pr-btn:disabled{opacity:.45;cursor:not-allowed}
+.pr-packs-head{margin:8px 0 8px}
+.pr-packs-title{margin:0;font-size:22px;letter-spacing:-.03em}
+.pr-packs-hint{margin:8px 0 16px;color:var(--muted);font-size:14px;line-height:1.5}
+.pr-packs-hint strong{color:var(--accent);font-weight:600}
+.pr-packs{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:8px}
 .pr-pack{
-  border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-wrap:wrap;
-  gap:12px;align-items:center;justify-content:space-between;background:#141210;
+  position:relative;border:1px solid var(--line);border-radius:16px;padding:18px;
+  display:flex;flex-direction:column;gap:12px;background:#141210;min-height:210px;
 }
-.pr-packs{display:grid;gap:12px;margin-bottom:8px}
+.pr-pack.highlight{border-color:rgba(232,168,124,.55);box-shadow:0 0 0 1px rgba(232,168,124,.18)}
+.pr-pack-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.pr-pack-badge{
+  flex-shrink:0;padding:4px 8px;border-radius:999px;font:11px/1 'IBM Plex Mono',monospace;
+  color:var(--save);background:var(--save-dim);border:1px solid rgba(157,255,168,.28);
+}
+.pr-pack-popular{
+  position:absolute;top:-10px;left:16px;padding:3px 10px;border-radius:999px;
+  font:10px/1 'IBM Plex Mono',monospace;letter-spacing:.04em;text-transform:uppercase;
+  color:#12100e;background:var(--accent);
+}
+.pr-pack strong{font-size:18px;letter-spacing:-.02em}
+.pr-pack-price-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.pr-pack-price{font-size:28px;font-weight:700;letter-spacing:-.03em}
+.pr-pack-old{font:13px 'IBM Plex Mono',monospace;color:var(--muted);text-decoration:line-through}
+.pr-pack-unit{font:12px 'IBM Plex Mono',monospace;color:var(--muted)}
+.pr-pack-save{font:12px 'IBM Plex Mono',monospace;color:var(--save)}
+.pr-pack .pr-btn{width:100%;margin-top:auto}
 .pr-err{color:#ff8a8a;margin:12px 0;font-size:14px}
 .pr-ok{color:#9dffa8;margin:12px 0;font-size:14px}
 .pr a{color:var(--accent)}
@@ -54,6 +91,20 @@ export default function Pricing() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [params] = useSearchParams();
+
+  const basePerGen = TOKEN_PACK_UI[0].price / TOKEN_PACK_UI[0].gens;
+
+  const packs = useMemo(
+    () =>
+      TOKEN_PACK_UI.map((pack) => {
+        const compareAt = Math.round(basePerGen * pack.gens);
+        const saveRub = Math.max(0, compareAt - pack.price);
+        const savePercent = compareAt > 0 ? Math.round((saveRub / compareAt) * 100) : 0;
+        const perGen = Math.round((pack.price / pack.gens) * 10) / 10;
+        return { ...pack, compareAt, saveRub, savePercent, perGen };
+      }),
+    [basePerGen]
+  );
 
   useEffect(() => {
     const paymentId = params.get('paymentId') || localStorage.getItem('sl_pending_payment');
@@ -160,19 +211,35 @@ export default function Pricing() {
           </article>
         </div>
 
-        <h2 style={{ margin: '8px 0 14px', fontSize: 22, letterSpacing: '-0.03em' }}>Доп. пакеты токенов</h2>
+        <div className="pr-packs-head">
+          <h2 className="pr-packs-title">Доп. пакеты токенов</h2>
+          <p className="pr-packs-hint">
+            100 токенов = 1 AI-генерация.{' '}
+            <strong>Чем больше пакет — тем дешевле генерация.</strong>
+          </p>
+        </div>
         <div className="pr-packs">
-          {([
-            { kind: 'TOKENS_400' as const, tokens: 400, gens: 4, price: 199 },
-            { kind: 'TOKENS_800' as const, tokens: 800, gens: 8, price: 379 },
-            { kind: 'TOKENS_1200' as const, tokens: 1200, gens: 12, price: 529 },
-            { kind: 'TOKENS_2400' as const, tokens: 2400, gens: 24, price: 949 },
-          ]).map((pack) => (
-            <div className="pr-pack" key={pack.kind}>
-              <div>
+          {packs.map((pack) => (
+            <div className={`pr-pack${pack.highlight ? ' highlight' : ''}`} key={pack.kind}>
+              {pack.highlight && <span className="pr-pack-popular">Выгоднее</span>}
+              <div className="pr-pack-top">
                 <strong>{pack.tokens} токенов</strong>
-                <div className="pr-meta">≈ {pack.gens} AI-генераций · {pack.price} ₽</div>
+                {pack.badge && <span className="pr-pack-badge">{pack.badge}</span>}
               </div>
+              <div className="pr-pack-price-row">
+                <span className="pr-pack-price">{pack.price} ₽</span>
+                {pack.saveRub > 0 && <span className="pr-pack-old">{pack.compareAt} ₽</span>}
+              </div>
+              <div className="pr-pack-unit">
+                ≈ {pack.gens} генераций · {pack.perGen} ₽ / генерация
+              </div>
+              {pack.saveRub > 0 ? (
+                <div className="pr-pack-save">
+                  Экономия {pack.saveRub} ₽ (−{pack.savePercent}%) vs маленький пакет
+                </div>
+              ) : (
+                <div className="pr-pack-unit">Базовая цена за генерацию</div>
+              )}
               <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay(pack.kind)}>
                 {busy === pack.kind ? 'Переход…' : 'Купить'}
               </button>
