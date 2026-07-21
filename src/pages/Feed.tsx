@@ -7,7 +7,7 @@ import { followsApi } from '../api/follows';
 import { useAuthStore } from '../store/authStore';
 import {
   Image, Video, Music, Heart, MessageCircle, Share2,
-  MoreHorizontal, Send, Eye, ChevronDown, X
+  MoreHorizontal, Send, Eye, ChevronDown, X, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -800,6 +800,29 @@ ${FONT_IMPORT}
 .post-more-menu { position: absolute; right: 0; top: 30px; z-index: 30; width: 190px; padding: 6px; border: 1px solid var(--border-mid); border-radius: 9px; background: var(--bg-elevated); box-shadow: 0 14px 30px rgba(0,0,0,.4); }
 .post-more-menu button { width: 100%; padding: 9px 10px; text-align: left; cursor: pointer; color: var(--text-primary); background: transparent; border: 0; border-radius: 6px; font: 12px 'Syne', sans-serif; }
 .post-more-menu button:hover { background: var(--bg-hover); }
+.post-more-menu button.danger { color: #f5a9a3; }
+.post-more-menu button.danger:hover { background: rgba(192, 57, 43, 0.16); }
+.post-comment {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.post-comment-main { min-width: 0; flex: 1; }
+.post-comment-delete {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.post-comment-delete:hover { color: #f5a9a3; background: rgba(192, 57, 43, 0.12); }
 .post-share-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.68); }
 .post-share-dialog { width: min(420px, 100%); max-height: 75vh; overflow: auto; padding: 18px; border: 1px solid var(--border-mid); border-radius: 13px; background: var(--bg-surface); }
 .post-share-dialog h3 { margin: 0 0 5px; font-size: 18px; }.post-share-dialog p { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; }
@@ -1000,15 +1023,19 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
 function PostCard({
   post,
   index,
+  currentUserId,
   isFollowing,
   canFollow,
   onToggleFollow,
+  onDeleted,
 }: {
   post: Post;
   index: number;
+  currentUserId?: string;
   isFollowing: boolean;
   canFollow: boolean;
   onToggleFollow: (userId: string) => Promise<void>;
+  onDeleted?: (postId: string) => void;
 }) {
   const navigate = useNavigate();
   const [showMore, setShowMore] = useState(false);
@@ -1028,6 +1055,8 @@ function PostCard({
   const [chats, setChats] = useState<Chat[]>([]);
   const [shareStatus, setShareStatus] = useState('');
   const [isFollowUpdating, setIsFollowUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const isOwnPost = Boolean(currentUserId && currentUserId === post.authorId);
 
   useEffect(() => {
     void postsApi.recordView(post.id)
@@ -1140,6 +1169,31 @@ function PostCard({
       setCommentText('');
     } catch (error: any) {
       setCommentError(error?.response?.data?.error || 'Не удалось отправить комментарий');
+    }
+  };
+  const deleteComment = async (commentId: string) => {
+    setCommentError('');
+    try {
+      const result = await postsApi.deleteComment(post.id, commentId);
+      setComments((current) => current.filter((comment) => comment.id !== commentId));
+      setCommentsCount(result.commentsCount);
+    } catch (error: any) {
+      setCommentError(error?.response?.data?.error || 'Не удалось удалить комментарий');
+    }
+  };
+  const deletePost = async () => {
+    if (isDeleting) return;
+    const confirmed = window.confirm('Удалить эту публикацию?');
+    if (!confirmed) return;
+    setIsDeleting(true);
+    setShowMoreMenu(false);
+    setActionError('');
+    try {
+      await postsApi.deletePost(post.id);
+      onDeleted?.(post.id);
+    } catch (error: any) {
+      setActionError(error?.response?.data?.error || 'Не удалось удалить публикацию');
+      setIsDeleting(false);
     }
   };
   const copyLink = async () => {
@@ -1257,6 +1311,15 @@ function PostCard({
               {showMoreMenu && <div className="post-more-menu">
                 <button onClick={() => { void copyLink(); setShowMoreMenu(false); }}>Копировать ссылку</button>
                 <button onClick={() => void openShare()}>Поделиться в чате</button>
+                {isOwnPost && (
+                  <button
+                    className="danger"
+                    disabled={isDeleting}
+                    onClick={() => void deletePost()}
+                  >
+                    {isDeleting ? 'Удаление…' : 'Удалить'}
+                  </button>
+                )}
               </div>}
             </div>
           </div>
@@ -1296,7 +1359,23 @@ function PostCard({
       {actionError && <div className="post-action-error" role="alert">{actionError}</div>}
       {commentsOpen && <div className="post-comments-panel">
         <div className="post-comment-list">
-          {comments.length ? comments.map((comment) => <div className="post-comment" key={comment.id}><b>@{comment.author.username}</b>{comment.text}</div>) : <div className="post-comment">Комментариев пока нет.</div>}
+          {comments.length ? comments.map((comment) => (
+            <div className="post-comment" key={comment.id}>
+              <div className="post-comment-main">
+                <b>@{comment.author.username}</b>{comment.text}
+              </div>
+              {currentUserId === comment.authorId && (
+                <button
+                  type="button"
+                  className="post-comment-delete"
+                  title="Удалить комментарий"
+                  onClick={() => void deleteComment(comment.id)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          )) : <div className="post-comment">Комментариев пока нет.</div>}
         </div>
         <form className="post-comment-form" onSubmit={submitComment}>
           <input value={commentText} onChange={(event) => setCommentText(event.target.value)} maxLength={1000} placeholder="Написать комментарий…" />
@@ -1443,9 +1522,11 @@ export default function Feed() {
                 key={post.id}
                 post={post}
                 index={idx}
+                currentUserId={currentUserId}
                 isFollowing={followingIds.includes(post.authorId)}
                 canFollow={Boolean(currentUserId && currentUserId !== post.authorId)}
                 onToggleFollow={toggleFollow}
+                onDeleted={(postId) => setPosts((current) => current.filter((item) => item.id !== postId))}
               />
             ))}
           </AnimatePresence>

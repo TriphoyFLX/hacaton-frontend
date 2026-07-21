@@ -20,7 +20,13 @@ export type BillingSnapshot = {
   tokenPacks: Record<string, any>;
 };
 
-export type PaymentKind = 'PLAN_PRO' | 'PLAN_PLATINUM' | 'TOKENS_400';
+export type PaymentKind =
+  | 'PLAN_PRO'
+  | 'PLAN_PLATINUM'
+  | 'TOKENS_400'
+  | 'TOKENS_800'
+  | 'TOKENS_1200'
+  | 'TOKENS_2400';
 
 export const billingApi = {
   catalog: () => api.get('/billing/catalog').then((r) => r.data),

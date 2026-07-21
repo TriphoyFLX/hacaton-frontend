@@ -39,8 +39,9 @@ const css = `
 .pr-btn:disabled{opacity:.45;cursor:not-allowed}
 .pr-pack{
   border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-wrap:wrap;
-  gap:12px;align-items:center;justify-content:space-between;
+  gap:12px;align-items:center;justify-content:space-between;background:#141210;
 }
+.pr-packs{display:grid;gap:12px;margin-bottom:8px}
 .pr-err{color:#ff8a8a;margin:12px 0;font-size:14px}
 .pr-ok{color:#9dffa8;margin:12px 0;font-size:14px}
 .pr a{color:var(--accent)}
@@ -159,15 +160,24 @@ export default function Pricing() {
           </article>
         </div>
 
-        <h2 style={{ margin: '8px 0 14px', fontSize: 22, letterSpacing: '-0.03em' }}>Доп. пакет токенов</h2>
-        <div className="pr-pack">
-          <div>
-            <strong>400 токенов</strong>
-            <div className="pr-meta">≈ 4 AI-генерации · 199 ₽</div>
-          </div>
-          <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay('TOKENS_400')}>
-            {busy === 'TOKENS_400' ? 'Переход…' : 'Купить токены'}
-          </button>
+        <h2 style={{ margin: '8px 0 14px', fontSize: 22, letterSpacing: '-0.03em' }}>Доп. пакеты токенов</h2>
+        <div className="pr-packs">
+          {([
+            { kind: 'TOKENS_400' as const, tokens: 400, gens: 4, price: 199 },
+            { kind: 'TOKENS_800' as const, tokens: 800, gens: 8, price: 379 },
+            { kind: 'TOKENS_1200' as const, tokens: 1200, gens: 12, price: 529 },
+            { kind: 'TOKENS_2400' as const, tokens: 2400, gens: 24, price: 949 },
+          ]).map((pack) => (
+            <div className="pr-pack" key={pack.kind}>
+              <div>
+                <strong>{pack.tokens} токенов</strong>
+                <div className="pr-meta">≈ {pack.gens} AI-генераций · {pack.price} ₽</div>
+              </div>
+              <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay(pack.kind)}>
+                {busy === pack.kind ? 'Переход…' : 'Купить'}
+              </button>
+            </div>
+          ))}
         </div>
 
         <p className="pr-sub" style={{ marginTop: 28 }}>
