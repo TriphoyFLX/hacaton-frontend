@@ -387,8 +387,11 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           <div>© {new Date().getFullYear()} SoundLab · soundlab-studio.ru</div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             <Link to="/">SoundLab</Link>
-            <Link to="/online-studiya-zvukozapisi">Онлайн студия</Link>
-            <Link to="/zapisat-trek-online">Записать трек</Link>
+            <Link to="/offer">Оферта</Link>
+            <Link to="/privacy">Конфиденциальность</Link>
+            <Link to="/contacts">Контакты</Link>
+            <Link to="/refunds">Возвраты</Link>
+            <Link to="/delivery">Получение услуги</Link>
             <Link to="/login">Войти</Link>
             <Link to="/register">Регистрация</Link>
           </div>

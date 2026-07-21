@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Wand2, Play, Download, History, Trash2 } from 'lucide-react';
-
+import { getAuthToken } from '../lib/authToken';
+import { API_ORIGIN } from '../api/client';
+import { Link } from 'react-router-dom';
+import { useBilling } from '../hooks/useBilling';
 
 interface GenerationResult {
   id: number | string;
@@ -921,6 +924,7 @@ ${FONT_IMPORT}
 `;
 
 export default function AI() {
+  const { billing, refresh: refreshBilling } = useBilling();
   const [title, setTitle] = useState('Свобода');
   const [tags, setTags] = useState('Винтажный джаз-лаундж, классические стандарты, плавные соло на трубе, контрабас и знойный женский вокал');
   const [prompt, setPrompt] = useState('');
@@ -1063,20 +1067,38 @@ export default function AI() {
         model: settings.model
       };
 
-      const response = await fetch('/api/generate-music', {
+      const token = getAuthToken();
+      const response = await fetch(`${API_ORIGIN}/api/generate-music`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API error: ${response.status} - ${errorText}`);
+        let message = `API error: ${response.status}`;
+        try {
+          const errJson = await response.json();
+          message = errJson.error || message;
+          if (response.status === 402) {
+            message += ' — откройте раздел Тарифы.';
+          }
+        } catch {
+          message = `${message}`;
+        }
+        throw new Error(message);
       }
 
       const data = await response.json();
+      console.log("GENERATION RESPONSE FROM BACKEND:", data);
+      void refreshBilling();
+
+      // Сохраняем полный ответ API для отображения
+      setApiResponse(data);
+      setShowApiResponse(true);
+
       const requestId = data.request_id || data.id;
       if (!requestId) {
         throw new Error('Сервис не вернул идентификатор генерации.');
@@ -1142,10 +1164,12 @@ export default function AI() {
         setProgress(newProgress);
         setGeneratedAudio(prev => prev ? { ...prev, progress: newProgress } : null);
         
-        const response = await fetch(`/api/check-generation/${id}`, {
+        const token = getAuthToken();
+        const response = await fetch(`${API_ORIGIN}/api/check-generation/${id}`, {
           method: 'GET',
           headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           }
         });
 
@@ -1281,8 +1305,13 @@ export default function AI() {
         {/* Description */}
         <div className="ai-desc">
           <p className="desc-text">
-            Генерируйте уникальные музыкальные композиции с помощью Suno AI. 
+            Генерируйте уникальные музыкальные композиции с помощью Suno AI.
             Опишите стиль и добавьте текст песни при необходимости.
+          </p>
+          <p className="desc-text" style={{ marginTop: 8, opacity: 0.75 }}>
+            Тариф: {billing?.plan ?? '…'} · токены: {billing?.tokenBalance ?? '…'}
+            {' '}({billing?.generationsAvailable ?? 0} ген.) ·{' '}
+            <Link to="/pricing" style={{ color: '#e8a87c' }}>купить / апгрейд</Link>
           </p>
         </div>
 

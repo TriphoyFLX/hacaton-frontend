@@ -17,7 +17,10 @@ import {
   normalizeClipFx,
   makeDistortionCurve,
   createImpulseReverb,
+  isVocalPresetAllowed,
 } from '../lib/vocalFx';
+import { useBilling } from '../hooks/useBilling';
+import { Link } from 'react-router-dom';
 
 // ================= TYPES =================
 interface Note {
@@ -1364,6 +1367,8 @@ function projectForStorage(project: MIDIProject): Record<string, unknown> {
 
 // ================= ГЛАВНЫЙ КОМПОНЕНТ =================
 function MIDISequencer() {
+  const { billing } = useBilling();
+  const vocalPresetsUnlocked = Boolean(billing?.vocalPresets);
   const [project, setProject] = useState<MIDIProject | null>(null);
   const [projects, setProjects] = useState<MidiProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
@@ -4882,6 +4887,7 @@ function MIDISequencer() {
 
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                     {VOCAL_FX_PRESETS.map(preset => {
+                      const allowed = isVocalPresetAllowed(preset.id, vocalPresetsUnlocked);
                       const active = clipFx.enabled === preset.enabled
                         && clipFx.low === preset.low
                         && clipFx.mid === preset.mid
@@ -4893,29 +4899,41 @@ function MIDISequencer() {
                         <button
                           key={preset.id}
                           type="button"
-                          onClick={() => patchClip({
-                            fx: {
-                              enabled: preset.enabled,
-                              low: preset.low,
-                              mid: preset.mid,
-                              high: preset.high,
-                              compress: preset.compress,
-                              drive: preset.drive,
-                              reverb: preset.reverb,
-                            },
-                          })}
+                          disabled={!allowed}
+                          title={allowed ? preset.name : 'Доступно на Pro / Platinum'}
+                          onClick={() => {
+                            if (!allowed) return;
+                            patchClip({
+                              fx: {
+                                enabled: preset.enabled,
+                                low: preset.low,
+                                mid: preset.mid,
+                                high: preset.high,
+                                compress: preset.compress,
+                                drive: preset.drive,
+                                reverb: preset.reverb,
+                              },
+                            });
+                          }}
                           style={{
-                            fontSize: 9, padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
+                            fontSize: 9, padding: '4px 9px', borderRadius: 4,
+                            cursor: allowed ? 'pointer' : 'not-allowed',
+                            opacity: allowed ? 1 : 0.35,
                             border: active ? '1px solid rgba(255,138,138,0.6)' : '1px solid rgba(255,255,255,0.12)',
                             background: active ? 'rgba(255,138,138,0.15)' : 'rgba(255,255,255,0.04)',
                             color: active ? '#ffb3b3' : '#999',
                           }}
                         >
-                          {preset.name}
+                          {preset.name}{!allowed ? ' 🔒' : ''}
                         </button>
                       );
                     })}
                   </div>
+                  {!vocalPresetsUnlocked && (
+                    <div style={{ fontSize: 10, color: '#888', marginTop: 6 }}>
+                      Пресеты вокала — на <Link to="/pricing" style={{ color: '#e8a87c' }}>Pro / Platinum</Link>
+                    </div>
+                  )}
 
                   {EQ_BANDS.map(band => (
                     <div key={band.key}>

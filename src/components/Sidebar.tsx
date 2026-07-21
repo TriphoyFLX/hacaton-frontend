@@ -626,6 +626,11 @@ export default function Sidebar() {
 
         <hr className="sb-divider" />
 
+        <NavLink to="/pricing" className={linkClass}>
+          <span className="sb-item-icon"><IconShield /></span>
+          <span className="sb-item-label">Тарифы</span>
+        </NavLink>
+
         <NavLink to="/profile" className={linkClass}>
           <span className="sb-item-icon"><IconUser /></span>
           <span className="sb-item-label">Профиль</span>
@@ -702,7 +707,7 @@ export default function Sidebar() {
             <div className="sb-avatar">{user.username[0].toUpperCase()}</div>
             <div className="sb-user-info">
               <div className="sb-username">@{user.username}</div>
-              <div className="sb-plan">Free plan</div>
+              <div className="sb-plan">{user.plan === 'PRO' ? 'Pro' : user.plan === 'PLATINUM' ? 'Platinum' : 'Free'} · {user.tokenBalance ?? 0} ток.</div>
             </div>
             <div className="sb-chevron"><IconChevron /></div>
           </NavLink>

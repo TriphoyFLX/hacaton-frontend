@@ -11,7 +11,10 @@ import {
   normalizeClipFx,
   VocalLiveSession,
   presetNameForFx,
+  isVocalPresetAllowed,
 } from '../lib/vocalFx';
+import { useBilling } from '../hooks/useBilling';
+import { Link } from 'react-router-dom';
 
 const VOICE_FX_STORAGE_KEY = 'soundlab_rap_battle_voice_fx';
 const DEFAULT_VOICE_FX = normalizeClipFx(VOCAL_FX_PRESETS.find(p => p.id === 'clean'));
@@ -907,6 +910,8 @@ const useBattlePersistence = (currentUserId: string): BattlePersistence => {
 // ─────────────────────────────────────────────────────────
 export default function RapBattleNew() {
   const { user } = useAuthStore();
+  const { billing } = useBilling();
+  const vocalPresetsUnlocked = Boolean(billing?.vocalPresets);
   const { saveBattleState, loadBattleState, clearBattleState } = useBattlePersistence(user?.id || '');
   const [lastSaved, setLastSaved] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -1766,20 +1771,28 @@ export default function RapBattleNew() {
             <label className="rb-label" style={{ marginTop: 16 }}>Пресеты голоса</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {VOCAL_FX_PRESETS.map(preset => {
+                const allowed = isVocalPresetAllowed(preset.id, vocalPresetsUnlocked);
                 const active = presetNameForFx(voiceFx) === preset.name;
                 return (
                   <button
                     key={preset.id}
                     type="button"
+                    disabled={!allowed}
+                    title={allowed ? preset.name : 'Доступно на Pro / Platinum'}
                     className={`rb-btn ${active ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
-                    style={{ height: 30, fontSize: 11, padding: '0 10px' }}
-                    onClick={() => applyVoicePreset(preset)}
+                    style={{ height: 30, fontSize: 11, padding: '0 10px', opacity: allowed ? 1 : 0.4 }}
+                    onClick={() => { if (allowed) applyVoicePreset(preset); }}
                   >
-                    {preset.name}
+                    {preset.name}{!allowed ? ' 🔒' : ''}
                   </button>
                 );
               })}
             </div>
+            {!vocalPresetsUnlocked && (
+              <p className="rb-hint" style={{ marginTop: 0 }}>
+                Пресеты — на <Link to="/pricing">Pro / Platinum</Link>
+              </p>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <span className="rb-label" style={{ margin: 0 }}>FX</span>

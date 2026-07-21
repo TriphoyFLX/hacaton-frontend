@@ -18,6 +18,9 @@ interface User {
   emailVerified?: boolean;
   displayName?: string | null;
   avatar?: string | null;
+  plan?: 'FREE' | 'PRO' | 'PLATINUM';
+  planExpiresAt?: string | null;
+  tokenBalance?: number;
 }
 
 interface AuthState {

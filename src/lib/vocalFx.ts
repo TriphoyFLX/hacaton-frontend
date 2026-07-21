@@ -347,3 +347,11 @@ export function presetNameForFx(fx: ClipFx): string {
   );
   return match?.name ?? 'Custom';
 }
+
+/** Free plan may only use the flat/off preset */
+export const FREE_VOCAL_PRESET_IDS = new Set(['flat']);
+
+export function isVocalPresetAllowed(presetId: string, vocalPresetsUnlocked: boolean): boolean {
+  if (vocalPresetsUnlocked) return true;
+  return FREE_VOCAL_PRESET_IDS.has(presetId);
+}

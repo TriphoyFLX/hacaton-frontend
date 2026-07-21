@@ -20,6 +20,8 @@ import RapBattle from './pages/RapBattleNew';
 import MIDI from './pages/MIDI';
 import Landing from './pages/Landing';
 import PresetsMarketplace from './pages/PresetsMarketplace';
+import Pricing from './pages/Pricing';
+import LegalPage from './pages/LegalPage';
 
 function App() {
   return (
@@ -32,6 +34,15 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+
+        {/* Legal — public */}
+        <Route path="/offer" element={<LegalPage docId="offer" />} />
+        <Route path="/terms" element={<LegalPage docId="offer" />} />
+        <Route path="/privacy" element={<LegalPage docId="privacy" />} />
+        <Route path="/contacts" element={<LegalPage docId="contacts" />} />
+        <Route path="/refunds" element={<LegalPage docId="refunds" />} />
+        <Route path="/delivery" element={<LegalPage docId="delivery" />} />
+        <Route path="/service-delivery" element={<LegalPage docId="delivery" />} />
 
         {/* Authenticated app shell */}
         <Route
@@ -50,6 +61,7 @@ function App() {
           <Route path="profile/:username" element={<PublicProfile />} />
           <Route path="chats" element={<Chats />} />
           <Route path="chats/:chatId" element={<ChatPage />} />
+          <Route path="pricing" element={<Pricing />} />
           <Route
             path="admin"
             element={
