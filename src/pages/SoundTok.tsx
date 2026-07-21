@@ -893,9 +893,9 @@ export default function SoundTok() {
     e.preventDefault();
     if (!videoFile) return;
 
-    const maxBytes = 100 * 1024 * 1024;
+    const maxBytes = 15 * 1024 * 1024;
     if (videoFile.size > maxBytes) {
-      showToast('Файл слишком большой — максимум 100 MB', 'error');
+      showToast('Файл слишком большой — максимум 15 MB', 'error');
       return;
     }
 
@@ -909,13 +909,14 @@ export default function SoundTok() {
       showToast('Видео опубликовано!', 'success');
     } catch (error) {
       console.error('Failed to upload:', error);
-      const status = (error as { response?: { status?: number } })?.response?.status;
+      const status = (error as { response?: { status?: number; data?: { error?: string } } })?.response?.status;
+      const serverError = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
       if (status === 413) {
-        showToast('Файл слишком большой для сервера (макс. 100 MB)', 'error');
+        showToast(serverError || 'Файл слишком большой — максимум 15 MB', 'error');
       } else if (status === 401) {
         showToast('Сессия истекла — войдите снова', 'error');
       } else {
-        showToast('Не удалось загрузить видео', 'error');
+        showToast(serverError || 'Не удалось загрузить видео', 'error');
       }
     } finally {
       setUploading(false);
@@ -1036,8 +1037,8 @@ export default function SoundTok() {
                     accept="video/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
-                      if (file && file.size > 100 * 1024 * 1024) {
-                        showToast('Файл слишком большой — максимум 100 MB', 'error');
+                      if (file && file.size > 15 * 1024 * 1024) {
+                        showToast('Файл слишком большой — максимум 15 MB', 'error');
                         e.target.value = '';
                         setVideoFile(null);
                         return;
@@ -1066,7 +1067,7 @@ export default function SoundTok() {
                       ) : (
                         <>
                           <div className="st-file-name">Нажмите, чтобы выбрать клип</div>
-                          <div className="st-file-hint">MP4 · MOV · WebM · до 100 MB</div>
+                          <div className="st-file-hint">MP4 · MOV · WebM · до 15 MB</div>
                         </>
                       )}
                     </div>
