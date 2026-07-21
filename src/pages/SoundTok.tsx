@@ -893,6 +893,12 @@ export default function SoundTok() {
     e.preventDefault();
     if (!videoFile) return;
 
+    const maxBytes = 100 * 1024 * 1024;
+    if (videoFile.size > maxBytes) {
+      showToast('Файл слишком большой — максимум 100 MB', 'error');
+      return;
+    }
+
     setUploading(true);
     try {
       await soundTokApi.createSoundTok(description, videoFile);
@@ -903,7 +909,14 @@ export default function SoundTok() {
       showToast('Видео опубликовано!', 'success');
     } catch (error) {
       console.error('Failed to upload:', error);
-      showToast('Не удалось загрузить видео', 'error');
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 413) {
+        showToast('Файл слишком большой для сервера (макс. 100 MB)', 'error');
+      } else if (status === 401) {
+        showToast('Сессия истекла — войдите снова', 'error');
+      } else {
+        showToast('Не удалось загрузить видео', 'error');
+      }
     } finally {
       setUploading(false);
     }
@@ -1021,7 +1034,16 @@ export default function SoundTok() {
                   <input
                     type="file"
                     accept="video/*"
-                    onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      if (file && file.size > 100 * 1024 * 1024) {
+                        showToast('Файл слишком большой — максимум 100 MB', 'error');
+                        e.target.value = '';
+                        setVideoFile(null);
+                        return;
+                      }
+                      setVideoFile(file);
+                    }}
                     className="st-file-input"
                     required
                     id="video-upload"
