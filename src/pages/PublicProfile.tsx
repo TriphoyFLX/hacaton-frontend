@@ -5,6 +5,7 @@ import { chatsApi } from '../api/chats';
 import { profileApi, UserProfile } from '../api/profile';
 import { followsApi } from '../api/follows';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { addRecentProfile } from '../lib/recentProfiles';
 import { useAuthStore } from '../store/authStore';
 import FollowListModal from '../components/FollowListModal';
 
@@ -469,6 +470,8 @@ export default function PublicProfile() {
   const [followLoading, setFollowLoading] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [listModal, setListModal] = useState<'followers' | 'following' | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
   const currentUser = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -479,6 +482,7 @@ export default function PublicProfile() {
       try {
         const data = await profileApi.getPublicProfile(username);
         setUser(data);
+        if (currentUser?.id !== data.id) addRecentProfile(data);
         setIsFollowing(!!data.isFollowing);
         setFollowersCount(data.followersCount ?? 0);
       } catch (error) {
@@ -490,7 +494,7 @@ export default function PublicProfile() {
     };
 
     fetchUser();
-  }, [username]);
+  }, [username, currentUser?.id]);
 
   const handleFollow = async () => {
     if (!user || followLoading || currentUser?.id === user.id) return;
@@ -516,12 +520,17 @@ export default function PublicProfile() {
   };
 
   const startChat = async () => {
-    if (!user) return;
+    if (!user || chatLoading || currentUser?.id === user.id) return;
+    setChatLoading(true);
+    setChatError('');
     try {
       const chat = await chatsApi.createChat(user.id);
       navigate(`/chats/${chat.id}`);
     } catch (error) {
+      setChatError('Не удалось создать чат. Возможно, пользователь ограничил сообщения.');
       console.error('Failed to create chat:', error);
+    } finally {
+      setChatLoading(false);
     }
   };
 
@@ -609,12 +618,15 @@ export default function PublicProfile() {
                 {isFollowing ? 'Отписаться' : 'Подписаться'}
               </button>
             )}
-            <button onClick={startChat} className="btn-primary">
-              <MessageCircle size={14} />
-              Чат
-            </button>
+            {currentUser?.id !== user.id && (
+              <button onClick={startChat} disabled={chatLoading} className="btn-primary">
+                <MessageCircle size={14} />
+                {chatLoading ? 'Создаём...' : 'Чат'}
+              </button>
+            )}
           </div>
         </div>
+        {chatError && <div className="profile-bio"><p className="bio-text">{chatError}</p></div>}
 
         {/* Bio */}
         {user.bio && (

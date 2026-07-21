@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { searchApi, SearchResult } from '../api/search';
 import { chatsApi } from '../api/chats';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { getRecentProfiles, RecentProfile } from '../lib/recentProfiles';
+import { useAuthStore } from '../store/authStore';
 import { Search, X, Users, FileText, Video, MessageCircle } from 'lucide-react';
 
 interface SearchModalProps {
@@ -401,13 +403,18 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'users' | 'posts' | 'soundtoks'>('all');
+  const [recentProfiles, setRecentProfiles] = useState<RecentProfile[]>([]);
+  const [chatError, setChatError] = useState('');
+  const currentUserId = useAuthStore((state) => state.user?.id);
 
   const startChat = async (userId: string) => {
+    setChatError('');
     try {
       const chat = await chatsApi.createChat(userId);
       navigate(`/chats/${chat.id}`);
       onClose();
     } catch (error) {
+      setChatError('Не удалось создать чат. Попробуйте ещё раз.');
       console.error('Failed to create chat:', error);
     }
   };
@@ -447,6 +454,10 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (isOpen) setRecentProfiles(getRecentProfiles());
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -514,12 +525,45 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
               </div>
             </div>
           ) : !query ? (
-            <div className="search-empty">
-              <div className="empty-icon">
-                <Search size={40} />
+            recentProfiles.length ? (
+              <div className="result-group">
+                <div className="result-group-heading">Недавно просмотренные</div>
+                {recentProfiles.map((user) => (
+                  <div key={user.id} className="user-row">
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}
+                      onClick={() => {
+                        navigate(`/profile/${user.username}`);
+                        onClose();
+                      }}
+                    >
+                      <div className="user-avatar">
+                        {user.avatar ? <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} /> : user.username[0].toUpperCase()}
+                      </div>
+                      <div className="user-info">
+                        <div className="user-username">@{user.username}</div>
+                        <div className="user-email">{user.displayName || 'Профиль'}</div>
+                      </div>
+                    </div>
+                    {currentUserId !== user.id && (
+                      <button onClick={(e) => { e.stopPropagation(); void startChat(user.id); }} className="user-chat-btn" aria-label={`Написать @${user.username}`}>
+                        <MessageCircle size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div className="empty-label">Поиск</div>
-              <div className="empty-hint">Начните вводить для поиска</div>
+            ) : (
+              <div className="search-empty">
+                <div className="empty-icon"><Search size={40} /></div>
+                <div className="empty-label">Поиск</div>
+                <div className="empty-hint">Начните вводить для поиска</div>
+              </div>
+            )
+          ) : query.trim().length < 2 ? (
+            <div className="search-empty">
+              <div className="empty-label">Продолжите ввод</div>
+              <div className="empty-hint">Введите минимум 2 символа</div>
             </div>
           ) : results && totalCount > 0 ? (
             <div>
@@ -552,15 +596,15 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                           </div>
                         </div>
                       </div>
-                      <button
+                      {currentUserId !== user.id && <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          startChat(user.id);
+                          void startChat(user.id);
                         }}
                         className="user-chat-btn"
                       >
                         <MessageCircle size={15} />
-                      </button>
+                      </button>}
                     </div>
                   ))}
                 </div>
@@ -605,6 +649,7 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
               <div className="empty-hint">Попробуйте изменить запрос</div>
             </div>
           )}
+          {chatError && <div className="search-empty"><div className="empty-hint">{chatError}</div></div>}
         </div>
       </div>
     </div>

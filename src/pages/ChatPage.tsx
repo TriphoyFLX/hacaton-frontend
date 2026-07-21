@@ -1150,8 +1150,9 @@ export default function ChatPage() {
         const chatData = chats.find((c: Chat) => c.id === chatId);
         const messagesData = await chatsApi.getMessages(chatId);
 
-        if (chatData) {
-          setChat(chatData);
+        const resolvedChat = chatData || messagesData.chat;
+        if (resolvedChat) {
+          setChat(resolvedChat);
           
           // Process messages and track IDs
           const loadedMessages = messagesData.messages || messagesData || [];
