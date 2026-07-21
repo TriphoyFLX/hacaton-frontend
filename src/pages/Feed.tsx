@@ -789,7 +789,6 @@ ${FONT_IMPORT}
 }
 .post-comments-panel { margin: 0 18px 16px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: rgba(0,0,0,.16); }
 .post-comment-list { display: grid; gap: 10px; max-height: 260px; overflow-y: auto; margin-bottom: 12px; }
-.post-comment { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
 .post-comment b { color: var(--text-primary); margin-right: 6px; }
 .post-comment-form { display: flex; gap: 8px; }
 .post-comment-form input { flex: 1; min-width: 0; border: 1px solid var(--border-mid); border-radius: 7px; padding: 8px 10px; color: var(--text-primary); background: var(--bg); font: 12px 'Syne', sans-serif; }
