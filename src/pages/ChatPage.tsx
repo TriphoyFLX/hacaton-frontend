@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users } from 'lucide-react';
-import { chatsApi, Chat, Message, resolveChatPinState } from '../api/chats';
+import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus } from 'lucide-react';
+import { chatsApi, Chat, Message, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
 import { blocksApi, BlockStatus } from '../api/blocks';
 import { usersApi } from '../api/users';
 import { useAuthStore } from '../store/authStore';
@@ -177,6 +177,9 @@ ${FONT_IMPORT}
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+.loader {
+  animation: spin 1s linear infinite;
 }
 
 .chat-grid-bg {
@@ -460,6 +463,8 @@ ${FONT_IMPORT}
 /* ── MESSAGE BUBBLE ── */
 .message-row {
   display: flex;
+  align-items: flex-end;
+  position: relative;
   animation: messageIn 0.25s ease-out;
 }
 .message-row.own {
@@ -494,6 +499,138 @@ ${FONT_IMPORT}
   border: 1px solid var(--border);
   color: var(--text-primary);
   border-bottom-left-radius: 6px;
+}
+.message-bubble.deleted {
+  opacity: 0.72;
+  font-style: italic;
+}
+.message-deleted-text {
+  font-size: 13px;
+  color: inherit;
+  opacity: 0.75;
+}
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.message-row:hover .message-actions,
+.message-row.picker-open .message-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+.message-row.own .message-actions {
+  order: -1;
+  margin-right: 6px;
+}
+.message-row.other .message-actions {
+  margin-left: 6px;
+}
+.message-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.message-action-btn:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+.message-action-btn.danger:hover {
+  color: #f5a9a3;
+  border-color: rgba(192, 57, 43, 0.45);
+  background: var(--red-dim);
+}
+.message-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.reaction-picker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.message-row.own .reaction-picker {
+  right: 0;
+}
+.message-row.other .reaction-picker {
+  left: 0;
+}
+.reaction-picker-emoji {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+.reaction-picker-emoji:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.12);
+}
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.message-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.message-reaction-chip:hover {
+  border-color: var(--border-hover);
+  background: rgba(255, 255, 255, 0.08);
+}
+.message-reaction-chip.active {
+  border-color: rgba(232, 228, 220, 0.45);
+  background: rgba(232, 228, 220, 0.12);
+}
+.message-bubble.own .message-reaction-chip {
+  border-color: rgba(11, 11, 11, 0.18);
+  background: rgba(11, 11, 11, 0.08);
+  color: var(--bg);
+}
+.message-bubble.own .message-reaction-chip.active {
+  border-color: rgba(11, 11, 11, 0.35);
+  background: rgba(11, 11, 11, 0.14);
 }
 .message-text {
   font-size: 14px;
@@ -931,6 +1068,8 @@ export default function ChatPage() {
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockConfirm, setBlockConfirm] = useState<'block' | 'unblock' | null>(null);
   const [pinning, setPinning] = useState(false);
+  const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<Array<{
     id: string;
     username: string;
@@ -1015,6 +1154,69 @@ export default function ChatPage() {
     );
   };
 
+  const normalizeIncomingMessage = (message: SocketMessage | Message): Message => ({
+    ...message,
+    createdAt: new Date(message.createdAt).toISOString(),
+    deletedAt: message.deletedAt ? String(message.deletedAt) : null,
+    reactions: message.reactions || [],
+  } as Message);
+
+  const handleMessageDeleted = (data: { chatId: string; message: SocketMessage }) => {
+    const updated = normalizeIncomingMessage(data.message);
+    setMessages(prev => prev.map(m => (m.id === updated.id ? updated : m)));
+    setReactionPickerId(prev => (prev === updated.id ? null : prev));
+  };
+
+  const handleMessageReaction = (data: { chatId: string; message: SocketMessage }) => {
+    const updated = normalizeIncomingMessage(data.message);
+    setMessages(prev => prev.map(m => (m.id === updated.id ? updated : m)));
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!chatId || deletingId) return;
+    setDeletingId(messageId);
+    try {
+      const updated = await chatsApi.deleteMessage(chatId, messageId);
+      setMessages(prev =>
+        prev.map(m => (m.id === messageId ? { ...m, ...updated } as Message : m))
+      );
+      setReactionPickerId(prev => (prev === messageId ? null : prev));
+    } catch {
+      setSendError('Не удалось удалить сообщение');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    if (!chatId) return;
+    setReactionPickerId(null);
+    try {
+      const result = await chatsApi.toggleReaction(chatId, messageId, emoji);
+      setMessages(prev =>
+        prev.map(m => (m.id === messageId ? { ...m, ...result.message } as Message : m))
+      );
+    } catch {
+      setSendError('Не удалось обновить реакцию');
+    }
+  };
+
+  const getReactionSummary = (message: DisplayMessage) => {
+    if (!('reactions' in message) || !message.reactions?.length) return [];
+    const counts = new Map<string, { emoji: string; count: number; reactedByMe: boolean }>();
+    for (const reaction of message.reactions) {
+      const current = counts.get(reaction.emoji) || {
+        emoji: reaction.emoji,
+        count: 0,
+        reactedByMe: false,
+      };
+      current.count += 1;
+      if (reaction.userId === user?.id) current.reactedByMe = true;
+      counts.set(reaction.emoji, current);
+    }
+    return Array.from(counts.values());
+  };
+
   const handleTyping = (isTyping: boolean, userId: string) => {
     if (userId !== user?.id) {
       setOtherUserTyping(isTyping);
@@ -1048,6 +1250,8 @@ export default function ChatPage() {
     sendChatTyping,
   } = useChatSocket(chatId, token, otherUser?.id, {
     onMessage: handleNewMessage,
+    onMessageDeleted: handleMessageDeleted,
+    onMessageReaction: handleMessageReaction,
     onMessageDelivered: handleMessageDelivered,
     onMessageRead: handleMessageRead,
     onTyping: handleTyping,
@@ -1517,8 +1721,8 @@ export default function ChatPage() {
               <>
                 <button type="button" className="header-profile-btn" onClick={openProfile}>
                   <div className="header-avatar">
-                    {otherUser.avatar ? (
-                      <img src={otherUser.avatar} alt={otherUser.username} />
+                    {resolveMediaUrl(otherUser.avatar) ? (
+                      <img src={resolveMediaUrl(otherUser.avatar)!} alt={otherUser.username} />
                     ) : (
                       otherUser.username[0].toUpperCase()
                     )}
@@ -1587,10 +1791,11 @@ export default function ChatPage() {
               messages.map((message) => {
                 const isOwn = message.senderId === user?.id;
                 const isPending = message.status === 'PENDING';
+                const isDeleted = 'deletedAt' in message && !!message.deletedAt;
                 const senderName = 'sender' in message
                   ? message.sender?.username
                   : undefined;
-                const sharedTok = 'soundTok' in message ? message.soundTok : null;
+                const sharedTok = !isDeleted && 'soundTok' in message ? message.soundTok : null;
                 const sharedAuthor = sharedTok?.author;
                 const sharedAuthorName =
                   sharedAuthor?.displayName ||
@@ -1599,13 +1804,29 @@ export default function ChatPage() {
                   ? `@${sharedAuthor.username}`
                   : null;
                 const sharedAvatarUrl = resolveMediaUrl(sharedAuthor?.avatar);
+                const reactionSummary = getReactionSummary(message);
+                const pickerOpen = reactionPickerId === message.id;
 
                 return (
                   <div
                     key={message.id}
-                    className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''}`}
+                    className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''} ${pickerOpen ? 'picker-open' : ''}`}
                   >
-                    <div className={`message-bubble ${isOwn ? 'own' : 'other'}`}>
+                    <div className={`message-bubble ${isOwn ? 'own' : 'other'} ${isDeleted ? 'deleted' : ''}`}>
+                      {pickerOpen && (
+                        <div className="reaction-picker" role="listbox">
+                          {REACTION_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="reaction-picker-emoji"
+                              onClick={() => handleToggleReaction(message.id, emoji)}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {isGroupChat && !isOwn && senderName && (
                         <button
                           type="button"
@@ -1615,75 +1836,126 @@ export default function ChatPage() {
                           @{senderName}
                         </button>
                       )}
-                      {sharedTok && (
-                        <div className="message-soundtok">
-                          <div className="message-soundtok-media">
-                            <video
-                              className="message-soundtok-video"
-                              src={resolveMediaUrl(sharedTok.videoUrl) || undefined}
-                              controls
-                              playsInline
-                              preload="metadata"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            className="message-soundtok-footer"
-                            onClick={() => {
-                              if (sharedAuthor?.username) {
-                                openMentionProfile(sharedAuthor.username);
-                              }
-                            }}
-                          >
-                            <div className="message-soundtok-avatar">
-                              {sharedAvatarUrl ? (
-                                <img
-                                  src={sharedAvatarUrl}
-                                  alt={sharedAuthor?.username || 'author'}
+                      {isDeleted ? (
+                        <p className="message-deleted-text">Сообщение удалено</p>
+                      ) : (
+                        <>
+                          {sharedTok && (
+                            <div className="message-soundtok">
+                              <div className="message-soundtok-media">
+                                <video
+                                  className="message-soundtok-video"
+                                  src={resolveMediaUrl(sharedTok.videoUrl) || undefined}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
                                 />
-                              ) : (
-                                (sharedAuthor?.username?.[0] || '?').toUpperCase()
-                              )}
-                            </div>
-                            <div className="message-soundtok-author-info">
-                              <div className="message-soundtok-author-name">
-                                {sharedAuthorName}
                               </div>
-                              {sharedUsername && (
-                                <div className="message-soundtok-author-username">
-                                  {sharedUsername}
+                              <button
+                                type="button"
+                                className="message-soundtok-footer"
+                                onClick={() => {
+                                  if (sharedAuthor?.username) {
+                                    openMentionProfile(sharedAuthor.username);
+                                  }
+                                }}
+                              >
+                                <div className="message-soundtok-avatar">
+                                  {sharedAvatarUrl ? (
+                                    <img
+                                      src={sharedAvatarUrl}
+                                      alt={sharedAuthor?.username || 'author'}
+                                    />
+                                  ) : (
+                                    (sharedAuthor?.username?.[0] || '?').toUpperCase()
+                                  )}
+                                </div>
+                                <div className="message-soundtok-author-info">
+                                  <div className="message-soundtok-author-name">
+                                    {sharedAuthorName}
+                                  </div>
+                                  {sharedUsername && (
+                                    <div className="message-soundtok-author-username">
+                                      {sharedUsername}
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                              {sharedTok.description?.trim() && (
+                                <div className="message-soundtok-desc">
+                                  {sharedTok.description}
                                 </div>
                               )}
                             </div>
-                          </button>
-                          {sharedTok.description?.trim() && (
-                            <div className="message-soundtok-desc">
-                              {sharedTok.description}
-                            </div>
                           )}
+                          {!!message.content &&
+                            !(
+                              sharedTok &&
+                              message.content.trim() === (sharedTok.description || '').trim()
+                            ) && (
+                            <p className="message-text">
+                              {renderTextWithMentions({
+                                text: message.content,
+                                onMentionClick: (username) => openMentionProfile(username),
+                                onLinkClick: (url) => openMessageLink(url),
+                              })}
+                            </p>
+                          )}
+                          {!message.content && !sharedTok && (
+                            <p className="message-text"> </p>
+                          )}
+                        </>
+                      )}
+                      {reactionSummary.length > 0 && !isDeleted && (
+                        <div className="message-reactions">
+                          {reactionSummary.map((reaction) => (
+                            <button
+                              key={reaction.emoji}
+                              type="button"
+                              className={`message-reaction-chip ${reaction.reactedByMe ? 'active' : ''}`}
+                              onClick={() => handleToggleReaction(message.id, reaction.emoji)}
+                              title={reaction.reactedByMe ? 'Убрать реакцию' : 'Поставить реакцию'}
+                            >
+                              <span>{reaction.emoji}</span>
+                              <span>{reaction.count}</span>
+                            </button>
+                          ))}
                         </div>
-                      )}
-                      {!!message.content &&
-                        !(
-                          sharedTok &&
-                          message.content.trim() === (sharedTok.description || '').trim()
-                        ) && (
-                        <p className="message-text">
-                          {renderTextWithMentions({
-                            text: message.content,
-                            onMentionClick: (username) => openMentionProfile(username),
-                            onLinkClick: (url) => openMessageLink(url),
-                          })}
-                        </p>
-                      )}
-                      {!message.content && !sharedTok && (
-                        <p className="message-text"> </p>
                       )}
                       <div className="message-meta">
                         <span className="message-time">{formatTime(message.createdAt)}</span>
-                        <span className="message-status">{renderStatus(message)}</span>
+                        {!isDeleted && <span className="message-status">{renderStatus(message)}</span>}
                       </div>
                     </div>
+                    {!isPending && !isDeleted && (
+                      <div className="message-actions">
+                        <button
+                          type="button"
+                          className="message-action-btn"
+                          title="Реакция"
+                          onClick={() =>
+                            setReactionPickerId(pickerOpen ? null : message.id)
+                          }
+                        >
+                          <SmilePlus />
+                        </button>
+                        {isOwn && (
+                          <button
+                            type="button"
+                            className="message-action-btn danger"
+                            title="Удалить"
+                            disabled={deletingId === message.id}
+                            onClick={() => handleDeleteMessage(message.id)}
+                          >
+                            {deletingId === message.id ? (
+                              <Loader2 className="loader" />
+                            ) : (
+                              <Trash2 />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })

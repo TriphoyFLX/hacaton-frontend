@@ -39,6 +39,7 @@ export interface Chat {
     clientMessageId?: string | null;
     status: 'SENT' | 'DELIVERED' | 'READ';
     readAt?: string | null;
+    deletedAt?: string | null;
     createdAt: string;
     sender: {
       id: string;
@@ -58,8 +59,22 @@ export interface Chat {
         avatar?: string | null;
       };
     } | null;
+    reactions?: MessageReaction[];
   }>;
 }
+
+export interface MessageReaction {
+  id: string;
+  emoji: string;
+  userId: string;
+  createdAt: string;
+  user?: {
+    id: string;
+    username: string;
+  };
+}
+
+export const REACTION_EMOJIS = ['❤️', '👍', '😂', '🔥', '😮', '😢'] as const;
 
 export interface Message {
   id: string;
@@ -71,6 +86,7 @@ export interface Message {
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: string | null;
+  deletedAt?: string | null;
   createdAt: string;
   sender: {
     id: string;
@@ -90,6 +106,7 @@ export interface Message {
       avatar?: string | null;
     };
   } | null;
+  reactions?: MessageReaction[];
 }
 
 export interface PinChatResponse {
@@ -161,6 +178,20 @@ export const chatsApi = {
       clientMessageId,
       soundTokId,
     });
+    return response.data;
+  },
+
+  deleteMessage: async (chatId: string, messageId: string): Promise<Message> => {
+    const response = await api.delete(`/chats/${chatId}/messages/${messageId}`);
+    return response.data;
+  },
+
+  toggleReaction: async (
+    chatId: string,
+    messageId: string,
+    emoji: string
+  ): Promise<{ message: Message; added: boolean }> => {
+    const response = await api.post(`/chats/${chatId}/messages/${messageId}/reactions`, { emoji });
     return response.data;
   },
 

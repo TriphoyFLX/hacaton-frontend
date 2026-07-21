@@ -4,6 +4,7 @@ import { chatsApi, Chat, resolveChatPinState } from '../api/chats';
 import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { Search, MessageCircle, Pin, PinOff, Users, Plus, X } from 'lucide-react';
+import { resolveMediaUrl } from '../lib/mediaUrl';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -310,6 +311,13 @@ ${FONT_IMPORT}
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.01em;
+  overflow: hidden;
+}
+.chat-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .chat-info {
   flex: 1;
@@ -714,13 +722,16 @@ export default function Chats() {
     return otherUser ? `@${otherUser.username}` : 'Чат';
   };
 
-  const getChatAvatar = (chat: Chat) => {
+  const getChatAvatarContent = (chat: Chat) => {
     if (isGroupChat(chat)) {
-      const name = chat.name || 'G';
-      return name[0].toUpperCase();
+      return <Users size={20} />;
     }
     const otherUser = getOtherUser(chat);
-    return otherUser ? otherUser.username[0].toUpperCase() : '?';
+    const avatarUrl = resolveMediaUrl(otherUser?.avatar);
+    if (avatarUrl) {
+      return <img src={avatarUrl} alt={otherUser?.username || 'avatar'} />;
+    }
+    return otherUser?.username?.[0]?.toUpperCase() || '?';
   };
 
   const getLastMessage = (chat: Chat) => {
@@ -945,7 +956,7 @@ export default function Chats() {
                   className={`chat-row ${pinState.isPinned ? 'pinned' : ''}`}
                 >
                   <div className={`chat-avatar ${isGroup ? 'group' : ''}`}>
-                    {isGroup ? <Users size={20} /> : getChatAvatar(chat)}
+                    {getChatAvatarContent(chat)}
                   </div>
                   
                   <div className="chat-info">

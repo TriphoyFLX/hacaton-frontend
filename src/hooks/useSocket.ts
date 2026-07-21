@@ -2,6 +2,17 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 // Types matching backend
+export interface MessageReaction {
+  id: string;
+  emoji: string;
+  userId: string;
+  createdAt: Date | string;
+  user?: {
+    id: string;
+    username: string;
+  };
+}
+
 export interface Message {
   id: string;
   content: string;
@@ -12,6 +23,7 @@ export interface Message {
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: Date | null;
+  deletedAt?: Date | string | null;
   createdAt: Date;
   updatedAt: Date;
   sender: {
@@ -32,6 +44,7 @@ export interface Message {
       avatar?: string | null;
     };
   } | null;
+  reactions?: MessageReaction[];
 }
 
 export interface SocketMessageResponse {
@@ -43,6 +56,8 @@ export interface SocketMessageResponse {
 
 interface ServerToClientEvents {
   'message:new': (message: Message) => void;
+  'message:deleted': (data: { chatId: string; message: Message }) => void;
+  'message:reaction': (data: { chatId: string; message: Message }) => void;
   'message:status': (data: { messageId: string; status: string; readAt?: Date }) => void;
   'message:delivered': (data: { clientMessageId: string; messageId: string }) => void;
   'chat:typing': (data: { chatId: string; userId: string; isTyping: boolean }) => void;
@@ -72,6 +87,8 @@ interface ClientToServerEvents {
 
 interface UseSocketOptions {
   onMessage?: (message: Message) => void;
+  onMessageDeleted?: (data: { chatId: string; message: Message }) => void;
+  onMessageReaction?: (data: { chatId: string; message: Message }) => void;
   onMessageDelivered?: (data: { clientMessageId: string; messageId: string }) => void;
   onMessageRead?: (data: { messageId: string; status: string; readAt?: Date }) => void;
   onTyping?: (data: { chatId: string; userId: string; isTyping: boolean }) => void;
@@ -165,6 +182,14 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
 
     socket.on('message:new', (message) => {
       optionsRef.current.onMessage?.(message);
+    });
+
+    socket.on('message:deleted', (data) => {
+      optionsRef.current.onMessageDeleted?.(data);
+    });
+
+    socket.on('message:reaction', (data) => {
+      optionsRef.current.onMessageReaction?.(data);
     });
 
     socket.on('message:delivered', (data) => {
@@ -281,6 +306,8 @@ export function useChatSocket(
   otherUserId: string | undefined,
   options: {
     onMessage?: (message: Message) => void;
+    onMessageDeleted?: (data: { chatId: string; message: Message }) => void;
+    onMessageReaction?: (data: { chatId: string; message: Message }) => void;
     onMessageDelivered?: (data: { clientMessageId: string; messageId: string }) => void;
     onMessageRead?: (data: { messageId: string; status: string; readAt?: Date }) => void;
     onTyping?: (isTyping: boolean, userId: string) => void;
@@ -295,6 +322,16 @@ export function useChatSocket(
       onMessage: (message) => {
         if (message.chatId === chatId) {
           options.onMessage?.(message);
+        }
+      },
+      onMessageDeleted: (data) => {
+        if (data.chatId === chatId) {
+          options.onMessageDeleted?.(data);
+        }
+      },
+      onMessageReaction: (data) => {
+        if (data.chatId === chatId) {
+          options.onMessageReaction?.(data);
         }
       },
       onMessageDelivered: (data) => {
