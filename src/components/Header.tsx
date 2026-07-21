@@ -1,5 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import SearchModal from './SearchModal';
+import { AppNotification, notificationsApi } from '../api/notifications';
+import { useAuthStore } from '../store/authStore';
+import { API_ORIGIN } from '../api/client';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
 
@@ -100,6 +105,81 @@ ${FONT_IMPORT}
   opacity: 1;
 }
 
+.notifications-wrap {
+  position: relative;
+}
+.notifications-panel {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(520px, calc(100vh - 90px));
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+.notifications-title {
+  padding: 8px 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+.notification-item {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 12px 'Syne', sans-serif;
+  text-align: left;
+}
+.notification-item:hover,
+.notification-item.unread {
+  background: var(--bg-elevated);
+}
+.notification-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--border-mid);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.notification-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.notification-copy {
+  min-width: 0;
+  line-height: 1.45;
+}
+.notification-time {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font: 10px 'DM Mono', monospace;
+}
+.notifications-empty {
+  padding: 24px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .header-inner {
     padding: 8px 12px;
@@ -134,6 +214,71 @@ const IconBell = () => (
 
 export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const token = useAuthStore((state) => state.token);
+  const navigate = useNavigate();
+
+  const loadNotifications = useCallback(async () => {
+    if (!token) return;
+    try {
+      const result = await notificationsApi.getAll();
+      setNotifications(result.items);
+      setUnreadCount(result.unreadCount);
+    } catch {
+      // Keep the header usable when a request is temporarily unavailable.
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void loadNotifications();
+    const interval = window.setInterval(() => void loadNotifications(), 30_000);
+    return () => window.clearInterval(interval);
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!token) return;
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5002', {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
+    socket.on('notification:new', (notification: AppNotification) => {
+      setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
+      setUnreadCount((current) => current + 1);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [token]);
+
+  const openNotifications = async () => {
+    setIsNotificationsOpen((current) => !current);
+    if (!isNotificationsOpen) await loadNotifications();
+  };
+
+  const notificationText = (notification: AppNotification) => {
+    const name = notification.actor.displayName || `@${notification.actor.username}`;
+    const actions: Record<AppNotification['type'], string> = {
+      LIKE: 'оценил(а) вашу публикацию',
+      COMMENT: 'оставил(а) комментарий к публикации',
+      FOLLOW: 'подписался(ась) на вас',
+      MESSAGE: 'отправил(а) вам сообщение',
+    };
+    return `${name} ${actions[notification.type]}`;
+  };
+
+  const openNotification = async (notification: AppNotification) => {
+    if (!notification.readAt) {
+      const result = await notificationsApi.markRead([notification.id]);
+      setUnreadCount(result.unreadCount);
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item));
+    }
+    setIsNotificationsOpen(false);
+    if (notification.entityType === 'post' && notification.entityId) navigate(`/feed?p=${notification.entityId}`);
+    else if (notification.entityType === 'chat' && notification.entityId) navigate(`/chats/${notification.entityId}`);
+    else navigate(`/profile/${notification.actor.username}`);
+  };
 
   return (
     <>
@@ -152,13 +297,39 @@ export default function Header() {
           </button>
 
           {/* Notifications button */}
-          <button 
-            className="header-btn"
-            aria-label="Уведомления"
-          >
-            <IconBell />
-            <span className="header-dot" />
-          </button>
+          <div className="notifications-wrap">
+            <button
+              className="header-btn"
+              onClick={() => void openNotifications()}
+              aria-label="Уведомления"
+              aria-expanded={isNotificationsOpen}
+            >
+              <IconBell />
+              {unreadCount > 0 && <span className="header-dot" />}
+            </button>
+            {isNotificationsOpen && (
+              <div className="notifications-panel" role="dialog" aria-label="Уведомления">
+                <div className="notifications-title">Уведомления</div>
+                {notifications.length === 0 ? (
+                  <div className="notifications-empty">Пока нет новых уведомлений</div>
+                ) : notifications.map((notification) => (
+                  <button
+                    key={notification.id}
+                    className={`notification-item ${notification.readAt ? '' : 'unread'}`}
+                    onClick={() => void openNotification(notification)}
+                  >
+                    <span className="notification-avatar">
+                      {notification.actor.avatar ? <img src={notification.actor.avatar.startsWith('http') ? notification.actor.avatar : `${API_ORIGIN}${notification.actor.avatar}`} alt="" /> : notification.actor.username[0]?.toUpperCase()}
+                    </span>
+                    <span className="notification-copy">
+                      {notificationText(notification)}
+                      <span className="notification-time">{new Date(notification.createdAt).toLocaleString('ru-RU')}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </header>
       

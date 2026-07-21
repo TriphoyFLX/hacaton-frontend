@@ -24,8 +24,6 @@ export default function Layout() {
 
   const immersive = isImmersiveRoute(pathname);
 
-  const hideHeader = immersive;
-
 
 
   return (
@@ -36,7 +34,7 @@ export default function Layout() {
 
       <div className="flex flex-1 flex-col ml-0 pb-[var(--app-bottom-nav)] md:ml-[200px] lg:ml-[220px] md:pb-0 min-h-0 min-w-0">
 
-        {!hideHeader && <Header />}
+        <Header />
 
         <main
 
@@ -44,7 +42,7 @@ export default function Layout() {
 
             immersive
 
-              ? 'overflow-hidden h-[calc(100dvh-var(--app-bottom-nav))] md:h-screen'
+              ? 'overflow-hidden h-[calc(100dvh-59px-var(--app-bottom-nav))] md:h-[calc(100dvh-59px)]'
 
               : 'overflow-auto'
 

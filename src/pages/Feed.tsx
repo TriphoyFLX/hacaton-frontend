@@ -3,10 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { postsApi, Post, PostComment } from '../api/posts';
 import { API_ORIGIN } from '../api/client';
 import { Chat, chatsApi } from '../api/chats';
+import { followsApi } from '../api/follows';
+import { useAuthStore } from '../store/authStore';
 import {
   Image, Video, Music, Heart, MessageCircle, Share2,
-  MoreHorizontal, TrendingUp, Clock, Bookmark, Send,
-  Play, Eye, ChevronDown, Bell, Search, Flame, Zap, ChevronRight, X
+  MoreHorizontal, Send, Eye, ChevronDown, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -446,6 +447,12 @@ ${FONT_IMPORT}
   font-size: 18px;
   font-weight: 700;
   color: var(--accent);
+  overflow: hidden;
+}
+.post-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .post-handle {
   font-family: 'DM Mono', monospace;
@@ -507,6 +514,15 @@ ${FONT_IMPORT}
   border-color: var(--border-hover);
   background: var(--bg-elevated);
 }
+.btn-follow.following {
+  color: var(--bg);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.btn-follow:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
 .btn-more {
   display: flex;
   align-items: center;
@@ -533,6 +549,19 @@ ${FONT_IMPORT}
   line-height: 1.7;
   font-weight: 400;
   margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+.post-hashtag {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.post-hashtag:hover {
+  text-decoration: underline;
 }
 .post-read-more {
   display: inline-flex;
@@ -776,6 +805,12 @@ ${FONT_IMPORT}
 .post-share-dialog h3 { margin: 0 0 5px; font-size: 18px; }.post-share-dialog p { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; }
 .post-share-chat { display: block; width: 100%; margin: 6px 0; padding: 11px; cursor: pointer; color: var(--text-primary); text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px 'Syne', sans-serif; }
 .post-share-chat:hover { border-color: var(--border-hover); background: var(--bg-hover); }.post-share-close { float: right; background: transparent; color: var(--text-secondary); border: 0; cursor: pointer; }
+.cp-hashtag-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+.cp-hashtag-hint { color: var(--text-muted); font: 10px 'DM Mono', monospace; }
+.cp-hashtag-add { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; background: transparent; color: var(--text-secondary); cursor: pointer; font: 10px 'DM Mono', monospace; }
+.cp-hashtag-add:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.feed-tag-filter { position: relative; z-index: 10; display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 16px; padding: 7px 10px; border: 1px solid var(--border-mid); border-radius: 7px; color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
+.feed-tag-filter button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 `;
 
 // ── Utils ──
@@ -873,9 +908,19 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
         className="cp-textarea"
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        placeholder="Что у вас нового?"
+        placeholder="Что у вас нового? Добавьте #хештег, чтобы публикацию было легче найти"
         rows={3}
       />
+      <div className="cp-hashtag-row">
+        <span className="cp-hashtag-hint">Хештеги: #музыка #новинка</span>
+        <button
+          type="button"
+          className="cp-hashtag-add"
+          onClick={() => setContent((current) => `${current}${current && !/\s$/.test(current) ? ' ' : ''}#`)}
+        >
+          + хештег
+        </button>
+      </div>
 
       {previews.length > 0 && (
         <div className="cp-preview">
@@ -952,9 +997,20 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
 }
 
 // ── Post Card ──
-function PostCard({ post, index }: { post: Post; index: number }) {
+function PostCard({
+  post,
+  index,
+  isFollowing,
+  canFollow,
+  onToggleFollow,
+}: {
+  post: Post;
+  index: number;
+  isFollowing: boolean;
+  canFollow: boolean;
+  onToggleFollow: (userId: string) => Promise<void>;
+}) {
   const navigate = useNavigate();
-  const [saved, setSaved] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
   const [likes, setLikes] = useState(post.likes);
@@ -971,6 +1027,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [shareStatus, setShareStatus] = useState('');
+  const [isFollowUpdating, setIsFollowUpdating] = useState(false);
 
   useEffect(() => {
     void postsApi.recordView(post.id)
@@ -982,6 +1039,31 @@ function PostCard({ post, index }: { post: Post; index: number }) {
   const displayContent = contentTruncated && !showMore
     ? post.content.slice(0, 200) + '…'
     : post.content;
+  const renderPostContent = (content: string) => {
+    const hashtagPattern = /#[\p{L}\p{N}_-]+/gu;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+
+    for (const match of content.matchAll(hashtagPattern)) {
+      const index = match.index ?? 0;
+      if (index > lastIndex) parts.push(content.slice(lastIndex, index));
+      const tag = match[0];
+      parts.push(
+        <button
+          type="button"
+          key={`${tag}-${index}`}
+          className="post-hashtag"
+          onClick={() => navigate(`/feed?tag=${encodeURIComponent(tag.slice(1))}`)}
+        >
+          {tag}
+        </button>,
+      );
+      lastIndex = index + tag.length;
+    }
+
+    if (lastIndex < content.length) parts.push(content.slice(lastIndex));
+    return parts.length ? parts : content;
+  };
 
   const renderMedia = () => {
     const mediaList = (post as any).media;
@@ -1110,6 +1192,18 @@ function PostCard({ post, index }: { post: Post; index: number }) {
       setShareStatus('Не удалось отправить публикацию');
     }
   };
+  const toggleFollow = async () => {
+    if (isFollowUpdating) return;
+    setIsFollowUpdating(true);
+    setActionError('');
+    try {
+      await onToggleFollow(post.authorId);
+    } catch {
+      setActionError('Не удалось обновить подписку. Попробуйте ещё раз.');
+    } finally {
+      setIsFollowUpdating(false);
+    }
+  };
 
   return (
     <motion.article
@@ -1126,11 +1220,15 @@ function PostCard({ post, index }: { post: Post; index: number }) {
             onClick={() => post?.author?.username && navigate(`/profile/${post.author.username}`)}
           >
             <div className="post-avatar">
-              {post?.author?.username?.[0]?.toUpperCase() ?? '?'}
+              {post.author.avatar ? (
+                <img src={post.author.avatar.startsWith('http') ? post.author.avatar : `${API_ORIGIN}${post.author.avatar}`} alt="" />
+              ) : (
+                post?.author?.username?.[0]?.toUpperCase() ?? '?'
+              )}
             </div>
             <div>
               <div className="post-handle">@{post?.author?.username ?? 'unknown'}</div>
-              <div className="post-name">{post?.author?.username ?? 'Unknown'}</div>
+              <div className="post-name">{post?.author?.displayName || post?.author?.username || 'Unknown'}</div>
               <div className="post-meta">
                 <span className="post-time">{post?.createdAt ? timeAgo(post.createdAt) : ''}</span>
                 <span className="post-dot">·</span>
@@ -1143,7 +1241,15 @@ function PostCard({ post, index }: { post: Post; index: number }) {
           </div>
 
           <div className="post-actions-top">
-            <button className="btn-follow">Follow</button>
+            {canFollow && (
+              <button
+                className={`btn-follow ${isFollowing ? 'following' : ''}`}
+                onClick={() => void toggleFollow()}
+                disabled={isFollowUpdating}
+              >
+                {isFollowing ? 'Вы подписаны' : 'Подписаться'}
+              </button>
+            )}
             <div className="post-more-wrap">
               <button className="btn-more" onClick={() => setShowMoreMenu((value) => !value)} aria-label="Действия с публикацией">
                 <MoreHorizontal size={16} />
@@ -1159,7 +1265,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
 
       {post?.content && (
         <div className="post-body">
-          <p className="post-text">{displayContent}</p>
+          <p className="post-text">{renderPostContent(displayContent)}</p>
           {contentTruncated && (
             <button className="post-read-more" onClick={() => setShowMore(v => !v)}>
               {showMore ? 'Свернуть' : 'Читать далее'}
@@ -1184,14 +1290,6 @@ function PostCard({ post, index }: { post: Post; index: number }) {
           <button className="stat-btn" onClick={() => void copyLink()} title="Копировать ссылку">
             <Share2 size={15} />
             {copied && <span className="post-copy-status">Скопировано</span>}
-          </button>
-          <span className="stat-spacer" />
-          <button
-            className={`stat-btn ${saved ? 'saved' : ''}`}
-            onClick={() => setSaved(v => !v)}
-            style={{ padding: '6px 8px' }}
-          >
-            <Heart size={15} style={{ transform: 'rotate(-45deg)' }} />
           </button>
         </div>
       </div>
@@ -1222,41 +1320,47 @@ function PostCard({ post, index }: { post: Post; index: number }) {
   );
 }
 
-// ── Trending Tag ──
-function TrendingTag({ label, count }: { label: string; count: string }) {
-  return (
-    <div className="trending-tag">
-      <div>
-        <div className="trending-tag-name">#{label}</div>
-        <div className="trending-tag-count">{count} постов</div>
-      </div>
-      <Flame size={14} color="#6b6b6b" />
-    </div>
-  );
-}
-
 // ── Main Feed ──
 export default function Feed() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const selectedTag = new URLSearchParams(location.search).get('tag')?.replace(/^#/, '').trim() || '';
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'trending' | 'latest'>('trending');
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await postsApi.getPosts();
+      const data = await postsApi.getPosts(activeTab, selectedTag);
       setPosts(data ?? []);
     } catch {
       setPosts([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTab, selectedTag]);
 
   useEffect(() => {
-    fetchPosts();
+    void fetchPosts();
   }, [fetchPosts]);
+
+  useEffect(() => {
+    void followsApi.getFollowingIds().then(setFollowingIds).catch(() => setFollowingIds([]));
+  }, []);
+
+  const toggleFollow = useCallback(async (userId: string) => {
+    const isFollowing = followingIds.includes(userId);
+    const response = isFollowing
+      ? await followsApi.unfollow(userId)
+      : await followsApi.follow(userId);
+
+    setFollowingIds((current) => response.following
+      ? [...new Set([...current, userId])]
+      : current.filter((id) => id !== userId));
+  }, [followingIds]);
 
   useEffect(() => {
     const postId = new URLSearchParams(location.search).get('p');
@@ -1297,20 +1401,16 @@ export default function Feed() {
           </button>
         </div>
 
-        <CreatePostBlock onPostCreated={fetchPosts} />
-
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="trending-box">
-          <div className="trending-header">
-            <Flame size={14} color="#f97316" />
-            <span className="trending-title">Тренды</span>
+        {selectedTag && (
+          <div className="feed-tag-filter">
+            Публикации с #{selectedTag}
+            <button type="button" onClick={() => navigate('/feed')} aria-label="Сбросить фильтр">
+              <X size={14} />
+            </button>
           </div>
-          <TrendingTag label="дизайн" count="12.4K" />
-          <TrendingTag label="разработка" count="9.2K" />
-          <TrendingTag label="искусственный интеллект" count="31K" />
-          <button className="trending-show-more">
-            Показать ещё <ChevronRight size={12} style={{ display: 'inline', verticalAlign: 'middle' }} />
-          </button>
-        </motion.div>
+        )}
+
+        <CreatePostBlock onPostCreated={fetchPosts} />
 
         <AnimatePresence>
           {loading && (
@@ -1339,7 +1439,14 @@ export default function Feed() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           <AnimatePresence mode="popLayout">
             {posts.map((post, idx) => (
-              <PostCard key={post.id} post={post} index={idx} />
+              <PostCard
+                key={post.id}
+                post={post}
+                index={idx}
+                isFollowing={followingIds.includes(post.authorId)}
+                canFollow={Boolean(currentUserId && currentUserId !== post.authorId)}
+                onToggleFollow={toggleFollow}
+              />
             ))}
           </AnimatePresence>
 

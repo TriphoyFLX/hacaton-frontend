@@ -21,6 +21,8 @@ export interface Post {
   author: {
     id: string;
     username: string;
+    displayName?: string | null;
+    avatar?: string | null;
   };
 }
 
@@ -52,8 +54,8 @@ export const postsApi = {
     return response.data;
   },
   
-  getPosts: async () => {
-    const response = await api.get('/posts');
+  getPosts: async (sort: 'latest' | 'trending' = 'latest', tag?: string) => {
+    const response = await api.get('/posts', { params: { sort, ...(tag && { tag }) } });
     return response.data;
   },
 

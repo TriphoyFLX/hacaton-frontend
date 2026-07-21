@@ -10,15 +10,29 @@ interface GenerationResult {
   title?: string;
   tags?: string;
   prompt?: string;
+  settings?: GenerationSettings;
   createdAt?: string;
   progress?: number;
   cost?: number;
   runtime?: number;
-  response_type?: string;
-  full_response?: any;
   timestamp?: number;
   model?: string;
   request_id?: number | string;
+}
+
+type TrackType = 'vocal' | 'instrumental';
+
+interface GenerationSettings {
+  genre: string;
+  mood: string;
+  energy: number;
+  bpm: number;
+  language: string;
+  trackType: TrackType;
+  voice: string;
+  duration: string;
+  translateInput: boolean;
+  model: 'v5.5';
 }
 
 const STORAGE_KEY = 'ai-generated-tracks';
@@ -295,6 +309,160 @@ ${FONT_IMPORT}
   border-color: var(--border-hover);
   color: var(--text-primary);
   background: var(--bg-elevated);
+}
+.preset-btn.active {
+  border-color: var(--accent);
+  color: var(--bg);
+  background: var(--accent);
+}
+
+/* ── GENERATION SETTINGS ── */
+.settings-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+}
+.settings-toggle span:last-child {
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.settings-panel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.settings-grid .form-group {
+  margin-bottom: 0;
+}
+.form-select {
+  appearance: none;
+  cursor: pointer;
+}
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.form-range {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.range-value {
+  min-width: 42px;
+  color: var(--text-primary);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  text-align: right;
+}
+.segmented-control {
+  display: flex;
+  gap: 6px;
+}
+.segmented-control button {
+  flex: 1;
+  padding: 9px 10px;
+  border: 1px solid var(--border-mid);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+}
+.segmented-control button.active {
+  border-color: var(--accent);
+  color: var(--bg);
+  background: var(--accent);
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0 0;
+}
+.toggle-copy {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.toggle-copy small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+.switch input {
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+.slider {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border-mid);
+  border-radius: 999px;
+  background: var(--bg);
+  cursor: pointer;
+  transition: 0.15s;
+}
+.slider::before {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  content: '';
+  transition: 0.15s;
+}
+.switch input:checked + .slider {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.switch input:checked + .slider::before {
+  transform: translateX(16px);
+  background: var(--bg);
+}
+.generation-preview {
+  margin-top: 16px;
+  padding: 12px;
+  border-left: 2px solid var(--border-mid);
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  line-height: 1.6;
+}
+@media (max-width: 640px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── SUBMIT BUTTON ── */
@@ -756,14 +924,25 @@ export default function AI() {
   const [title, setTitle] = useState('Свобода');
   const [tags, setTags] = useState('Винтажный джаз-лаундж, классические стандарты, плавные соло на трубе, контрабас и знойный женский вокал');
   const [prompt, setPrompt] = useState('');
+  const [settings, setSettings] = useState<GenerationSettings>({
+    genre: 'Джаз',
+    mood: 'Тёплое',
+    energy: 55,
+    bpm: 92,
+    language: 'Русский',
+    trackType: 'vocal',
+    voice: 'Женский вокал',
+    duration: 'Стандартная',
+    translateInput: true,
+    model: 'v5.5',
+  });
+  const [showSettings, setShowSettings] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<GenerationResult[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [apiResponse, setApiResponse] = useState<any>(null);
-  const [showApiResponse, setShowApiResponse] = useState(false);
 
   // API ключ в backend для безопасности
 
@@ -793,7 +972,7 @@ export default function AI() {
             setGeneratedAudio(generatedAudio);
             setProgress(progress);
             // Продолжаем опрос результата
-            pollForResult(generatedAudio.id);
+            pollForResult(generatedAudio.id, generatedAudio);
           } else {
             // Если прошло слишком много времени, очищаем состояние
             localStorage.removeItem(GENERATION_KEY);
@@ -837,7 +1016,39 @@ export default function AI() {
     }
   };
 
+  const updateSettings = <K extends keyof GenerationSettings>(key: K, value: GenerationSettings[K]) => {
+    setSettings(current => ({ ...current, [key]: value }));
+  };
+
+  const buildFinalTags = () => {
+    const vocalPart = settings.trackType === 'instrumental'
+      ? 'инструментальная композиция, без вокала'
+      : `${settings.voice}, вокал на ${settings.language} языке`;
+
+    return [
+      settings.genre,
+      tags.trim(),
+      settings.mood.toLowerCase(),
+      `энергия ${settings.energy}%`,
+      `${settings.bpm} BPM`,
+      vocalPart,
+      `длительность: ${settings.duration.toLowerCase()}`,
+    ].filter(Boolean).join(', ');
+  };
+
   const generateMusic = async () => {
+    const finalTags = buildFinalTags();
+    const finalPrompt = settings.trackType === 'vocal' ? prompt.trim() : '';
+
+    if (!title.trim() || !tags.trim()) {
+      setError('Укажите название и основной музыкальный стиль.');
+      return;
+    }
+    if (title.trim().length > 100 || finalTags.length > 1000 || finalPrompt.length > 5000) {
+      setError('Проверьте длину полей: название — до 100, стиль — до 1000, текст песни — до 5000 символов.');
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     setGeneratedAudio(null);
@@ -845,11 +1056,11 @@ export default function AI() {
 
     try {
       const requestBody = {
-        title: title,
-        tags: tags,
-        ...(prompt && { prompt: prompt }),
-        translate_input: true,
-        model: 'v5.5'
+        title: title.trim(),
+        tags: finalTags,
+        ...(finalPrompt && { prompt: finalPrompt }),
+        translate_input: settings.translateInput,
+        model: settings.model
       };
 
       const response = await fetch('/api/generate-music', {
@@ -866,23 +1077,21 @@ export default function AI() {
       }
 
       const data = await response.json();
-      console.log("GENERATION RESPONSE FROM BACKEND:", data);
-      
-      // Сохраняем полный ответ API для отображения
-      setApiResponse(data);
-      setShowApiResponse(true);
-      
       const requestId = data.request_id || data.id;
-      console.log("USING REQUEST ID:", requestId);
+      if (!requestId) {
+        throw new Error('Сервис не вернул идентификатор генерации.');
+      }
       
-      const generationState = {
+      const generationState: GenerationResult = {
         id: requestId,
         status: 'starting',
         audio_urls: [],
         images: [],
-        title: title,
-        tags: tags,
-        prompt: prompt,
+        title: title.trim(),
+        tags: finalTags,
+        prompt: finalPrompt,
+        settings,
+        model: settings.model,
         createdAt: new Date().toISOString(),
         progress: 0
       };
@@ -897,7 +1106,7 @@ export default function AI() {
         startTime: Date.now()
       }));
       
-      pollForResult(requestId);
+      pollForResult(requestId, generationState);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка генерации');
@@ -908,11 +1117,8 @@ export default function AI() {
     }
   };
 
-  const pollForResult = async (id: number) => {
-    console.log("STARTING POLLING FOR ID:", id);
-    
+  async function pollForResult(id: number | string, generationContext?: GenerationResult) {
     if (!id) {
-      console.error("ERROR: No ID provided for polling");
       setError("Ошибка: отсутствует ID генерации");
       setIsGenerating(false);
       return;
@@ -924,8 +1130,6 @@ export default function AI() {
     const poll = async () => {
       try {
         attempts++;
-        console.log("POLLING ID:", id, "ATTEMPT:", attempts);
-        
         let newProgress;
         if (attempts <= 20) {
           newProgress = Math.min(30, Math.floor((attempts / 20) * 30));
@@ -948,13 +1152,9 @@ export default function AI() {
         if (response.ok) {
           const result = await response.json();
           
-          // Обновляем API ответ для отображения актуального статуса
-          setApiResponse(result);
-
           if (result.status === 'success' && result.result) {
-            // Извлекаем аудио URLs из массива result
+            // Извлекаем аудио URLs из массива result.
             const audioUrls = result.result.filter((item: any) => typeof item === 'string') as string[];
-            // Извлекаем изображения из массива result
             const images = result.result
               .filter((item: any) => typeof item === 'object' && item !== null && 'image' in item)
               .map((item: any) => item.image);
@@ -964,13 +1164,15 @@ export default function AI() {
               status: 'success',
               audio_urls: audioUrls,
               images: images,
-              title: result.parameters?.title || title,
-              tags: result.parameters?.tags || tags,
-              prompt: prompt,
+              title: result.parameters?.title || generationContext?.title || title,
+              tags: result.parameters?.tags || generationContext?.tags || buildFinalTags(),
+              prompt: generationContext?.prompt ?? prompt,
+              settings: generationContext?.settings ?? settings,
               createdAt: new Date().toISOString(),
               progress: 100,
               cost: result.cost,
-              runtime: result.runtime
+              runtime: result.runtime,
+              model: result.model ?? generationContext?.model ?? settings.model
             };
             
             setGeneratedAudio(completedTrack);
@@ -1011,7 +1213,7 @@ export default function AI() {
     };
 
     poll();
-  };
+  }
 
   const presetStyles = [
     { name: 'Джаз', tags: 'Винтажный джаз-лаундж, классические стандарты, плавные соло на трубе, контрабас и знойный женский вокал' },
@@ -1026,15 +1228,17 @@ export default function AI() {
     setTags(tags);
   };
 
-  // ── SVG Icons ──
-  const IconWand = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M15 4V2m0 2v2m0-2h2m-2 0h-2"/>
-      <path d="M10.5 21l-7-7 11-11 7 7-11 11z"/>
-      <path d="M8 19l-3 3"/>
-      <path d="M21 6l-3-3"/>
-    </svg>
-  );
+  const creativePresets: Array<{ name: string; tags: string; settings: Partial<GenerationSettings> }> = [
+    { name: 'Ло-фай', tags: 'мягкий lo-fi hip-hop, виниловый треск, Rhodes и спокойный бит', settings: { genre: 'Ло-фай', mood: 'Уютное', energy: 30, bpm: 78, trackType: 'instrumental', duration: 'Короткая' } },
+    { name: 'Клубный трек', tags: 'современный house, плотный бас, яркий дроп и чистый клубный звук', settings: { genre: 'Электроника', mood: 'Эйфоричное', energy: 90, bpm: 126, trackType: 'vocal', voice: 'Женский вокал' } },
+    { name: 'Киносаундтрек', tags: 'широкий симфонический оркестр, кинематографичные струнные и эпичная кульминация', settings: { genre: 'Саундтрек', mood: 'Эпичное', energy: 65, bpm: 88, trackType: 'instrumental', duration: 'Длинная' } },
+    { name: 'Акустика', tags: 'интимная акустическая гитара, тёплое фортепиано и живая камерная запись', settings: { genre: 'Акустика', mood: 'Тёплое', energy: 35, bpm: 82, trackType: 'vocal', voice: 'Мужской вокал' } },
+  ];
+
+  const applyCreativePreset = (preset: typeof creativePresets[number]) => {
+    setTags(preset.tags);
+    setSettings(current => ({ ...current, ...preset.settings }));
+  };
 
   return (
     <div className="ai-root">
@@ -1053,7 +1257,12 @@ export default function AI() {
         <div className="ai-topbar">
           <div className="topbar-brand">
             <div className="brand-mark">
-              <IconWand />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                <path d="M15 4V2m0 2v2m0-2h2m-2 0h-2"/>
+                <path d="M10.5 21l-7-7 11-11 7 7-11 11z"/>
+                <path d="M8 19l-3 3"/>
+                <path d="M21 6l-3-3"/>
+              </svg>
             </div>
             <span className="brand-text">AI Генерация</span>
           </div>
@@ -1089,17 +1298,19 @@ export default function AI() {
               onChange={(e) => setTitle(e.target.value)}
               className="form-input"
               placeholder="Введите название"
+              maxLength={100}
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Музыкальные стили</label>
+            <label className="form-label">Основной музыкальный стиль</label>
             <textarea
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               className="form-input form-textarea"
               placeholder="Опишите желаемый музыкальный стиль"
               rows={3}
+              maxLength={700}
             />
           </div>
 
@@ -1119,13 +1330,109 @@ export default function AI() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Текст песни (опционально)</label>
+            <label className="form-label">Сценарии звучания</label>
+            <div className="presets">
+              {creativePresets.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  onClick={() => applyCreativePreset(preset)}
+                  className="preset-btn"
+                >
+                  {preset.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="settings-toggle"
+            onClick={() => setShowSettings(current => !current)}
+            aria-expanded={showSettings}
+          >
+            <span>Настроить звучание</span>
+            <span>{showSettings ? 'Свернуть −' : 'Открыть +'}</span>
+          </button>
+
+          {showSettings && (
+            <div className="settings-panel">
+              <div className="settings-grid">
+                <div className="form-group">
+                  <label className="form-label">Жанр</label>
+                  <select className="form-input form-select" value={settings.genre} onChange={(e) => updateSettings('genre', e.target.value)}>
+                    <option>Джаз</option><option>Поп</option><option>Рок</option><option>Хип-хоп</option>
+                    <option>Электроника</option><option>Ло-фай</option><option>Акустика</option><option>Саундтрек</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Настроение</label>
+                  <select className="form-input form-select" value={settings.mood} onChange={(e) => updateSettings('mood', e.target.value)}>
+                    <option>Тёплое</option><option>Эйфоричное</option><option>Меланхоличное</option><option>Эпичное</option><option>Мрачное</option><option>Романтичное</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Энергия</label>
+                  <div className="range-row">
+                    <input className="form-range" type="range" min="10" max="100" step="5" value={settings.energy} onChange={(e) => updateSettings('energy', Number(e.target.value))} />
+                    <span className="range-value">{settings.energy}%</span>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Темп</label>
+                  <div className="range-row">
+                    <input className="form-range" type="range" min="60" max="180" step="1" value={settings.bpm} onChange={(e) => updateSettings('bpm', Number(e.target.value))} />
+                    <span className="range-value">{settings.bpm}</span>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Язык вокала</label>
+                  <select className="form-input form-select" value={settings.language} disabled={settings.trackType === 'instrumental'} onChange={(e) => updateSettings('language', e.target.value)}>
+                    <option>Русский</option><option>Английский</option><option>Испанский</option><option>Французский</option><option>Без текста</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Тип голоса</label>
+                  <select className="form-input form-select" value={settings.voice} disabled={settings.trackType === 'instrumental'} onChange={(e) => updateSettings('voice', e.target.value)}>
+                    <option>Женский вокал</option><option>Мужской вокал</option><option>Дуэт</option><option>Хор</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Длительность</label>
+                  <select className="form-input form-select" value={settings.duration} onChange={(e) => updateSettings('duration', e.target.value)}>
+                    <option>Короткая</option><option>Стандартная</option><option>Длинная</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Режим</label>
+                  <div className="segmented-control">
+                    <button type="button" className={settings.trackType === 'vocal' ? 'active' : ''} onClick={() => updateSettings('trackType', 'vocal')}>Вокал</button>
+                    <button type="button" className={settings.trackType === 'instrumental' ? 'active' : ''} onClick={() => updateSettings('trackType', 'instrumental')}>Инструментал</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="toggle-row">
+                <div className="toggle-copy">Переводить описание для модели<small>Помогает Suno точнее интерпретировать русский текст</small></div>
+                <label className="switch">
+                  <input type="checkbox" checked={settings.translateInput} onChange={(e) => updateSettings('translateInput', e.target.checked)} />
+                  <span className="slider" />
+                </label>
+              </div>
+              <div className="generation-preview">В генератор уйдёт: {buildFinalTags()}</div>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">{settings.trackType === 'instrumental' ? 'Текст песни отключён для инструментала' : 'Текст песни (опционально)'}</label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="form-input form-textarea"
-              placeholder="Введите текст песни, если хотите добавить вокал"
+              placeholder={settings.trackType === 'instrumental' ? 'Инструментальный режим: текст не будет отправлен' : 'Введите текст песни, если хотите добавить вокал'}
               rows={6}
+              maxLength={5000}
+              disabled={settings.trackType === 'instrumental'}
             />
           </div>
 
@@ -1147,72 +1454,6 @@ export default function AI() {
             )}
           </button>
         </div>
-
-        {/* API Response */}
-        {apiResponse && showApiResponse && (
-          <div className="api-response-card">
-            <div className="api-response-header">
-              <span className="api-response-title">Ответ API GenAPI</span>
-              <button 
-                className="api-response-toggle"
-                onClick={() => setShowApiResponse(!showApiResponse)}
-              >
-                {showApiResponse ? 'Скрыть' : 'Показать'}
-              </button>
-            </div>
-            
-            <div className="api-response-content">
-              <div className="api-response-field">
-                <div className="api-response-label">Статус:</div>
-                <span className={`api-response-status status-${apiResponse.status || 'processing'}`}>
-                  {apiResponse.status || 'processing'}
-                </span>
-              </div>
-              
-              {apiResponse.request_id && (
-                <div className="api-response-field">
-                  <div className="api-response-label">Request ID:</div>
-                  <div className="api-response-value">{apiResponse.request_id}</div>
-                </div>
-              )}
-              
-              {apiResponse.model && (
-                <div className="api-response-field">
-                  <div className="api-response-label">Модель:</div>
-                  <div className="api-response-value">{apiResponse.model}</div>
-                </div>
-              )}
-              
-              {apiResponse.cost !== undefined && (
-                <div className="api-response-field">
-                  <div className="api-response-label">Стоимость:</div>
-                  <div className="api-response-value">{apiResponse.cost} кредитов</div>
-                </div>
-              )}
-              
-              {apiResponse.progress !== undefined && (
-                <div className="api-response-field">
-                  <div className="api-response-label">Прогресс:</div>
-                  <div className="api-response-value">{apiResponse.progress}%</div>
-                </div>
-              )}
-              
-              {apiResponse.timestamp && (
-                <div className="api-response-field">
-                  <div className="api-response-label">Время:</div>
-                  <div className="api-response-value">{new Date(apiResponse.timestamp * 1000).toLocaleString('ru-RU')}</div>
-                </div>
-              )}
-              
-              <div className="api-response-field">
-                <div className="api-response-label">Полный ответ:</div>
-                <div className="api-response-json">
-                  {JSON.stringify(apiResponse, null, 2)}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Progress */}
         {generatedAudio && generatedAudio.status === 'starting' && (
