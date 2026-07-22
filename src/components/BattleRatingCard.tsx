@@ -10,6 +10,7 @@ export type BattleRatingInfo = {
   rankMin?: number;
   rankMax?: number;
   nextRankLabel?: string | null;
+  nextRankMin?: number | null;
   progressInRank?: number;
   scaleProgress?: number;
 };
