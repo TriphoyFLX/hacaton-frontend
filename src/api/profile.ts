@@ -16,6 +16,19 @@ export interface UserProfile {
   followersCount?: number;
   followingCount?: number;
   isFollowing?: boolean;
+  battleElo?: number;
+  battleWins?: number;
+  battleLosses?: number;
+  battleDraws?: number;
+  battleGames?: number;
+  rankId?: string;
+  rankLabel?: string;
+  rankMin?: number;
+  rankMax?: number;
+  nextRankLabel?: string | null;
+  nextRankMin?: number | null;
+  progressInRank?: number;
+  scaleProgress?: number;
 }
 
 export interface UpdateProfileData {

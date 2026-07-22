@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save, Headphones, Sliders } from 'lucide-react';
-import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, BattleRatingResult, User, Battle, BattleRecording } from '../api/battles';
+import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save, Headphones, Sliders, Swords, Search } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, getMyBattleRating, joinBattleQueue, getBattleQueueStatus, leaveBattleQueue, BattleRatingResult, BattleRatingSnapshot, User, Battle, BattleRecording } from '../api/battles';
+import BattleRatingCard from '../components/BattleRatingCard';
 import { useAuthStore } from '../store/authStore';
 import { API_ORIGIN } from '../api/client';
 import {
@@ -916,7 +918,7 @@ export default function RapBattleNew() {
   const [lastSaved, setLastSaved] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [currentPhase, setCurrentPhase] = useState<'waiting'|'creating'|'selecting_beat_creation'|'selecting_opponent'|'inviting'|'waiting_for_opponent'|'selecting_beat'|'waiting_for_beat'|'user1_turn'|'user2_turn'|'reviewing_recording'|'mutual_judging'|'waiting_for_opponent_rating'|'finished'|'history'>('waiting');
+  const [currentPhase, setCurrentPhase] = useState<'waiting'|'creating'|'queue_setup'|'queue_searching'|'selecting_beat_creation'|'selecting_opponent'|'inviting'|'waiting_for_opponent'|'selecting_beat'|'waiting_for_beat'|'user1_turn'|'user2_turn'|'reviewing_recording'|'mutual_judging'|'waiting_for_opponent_rating'|'finished'|'history'>('waiting');
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedOpponent, setSelectedOpponent] = useState<User | null>(null);
   const [currentBattle, setCurrentBattle] = useState<Battle | null>(null);
@@ -924,6 +926,10 @@ export default function RapBattleNew() {
   const [pendingInvitations, setPendingInvitations] = useState<Battle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [myRating, setMyRating] = useState<BattleRatingSnapshot | null>(null);
+  const [queueSize, setQueueSize] = useState(0);
+  const [opponentFilter, setOpponentFilter] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [battleTitle, setBattleTitle] = useState('');
   const [battleDescription, setBattleDescription] = useState('');
@@ -1087,7 +1093,46 @@ export default function RapBattleNew() {
     }
     loadAvailableUsers();
     loadUserBattles();
+    loadMyRating();
   }, []);
+
+  useEffect(() => {
+    const challengeId = searchParams.get('challenge');
+    if (!challengeId || !availableUsers.length) return;
+    const opp = availableUsers.find((u) => u.id === challengeId);
+    if (!opp) return;
+    setSelectedOpponent(opp);
+    setBattleTitle((t) => t || `Баттл vs @${opp.username}`);
+    setCurrentPhase('creating');
+    setSearchParams({}, { replace: true });
+  }, [searchParams, availableUsers, setSearchParams]);
+
+  useEffect(() => {
+    if (currentPhase !== 'queue_searching') return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await getBattleQueueStatus();
+        if (cancelled) return;
+        if (status.status === 'matched') {
+          await enterMatchedBattle(status.battle);
+          return;
+        }
+        if (status.status === 'waiting') {
+          setQueueSize(status.queueSize);
+          if (status.rank) setMyRating(status.rank as BattleRatingSnapshot);
+        }
+      } catch {
+        /* keep polling */
+      }
+    };
+    void poll();
+    const id = window.setInterval(() => void poll(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [currentPhase]);
 
   useEffect(() => {
     if (!currentBattle) return;
@@ -1099,6 +1144,68 @@ export default function RapBattleNew() {
 
   const loadAvailableUsers  = async () => { try { setAvailableUsers(await getAvailableUsers()); } catch { setError('Не удалось загрузить пользователей'); } };
   const loadUserBattles     = async () => { try { setUserBattles(await getUserBattles()); } catch { setError('Не удалось загрузить баттлы'); } };
+  const loadMyRating = async () => {
+    try { setMyRating(await getMyBattleRating()); } catch { /* optional */ }
+  };
+
+  const enterMatchedBattle = async (battle: Battle) => {
+    setCurrentBattle(battle);
+    if (battle.beatUrl) setBeatUrl(resolveMediaUrl(battle.beatUrl));
+    const isCreator = battle.creatorId === user?.id;
+    if (battle.status === 'USER1_TURN') {
+      setCurrentPhase(isCreator ? 'user1_turn' : 'waiting_for_beat');
+    } else if (battle.status === 'USER2_TURN') {
+      setCurrentPhase(isCreator ? 'waiting_for_beat' : 'user2_turn');
+    } else if (battle.status === 'JUDGING') {
+      setCurrentPhase('mutual_judging');
+    } else if (battle.status === 'SELECTING_BEAT') {
+      setCurrentPhase(isCreator ? 'selecting_beat' : 'waiting_for_beat');
+    } else {
+      setCurrentPhase(isCreator ? 'user1_turn' : 'waiting_for_beat');
+    }
+    await loadMyRating();
+  };
+
+  const startRankedQueue = async () => {
+    if (!beatFile && !beatUrl) {
+      setError('Сначала загрузите бит для ranked-очереди');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      let url = beatUrl;
+      let name = beatFile?.name || 'beat';
+      if (beatFile) {
+        const uploaded = await uploadBeatFile(beatFile);
+        url = uploaded.url;
+        name = beatFile.name;
+        setBeatUrl(resolveMediaUrl(url));
+      }
+      if (!url) throw new Error('Не удалось загрузить бит');
+      const result = await joinBattleQueue({
+        title: battleTitle.trim() || 'Ranked Battle',
+        beatUrl: url,
+        beatName: name,
+      });
+      if (result.status === 'matched') {
+        await enterMatchedBattle(result.battle);
+      } else if (result.status === 'waiting') {
+        setQueueSize(result.queueSize);
+        setMyRating(result.rank as BattleRatingSnapshot);
+        setCurrentPhase('queue_searching');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось встать в очередь');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelRankedQueue = async () => {
+    try { await leaveBattleQueue(); } catch {}
+    setCurrentPhase('waiting');
+  };
 
   const loadPendingInvitations = async () => {
     try {
@@ -1134,9 +1241,10 @@ export default function RapBattleNew() {
           return resolveMediaUrl(upd.beatUrl);
         });
       }
-      if (upd.status !== currentBattle.status) {
-        if (upd.status === 'USER1_TURN')  setCurrentPhase('user1_turn');
-        else if (upd.status === 'USER2_TURN') setCurrentPhase('user2_turn');
+      if (upd.status !== currentBattle.status || currentPhase === 'waiting_for_beat') {
+        const isCreator = String(upd.creatorId) === user?.id || String(upd.creator?.id) === user?.id;
+        if (upd.status === 'USER1_TURN')  setCurrentPhase(isCreator ? 'user1_turn' : 'waiting_for_beat');
+        else if (upd.status === 'USER2_TURN') setCurrentPhase(isCreator ? 'waiting_for_beat' : 'user2_turn');
         else if (upd.status === 'JUDGING')    setCurrentPhase('mutual_judging');
         else if (upd.status === 'FINISHED')   setCurrentPhase('mutual_judging');
         else if (upd.status === 'CANCELLED')  { setCurrentPhase('waiting'); setCurrentBattle(null); setBeatUrl(''); }
@@ -1438,7 +1546,7 @@ export default function RapBattleNew() {
     if (currentPhase==='waiting') {
       loadPendingInvitations();
       const i=setInterval(loadPendingInvitations,5000); return ()=>clearInterval(i);
-    } else if (currentPhase==='waiting_for_opponent') {
+    } else if (currentPhase==='waiting_for_opponent' || currentPhase==='waiting_for_beat') {
       const i=setInterval(checkBattleStatus,1500); return ()=>clearInterval(i);
     } else if (currentPhase==='user1_turn'||currentPhase==='user2_turn') {
       const i=setInterval(checkBattleStatus,1000); return ()=>clearInterval(i);
@@ -1539,13 +1647,78 @@ export default function RapBattleNew() {
     <div className="rb-hero">
       <div className="rb-hero-icon"><Users/></div>
       <div className="rb-hero-title">Рэп Баттл</div>
-      <div className="rb-hero-desc">Соревнования в реальном времени</div>
+      <div className="rb-hero-desc">Пригласи соперника или встань в очередь по рейтингу</div>
+      {myRating && (
+        <div style={{ width: '100%', maxWidth: 420, margin: '0 auto 18px', textAlign: 'left' }}>
+          <BattleRatingCard rating={myRating} compact />
+        </div>
+      )}
       <div className="rb-hero-actions">
         <button onClick={()=>setCurrentPhase('creating')} className="rb-btn rb-btn-primary tall full">
-          <Sparkles/> Создать баттл
+          <Send/> Пригласить в баттл
+        </button>
+        <button onClick={()=>setCurrentPhase('queue_setup')} className="rb-btn rb-btn-primary tall full">
+          <Search/> Найти по рейтингу
         </button>
         <button onClick={()=>setCurrentPhase('history')} className="rb-btn rb-btn-ghost tall full">
           <Trophy/> История баттлов
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderQueueSetupPhase = () => (
+    <div>
+      <div className="rb-card-hd">
+        <div>
+          <div className="rb-card-title">Очередь по рейтингу</div>
+          <div className="rb-card-sub">Подбор соперника ближайшего Elo. Нужен бит.</div>
+        </div>
+        <button onClick={()=>setCurrentPhase('waiting')} className="rb-btn rb-btn-ghost">Отмена</button>
+      </div>
+      {myRating && <BattleRatingCard rating={myRating} compact style={{ marginBottom: 14 }} />}
+      <div className="rb-card">
+        <span className="rb-section-label">Название (опционально)</span>
+        <div className="rb-field rb-mb0">
+          <input className="rb-input" value={battleTitle} onChange={e=>setBattleTitle(e.target.value)} placeholder="Ranked Battle"/>
+        </div>
+      </div>
+      <div className="rb-card">
+        <span className="rb-section-label">Бит</span>
+        <label>
+          <div className="rb-upload-zone">
+            <Upload/>
+            <div className="rb-upload-label">Нажмите для загрузки</div>
+            <div className="rb-upload-hint">MP3, WAV — до 10 MB</div>
+          </div>
+          <input type="file" accept="audio/mp3,audio/wav,audio/mpeg" className="hidden" onChange={e=>e.target.files?.[0]&&handleBeatUpload(e.target.files[0])}/>
+        </label>
+        {beatFile && (
+          <div className="rb-beat-row rb-mt8">
+            <div className="rb-beat-icon"><Disc style={{width:14,height:14,color:'var(--t3)'}}/></div>
+            <span className="rb-beat-name">{beatFile.name}</span>
+          </div>
+        )}
+      </div>
+      <div className="rb-row" style={{justifyContent:'flex-end'}}>
+        <button onClick={() => void startRankedQueue()} disabled={!beatFile||loading} className="rb-btn rb-btn-primary tall">
+          {loading ? <><div className="rb-spinner" style={{borderTopColor:'var(--bg)'}}/> Поиск</> : <><Swords/> Встать в очередь</>}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderQueueSearchingPhase = () => (
+    <div className="rb-hero" style={{ paddingTop: 48 }}>
+      <div className="rb-pulse-ring"><Search style={{ width: 20, height: 20 }} /></div>
+      <div className="rb-hero-title">Ищем соперника</div>
+      <div className="rb-hero-desc">
+        Подбор по Elo{myRating ? ` · ваш рейтинг ${myRating.battleElo} (${myRating.rankLabel})` : ''}
+        {queueSize > 0 ? ` · в очереди: ${queueSize}` : ''}
+      </div>
+      <div className="rb-hero-actions">
+        <button onClick={() => void cancelRankedQueue()} className="rb-btn rb-btn-danger tall">
+          Отменить поиск
         </button>
       </div>
     </div>
@@ -1599,15 +1772,27 @@ export default function RapBattleNew() {
 
       <div className="rb-card">
         <span className="rb-section-label">Оппонент</span>
+        <div className="rb-field">
+          <input
+            className="rb-input"
+            value={opponentFilter}
+            onChange={(e) => setOpponentFilter(e.target.value)}
+            placeholder="Поиск по нику…"
+          />
+        </div>
         {availableUsers.length === 0
           ? <div className="rb-loading"><div className="rb-spinner"/><span>Загрузка пользователей</span></div>
           : <div className="rb-user-list">
-              {availableUsers.map(u => (
+              {availableUsers
+                .filter((u) => !opponentFilter || u.username.toLowerCase().includes(opponentFilter.toLowerCase()))
+                .map(u => (
                 <button key={u.id} onClick={()=>setSelectedOpponent(u)} className={`rb-user-row${selectedOpponent?.id===u.id?' sel':''}`}>
                   <div className="rb-user-avatar">{u.username[0].toUpperCase()}</div>
                   <div style={{flex:1,textAlign:'left'}}>
                     <div className="rb-user-name">@{u.username}</div>
-                    <div className="rb-user-meta">{u._count.createdBattles + u._count.battleParticipants} баттлов</div>
+                    <div className="rb-user-meta">
+                      {u.rankLabel || 'Любитель'} · {u.battleElo ?? 1000} Elo · {u._count.createdBattles + u._count.battleParticipants} баттлов
+                    </div>
                   </div>
                   {selectedOpponent?.id===u.id && <div className="rb-user-check"><CheckCircle/></div>}
                 </button>
@@ -2289,8 +2474,11 @@ export default function RapBattleNew() {
         {/* Phase content */}
         {currentPhase==='waiting'                  && renderWaitingPhase()}
         {currentPhase==='creating'                 && renderCreatingPhase()}
+        {currentPhase==='queue_setup'              && renderQueueSetupPhase()}
+        {currentPhase==='queue_searching'          && renderQueueSearchingPhase()}
         {currentPhase==='inviting'                 && renderInvitingPhase()}
         {currentPhase==='waiting_for_opponent'     && renderWaitingForOpponentPhase()}
+        {(currentPhase==='waiting_for_beat')       && renderWaitingForOpponentPhase()}
         {(currentPhase==='user1_turn'||currentPhase==='user2_turn') && renderBattlePhase()}
         {currentPhase==='reviewing_recording'      && renderReviewingRecordingPhase()}
         {currentPhase==='mutual_judging'           && renderMutualJudgingPhase()}

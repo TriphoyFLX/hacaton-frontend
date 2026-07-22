@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Calendar } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Calendar, Swords } from 'lucide-react';
 import { chatsApi } from '../api/chats';
 import { profileApi, UserProfile } from '../api/profile';
 import { followsApi } from '../api/follows';
@@ -8,6 +8,7 @@ import { resolveMediaUrl } from '../lib/mediaUrl';
 import { addRecentProfile } from '../lib/recentProfiles';
 import { useAuthStore } from '../store/authStore';
 import FollowListModal from '../components/FollowListModal';
+import BattleRatingCard from '../components/BattleRatingCard';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -624,6 +625,15 @@ export default function PublicProfile() {
                 {chatLoading ? 'Создаём...' : 'Чат'}
               </button>
             )}
+            {currentUser?.id !== user.id && (
+              <button
+                onClick={() => navigate(`/rap-battle?challenge=${user.id}`)}
+                className="btn-primary"
+              >
+                <Swords size={14} />
+                Баттл
+              </button>
+            )}
           </div>
         </div>
         {chatError && <div className="profile-bio"><p className="bio-text">{chatError}</p></div>}
@@ -666,6 +676,8 @@ export default function PublicProfile() {
             <div className="stat-label">Подписок</div>
           </div>
         </div>
+
+        <BattleRatingCard rating={user} />
 
         {/* Details */}
         <div className="profile-details">

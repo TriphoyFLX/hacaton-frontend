@@ -15,12 +15,40 @@ const getAuthHeaders = () => {
 export interface User {
   id: string;
   username: string;
+  displayName?: string | null;
+  avatar?: string | null;
+  battleElo?: number;
+  battleWins?: number;
+  battleLosses?: number;
+  battleDraws?: number;
+  rankLabel?: string;
   createdAt: string;
   _count: {
     createdBattles: number;
     battleParticipants: number;
   };
 }
+
+export interface BattleRatingSnapshot {
+  battleElo: number;
+  battleWins: number;
+  battleLosses: number;
+  battleDraws: number;
+  battleGames: number;
+  rankId: string;
+  rankLabel: string;
+  rankMin: number;
+  rankMax: number;
+  nextRankLabel: string | null;
+  nextRankMin: number | null;
+  progressInRank: number;
+  scaleProgress: number;
+}
+
+export type QueueStatusResponse =
+  | { status: 'idle' }
+  | { status: 'waiting'; elo: number; rank: BattleRatingSnapshot; queueSize: number; joinedAt?: string }
+  | { status: 'matched'; battle: Battle };
 
 export interface Battle {
   id: string;
@@ -357,4 +385,45 @@ export const judgeBattle = async (battleId: string): Promise<{
   }
   
   return response.json();
+};
+
+export const getMyBattleRating = async (): Promise<BattleRatingSnapshot> => {
+  const response = await fetch(`${API_BASE}/battles/me/rating`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch battle rating');
+  return response.json();
+};
+
+export const joinBattleQueue = async (payload: {
+  title?: string;
+  beatUrl: string;
+  beatName?: string;
+}): Promise<QueueStatusResponse> => {
+  const response = await fetch(`${API_BASE}/battles/queue`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to join queue');
+  }
+  return response.json();
+};
+
+export const getBattleQueueStatus = async (): Promise<QueueStatusResponse> => {
+  const response = await fetch(`${API_BASE}/battles/queue/status`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to check queue');
+  return response.json();
+};
+
+export const leaveBattleQueue = async (): Promise<void> => {
+  const response = await fetch(`${API_BASE}/battles/queue`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to leave queue');
 };

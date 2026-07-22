@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { profileApi, UserProfile, ValidationError } from '../api/profile';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import FollowListModal from '../components/FollowListModal';
+import BattleRatingCard from '../components/BattleRatingCard';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
 
@@ -876,6 +877,8 @@ export default function Profile() {
             <div className="stat-label">Подписок</div>
           </div>
         </div>
+
+        <BattleRatingCard rating={profile} />
 
         {/* Details */}
         <div className="details-section">
