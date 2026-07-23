@@ -10,6 +10,7 @@ import {
   MoreHorizontal, Send, Eye, ChevronDown, X, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import AdminBadge from '../components/AdminBadge';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -1283,7 +1284,10 @@ function PostCard({
               )}
             </div>
             <div>
-              <div className="post-handle">@{post?.author?.username ?? 'unknown'}</div>
+              <div className="post-handle">
+                @{post?.author?.username ?? 'unknown'}
+                <AdminBadge role={post?.author?.role} size={12} />
+              </div>
               <div className="post-name">{post?.author?.displayName || post?.author?.username || 'Unknown'}</div>
               <div className="post-meta">
                 <span className="post-time">{post?.createdAt ? timeAgo(post.createdAt) : ''}</span>

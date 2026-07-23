@@ -30,6 +30,7 @@ export interface SoundTok {
     username: string;
     displayName?: string | null;
     avatar?: string | null;
+    role?: string;
   };
   comments?: Comment[];
 }

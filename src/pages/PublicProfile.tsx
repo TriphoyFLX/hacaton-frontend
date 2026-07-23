@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Calendar, Swords } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Calendar, Swords, Flag } from 'lucide-react';
 import { chatsApi } from '../api/chats';
 import { profileApi, UserProfile } from '../api/profile';
 import { followsApi } from '../api/follows';
@@ -9,6 +9,8 @@ import { addRecentProfile } from '../lib/recentProfiles';
 import { useAuthStore } from '../store/authStore';
 import FollowListModal from '../components/FollowListModal';
 import BattleRatingCard from '../components/BattleRatingCard';
+import AdminBadge from '../components/AdminBadge';
+import ReportUserModal from '../components/ReportUserModal';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -473,6 +475,7 @@ export default function PublicProfile() {
   const [listModal, setListModal] = useState<'followers' | 'following' | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
   const currentUser = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -606,7 +609,10 @@ export default function PublicProfile() {
             )}
           </div>
           <div className="profile-info">
-            <div className="profile-handle">@{user.username}</div>
+            <div className="profile-handle">
+              @{user.username}
+              <AdminBadge role={user.role} />
+            </div>
             <h1 className="profile-name">{user.displayName || user.username}</h1>
           </div>
           <div className="profile-actions">
@@ -634,9 +640,29 @@ export default function PublicProfile() {
                 Баттл
               </button>
             )}
+            {currentUser?.id !== user.id && user.role !== 'ADMIN' && (
+              <button
+                onClick={() => setReportOpen(true)}
+                className="btn-primary"
+                title="Пожаловаться"
+                style={{ background: 'transparent', border: '1px solid #3a3a3a', color: '#c5c0b8' }}
+              >
+                <Flag size={14} />
+                Жалоба
+              </button>
+            )}
           </div>
         </div>
         {chatError && <div className="profile-bio"><p className="bio-text">{chatError}</p></div>}
+
+        {reportOpen && (
+          <ReportUserModal
+            open={reportOpen}
+            onClose={() => setReportOpen(false)}
+            reportedUserId={user.id}
+            reportedUsername={user.username}
+          />
+        )}
 
         {/* Bio */}
         {user.bio && (

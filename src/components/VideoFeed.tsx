@@ -8,6 +8,7 @@ import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount, formatRelativeTime, pluralizeComments } from '../lib/format';
 import { useAuthStore } from '../store/authStore';
 import ShareSoundTokModal from './ShareSoundTokModal';
+import AdminBadge from './AdminBadge';
 
 const css = `
 .vf-root {
@@ -1163,7 +1164,10 @@ export default function VideoFeed({
 
                   <div className="vf-bottom-info">
                     <div className="vf-author-row">
-                      <span className="vf-author-name">@{soundTok.author?.username || 'user'}</span>
+                      <span className="vf-author-name">
+                        @{soundTok.author?.username || 'user'}
+                        <AdminBadge role={soundTok.author?.role} size={12} />
+                      </span>
                     </div>
                     {soundTok.description && (
                       <>

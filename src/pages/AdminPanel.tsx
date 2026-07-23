@@ -13,15 +13,18 @@ import {
   RefreshCw,
   Search,
   Crown,
+  Flag,
 } from 'lucide-react';
 import { API_ORIGIN } from '../api/client';
 import { getAuthToken } from '../lib/authToken';
+import { REPORT_REASON_OPTIONS } from '../api/reports';
 
 const ADMIN_API = `${API_ORIGIN}/api/admin`;
 const PAGE_SIZE = 40;
 
-type Tab = 'overview' | 'purchases' | 'users' | 'posts' | 'soundtoks';
+type Tab = 'overview' | 'purchases' | 'reports' | 'users' | 'posts' | 'soundtoks';
 type PurchaseFilter = 'all' | 'subscriptions' | 'tokens' | 'presets';
+type ReportStatusFilter = 'OPEN' | 'REVIEWING' | 'RESOLVED' | 'DISMISSED' | 'ALL';
 
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
@@ -53,6 +56,7 @@ interface AdminStats {
     soundToks: number;
     presetsPublished: number;
     pendingPayments: number;
+    openReports?: number;
   };
   plans: {
     activePro: number;
@@ -135,6 +139,18 @@ interface PresetPurchaseRow {
   preset: { id: string; title: string; priceCents: number };
 }
 
+interface ReportRow {
+  id: string;
+  reason: string;
+  details: string | null;
+  status: string;
+  adminNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  reporter: { id: string; username: string; email: string; role: string };
+  reported: { id: string; username: string; email: string; role: string };
+}
+
 const KIND_LABELS: Record<string, string> = {
   PLAN_PRO: 'Подписка Pro',
   PLAN_PLATINUM: 'Подписка Platinum',
@@ -170,6 +186,10 @@ export default function AdminPanel() {
   const [paymentsTotal, setPaymentsTotal] = useState(0);
   const [presetPurchases, setPresetPurchases] = useState<PresetPurchaseRow[]>([]);
   const [presetPurchasesTotal, setPresetPurchasesTotal] = useState(0);
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [reportsTotal, setReportsTotal] = useState(0);
+  const [reportsOpenCount, setReportsOpenCount] = useState(0);
+  const [reportStatusFilter, setReportStatusFilter] = useState<ReportStatusFilter>('OPEN');
   const [userQuery, setUserQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -239,6 +259,18 @@ export default function AdminPanel() {
     }
   }, []);
 
+  const loadReports = useCallback(async (status: ReportStatusFilter) => {
+    const qs = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: '0',
+      status,
+    });
+    const data = await adminFetch<Paged<ReportRow> & { openCount?: number }>(`/reports?${qs}`);
+    setReports(data.items);
+    setReportsTotal(data.total);
+    setReportsOpenCount(data.openCount ?? 0);
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -249,6 +281,9 @@ export default function AdminPanel() {
           break;
         case 'purchases':
           await loadPurchases(purchaseFilter);
+          break;
+        case 'reports':
+          await loadReports(reportStatusFilter);
           break;
         case 'users':
           await loadUsers(debouncedQuery);
@@ -269,9 +304,11 @@ export default function AdminPanel() {
   }, [
     activeTab,
     purchaseFilter,
+    reportStatusFilter,
     debouncedQuery,
     loadOverview,
     loadPurchases,
+    loadReports,
     loadUsers,
     loadPosts,
     loadSoundToks,
@@ -341,11 +378,39 @@ export default function AdminPanel() {
     }
   };
 
+  const updateReportStatus = async (reportId: string, status: string) => {
+    try {
+      const res = await fetch(`${ADMIN_API}/reports/${reportId}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('Не удалось обновить');
+      await loadReports(reportStatusFilter);
+      if (stats) {
+        void loadOverview();
+      }
+    } catch {
+      alert('Не удалось обновить жалобу');
+    }
+  };
+
   const tabs = useMemo(
     () =>
       [
         { id: 'overview' as const, label: 'Обзор', icon: BarChart3 },
         { id: 'purchases' as const, label: 'Покупки', icon: CreditCard },
+        {
+          id: 'reports' as const,
+          label: `Жалобы${
+            stats?.totals.openReports != null
+              ? ` (${stats.totals.openReports})`
+              : reportsOpenCount
+                ? ` (${reportsOpenCount})`
+                : ''
+          }`,
+          icon: Flag,
+        },
         {
           id: 'users' as const,
           label: `Пользователи${stats ? ` (${stats.totals.users})` : usersTotal ? ` (${usersTotal})` : ''}`,
@@ -362,7 +427,7 @@ export default function AdminPanel() {
           icon: Video,
         },
       ] as const,
-    [stats, usersTotal, postsTotal, soundToksTotal],
+    [stats, usersTotal, postsTotal, soundToksTotal, reportsOpenCount],
   );
 
   return (
@@ -447,11 +512,12 @@ export default function AdminPanel() {
               />
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <MiniStat label="Пользователи" value={stats.totals.users} />
               <MiniStat label="Активные Pro" value={stats.plans.activePro} />
               <MiniStat label="Активные Platinum" value={stats.plans.activePlatinum} />
               <MiniStat label="Пресеты в каталоге" value={stats.totals.presetsPublished} />
+              <MiniStat label="Открытые жалобы" value={stats.totals.openReports ?? 0} />
             </div>
 
             {Object.keys(stats.byKind).length > 0 && (
@@ -621,6 +687,112 @@ export default function AdminPanel() {
                   </section>
                 )}
               </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'reports' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ['OPEN', 'Открытые'],
+                  ['REVIEWING', 'В работе'],
+                  ['RESOLVED', 'Решено'],
+                  ['DISMISSED', 'Отклонено'],
+                  ['ALL', 'Все'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setReportStatusFilter(id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                    reportStatusFilter === id
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-gray-500 text-xs">
+              Показано: {reportsTotal} · открытых всего: {reportsOpenCount}
+            </p>
+            {loading ? (
+              <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
+            ) : reports.length === 0 ? (
+              <p className="text-gray-500 text-sm">Жалоб нет</p>
+            ) : (
+              reports.map((report) => {
+                const reasonLabel =
+                  REPORT_REASON_OPTIONS.find((r) => r.id === report.reason)?.label || report.reason;
+                return (
+                  <div key={report.id} className="bg-gray-800 rounded-lg p-3 sm:p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div>
+                        <p className="text-white font-medium">{reasonLabel}</p>
+                        <p className="text-gray-300 text-sm mt-1">
+                          На{' '}
+                          <a
+                            className="text-emerald-400 hover:underline"
+                            href={`/profile/${report.reported.username}`}
+                          >
+                            @{report.reported.username}
+                          </a>
+                          {' · '}от @{report.reporter.username}
+                        </p>
+                        {report.details && (
+                          <p className="text-gray-400 text-sm mt-2 whitespace-pre-wrap">{report.details}</p>
+                        )}
+                        <p className="text-gray-500 text-xs mt-2">{formatDate(report.createdAt)}</p>
+                      </div>
+                      <span className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-200 h-fit">
+                        {report.status}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {report.status !== 'REVIEWING' && (
+                        <button
+                          type="button"
+                          onClick={() => void updateReportStatus(report.id, 'REVIEWING')}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-amber-700 hover:bg-amber-600 text-white"
+                        >
+                          В работу
+                        </button>
+                      )}
+                      {report.status !== 'RESOLVED' && (
+                        <button
+                          type="button"
+                          onClick={() => void updateReportStatus(report.id, 'RESOLVED')}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white"
+                        >
+                          Решено
+                        </button>
+                      )}
+                      {report.status !== 'DISMISSED' && (
+                        <button
+                          type="button"
+                          onClick={() => void updateReportStatus(report.id, 'DISMISSED')}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-gray-600 hover:bg-gray-500 text-white"
+                        >
+                          Отклонить
+                        </button>
+                      )}
+                      {report.status !== 'OPEN' && (
+                        <button
+                          type="button"
+                          onClick={() => void updateReportStatus(report.id, 'OPEN')}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-sky-800 hover:bg-sky-700 text-white"
+                        >
+                          Открыть снова
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         )}

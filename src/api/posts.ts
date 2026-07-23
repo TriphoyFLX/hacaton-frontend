@@ -23,6 +23,7 @@ export interface Post {
     username: string;
     displayName?: string | null;
     avatar?: string | null;
+    role?: string;
   };
 }
 
@@ -37,6 +38,7 @@ export interface PostComment {
     username: string;
     displayName?: string | null;
     avatar?: string | null;
+    role?: string;
   };
 }
 
