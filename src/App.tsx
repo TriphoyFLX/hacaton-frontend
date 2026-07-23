@@ -1,27 +1,41 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, type ReactNode } from 'react';
 import Login from './components/Login';
 import Register from './components/Register';
 import AuthCallback from './components/AuthCallback';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
-import Dashboard from './components/Dashboard';
-import Studio from './pages/Studio';
-import Feed from './pages/Feed';
-import Projects from './pages/Projects';
-import SoundTok from './pages/SoundTok';
-import Profile from './pages/Profile';
-import PublicProfile from './pages/PublicProfile';
-import Chats from './pages/Chats';
-import ChatPage from './pages/ChatPage';
-import AdminPanel from './pages/AdminPanel';
-import AI from './pages/AI';
-import RapBattle from './pages/RapBattleNew';
-import MIDI from './pages/MIDI';
 import Landing from './pages/Landing';
-import PresetsMarketplace from './pages/PresetsMarketplace';
-import Pricing from './pages/Pricing';
 import LegalPage from './pages/LegalPage';
+
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Studio = lazy(() => import('./pages/Studio'));
+const Feed = lazy(() => import('./pages/Feed'));
+const Projects = lazy(() => import('./pages/Projects'));
+const SoundTok = lazy(() => import('./pages/SoundTok'));
+const Profile = lazy(() => import('./pages/Profile'));
+const PublicProfile = lazy(() => import('./pages/PublicProfile'));
+const Chats = lazy(() => import('./pages/Chats'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const AI = lazy(() => import('./pages/AI'));
+const RapBattle = lazy(() => import('./pages/RapBattleNew'));
+const MIDI = lazy(() => import('./pages/MIDI'));
+const PresetsMarketplace = lazy(() => import('./pages/PresetsMarketplace'));
+const Pricing = lazy(() => import('./pages/Pricing'));
+
+function RouteFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">
+      Загрузка…
+    </div>
+  );
+}
+
+function Lazy({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
+}
 
 function App() {
   return (
@@ -52,28 +66,28 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="studio" element={<Studio />} />
-          <Route path="feed" element={<Feed />} />
-          <Route path="projects" element={<Projects />} />
-          <Route path="soundtok" element={<SoundTok />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="profile/:username" element={<PublicProfile />} />
-          <Route path="chats" element={<Chats />} />
-          <Route path="chats/:chatId" element={<ChatPage />} />
-          <Route path="pricing" element={<Pricing />} />
+          <Route path="dashboard" element={<Lazy><Dashboard /></Lazy>} />
+          <Route path="studio" element={<Lazy><Studio /></Lazy>} />
+          <Route path="feed" element={<Lazy><Feed /></Lazy>} />
+          <Route path="projects" element={<Lazy><Projects /></Lazy>} />
+          <Route path="soundtok" element={<Lazy><SoundTok /></Lazy>} />
+          <Route path="profile" element={<Lazy><Profile /></Lazy>} />
+          <Route path="profile/:username" element={<Lazy><PublicProfile /></Lazy>} />
+          <Route path="chats" element={<Lazy><Chats /></Lazy>} />
+          <Route path="chats/:chatId" element={<Lazy><ChatPage /></Lazy>} />
+          <Route path="pricing" element={<Lazy><Pricing /></Lazy>} />
           <Route
             path="admin"
             element={
               <AdminRoute>
-                <AdminPanel />
+                <Lazy><AdminPanel /></Lazy>
               </AdminRoute>
             }
           />
-          <Route path="ai" element={<AI />} />
-          <Route path="rap-battle" element={<RapBattle />} />
-          <Route path="midi" element={<MIDI />} />
-          <Route path="presets" element={<PresetsMarketplace />} />
+          <Route path="ai" element={<Lazy><AI /></Lazy>} />
+          <Route path="rap-battle" element={<Lazy><RapBattle /></Lazy>} />
+          <Route path="midi" element={<Lazy><MIDI /></Lazy>} />
+          <Route path="presets" element={<Lazy><PresetsMarketplace /></Lazy>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

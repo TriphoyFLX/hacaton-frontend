@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import VideoFeed from '../components/VideoFeed';
 import { SoundTok, soundTokApi } from '../api/soundtok';
@@ -803,11 +803,14 @@ export default function SoundTok() {
   const [searchParams] = useSearchParams();
   const [soundToks, setSoundToks] = useState<SoundTok[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [description, setDescription] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const PAGE_SIZE = 20;
 
   const sharedVideoId = searchParams.get('v');
 
@@ -828,8 +831,9 @@ export default function SoundTok() {
 
   const fetchSoundToks = async () => {
     try {
-      const data = await soundTokApi.getSoundToks();
-      setSoundToks(data);
+      const data = await soundTokApi.getSoundToks({ limit: PAGE_SIZE, offset: 0 });
+      setSoundToks(data.items);
+      setHasMore(Boolean(data.hasMore));
     } catch (error) {
       console.error('Failed to fetch SoundToks:', error);
       showToast('Не удалось загрузить видео', 'error');
@@ -837,6 +841,26 @@ export default function SoundTok() {
       setLoading(false);
     }
   };
+
+  const loadMoreSoundToks = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await soundTokApi.getSoundToks({
+        limit: PAGE_SIZE,
+        offset: soundToks.length,
+      });
+      setSoundToks((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        return [...prev, ...data.items.filter((t) => !seen.has(t.id))];
+      });
+      setHasMore(Boolean(data.hasMore));
+    } catch (error) {
+      console.error('Failed to load more SoundToks:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, soundToks.length]);
 
   useEffect(() => {
     fetchSoundToks();
@@ -995,6 +1019,7 @@ export default function SoundTok() {
             soundToks={orderedSoundToks}
             initialIndex={initialIndex}
             onLike={handleLike}
+            onNearEnd={loadMoreSoundToks}
             onCommentCountChange={(id, count) => {
               setSoundToks((prev) =>
                 prev.map((tok) => (tok.id === id ? { ...tok, commentsCount: count } : tok))

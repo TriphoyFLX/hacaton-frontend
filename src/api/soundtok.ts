@@ -51,9 +51,21 @@ export const soundTokApi = {
     return response.data;
   },
 
-  getSoundToks: async (): Promise<SoundTok[]> => {
-    const response = await api.get('/soundtok');
-    return response.data;
+  getSoundToks: async (opts?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: SoundTok[]; total: number; hasMore: boolean; limit: number; offset: number }> => {
+    const response = await api.get('/soundtok', {
+      params: {
+        limit: opts?.limit ?? 20,
+        offset: opts?.offset ?? 0,
+      },
+    });
+    const data = response.data;
+    if (Array.isArray(data)) {
+      return { items: data, total: data.length, hasMore: false, limit: data.length, offset: 0 };
+    }
+    return data;
   },
 
   likeSoundTok: async (id: string) => {

@@ -1,9 +1,27 @@
-import { useState, useEffect } from 'react';
-import { Users, FileText, Video, Trash2, Shield, Ban } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  Users,
+  FileText,
+  Video,
+  Trash2,
+  Shield,
+  Ban,
+  BarChart3,
+  CreditCard,
+  Coins,
+  Package,
+  RefreshCw,
+  Search,
+  Crown,
+} from 'lucide-react';
 import { API_ORIGIN } from '../api/client';
 import { getAuthToken } from '../lib/authToken';
 
 const ADMIN_API = `${API_ORIGIN}/api/admin`;
+const PAGE_SIZE = 40;
+
+type Tab = 'overview' | 'purchases' | 'users' | 'posts' | 'soundtoks';
+type PurchaseFilter = 'all' | 'subscriptions' | 'tokens' | 'presets';
 
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
@@ -13,11 +31,70 @@ function authHeaders(): HeadersInit {
   };
 }
 
+async function adminFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${ADMIN_API}${path}`, { headers: authHeaders() });
+  if (!res.ok) {
+    throw new Error(res.status === 403 ? 'Нужна роль ADMIN' : `Ошибка ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+interface Paged<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+interface AdminStats {
+  totals: {
+    users: number;
+    posts: number;
+    soundToks: number;
+    presetsPublished: number;
+    pendingPayments: number;
+  };
+  plans: {
+    activePro: number;
+    activePlatinum: number;
+    activePaid: number;
+  };
+  purchases: {
+    subscriptions: { count: number; revenueRub: number };
+    tokens: { count: number; revenueRub: number };
+    presets: { count: number; revenueRub: number; revenueCents: number };
+    paymentsRevenueRub: number;
+    totalRevenueRub: number;
+  };
+  byKind: Record<string, { count: number; revenueRub: number }>;
+  recent: {
+    payments: Array<{
+      id: string;
+      kind: string;
+      amountRub: number;
+      status: string;
+      createdAt: string;
+      user: { id: string; username: string };
+    }>;
+    presetPurchases: Array<{
+      id: string;
+      amountCents: number;
+      currency: string;
+      purchasedAt: string;
+      buyer: { id: string; username: string };
+      preset: { id: string; title: string };
+    }>;
+  };
+}
+
 interface User {
   id: string;
   username: string;
   email: string;
   role: string;
+  plan: string;
+  planExpiresAt: string | null;
+  tokenBalance: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,142 +102,285 @@ interface User {
 interface Post {
   id: string;
   content: string;
-  author: {
-    id: string;
-    username: string;
-  };
+  author: { id: string; username: string };
   createdAt: string;
-  media: Array<{
-    id: string;
-    type: string;
-    url: string;
-  }>;
+  media: Array<{ id: string; type: string; url: string }>;
 }
 
 interface SoundTok {
   id: string;
   description: string;
   videoUrl: string;
-  author: {
-    id: string;
-    username: string;
-  };
+  author: { id: string; username: string };
   createdAt: string;
   likes: number;
 }
 
+interface PaymentRow {
+  id: string;
+  kind: string;
+  status: string;
+  amountRub: number;
+  description: string;
+  createdAt: string;
+  user: { id: string; username: string; email: string };
+}
+
+interface PresetPurchaseRow {
+  id: string;
+  amountCents: number;
+  currency: string;
+  purchasedAt: string;
+  buyer: { id: string; username: string; email: string };
+  preset: { id: string; title: string; priceCents: number };
+}
+
+const KIND_LABELS: Record<string, string> = {
+  PLAN_PRO: 'Подписка Pro',
+  PLAN_PLATINUM: 'Подписка Platinum',
+  TOKENS_400: 'Токены 400',
+  TOKENS_800: 'Токены 800',
+  TOKENS_1200: 'Токены 1200',
+  TOKENS_2400: 'Токены 2400',
+};
+
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleString('ru-RU');
+}
+
+function formatRub(n: number) {
+  return `${n.toLocaleString('ru-RU')} ₽`;
+}
+
+function kindLabel(kind: string) {
+  return KIND_LABELS[kind] || kind;
+}
+
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'soundtoks'>('users');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [purchaseFilter, setPurchaseFilter] = useState<PurchaseFilter>('all');
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [usersTotal, setUsersTotal] = useState(0);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [postsTotal, setPostsTotal] = useState(0);
   const [soundToks, setSoundToks] = useState<SoundTok[]>([]);
+  const [soundToksTotal, setSoundToksTotal] = useState(0);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [presetPurchases, setPresetPurchases] = useState<PresetPurchaseRow[]>([]);
+  const [presetPurchasesTotal, setPresetPurchasesTotal] = useState(0);
+  const [userQuery, setUserQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    void fetchData();
-  }, [activeTab]);
+    const t = window.setTimeout(() => setDebouncedQuery(userQuery.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [userQuery]);
 
-  const fetchData = async () => {
+  const loadOverview = useCallback(async () => {
+    const data = await adminFetch<AdminStats>('/stats');
+    setStats(data);
+  }, []);
+
+  const loadUsers = useCallback(async (q: string) => {
+    const qs = new URLSearchParams({ limit: String(PAGE_SIZE), offset: '0' });
+    if (q) qs.set('q', q);
+    const data = await adminFetch<Paged<User>>(`/users?${qs}`);
+    setUsers(data.items);
+    setUsersTotal(data.total);
+  }, []);
+
+  const loadPosts = useCallback(async () => {
+    const data = await adminFetch<Paged<Post>>(`/posts?limit=${PAGE_SIZE}&offset=0`);
+    setPosts(data.items);
+    setPostsTotal(data.total);
+  }, []);
+
+  const loadSoundToks = useCallback(async () => {
+    const data = await adminFetch<Paged<SoundTok>>(`/soundtoks?limit=${PAGE_SIZE}&offset=0`);
+    setSoundToks(data.items);
+    setSoundToksTotal(data.total);
+  }, []);
+
+  const loadPurchases = useCallback(async (filter: PurchaseFilter) => {
+    if (filter === 'presets') {
+      const data = await adminFetch<Paged<PresetPurchaseRow>>(
+        `/preset-purchases?limit=${PAGE_SIZE}&offset=0`,
+      );
+      setPresetPurchases(data.items);
+      setPresetPurchasesTotal(data.total);
+      setPayments([]);
+      setPaymentsTotal(0);
+      return;
+    }
+
+    const qs = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: '0',
+      status: 'SUCCEEDED',
+    });
+    if (filter === 'subscriptions' || filter === 'tokens') qs.set('kind', filter);
+    const data = await adminFetch<Paged<PaymentRow>>(`/payments?${qs}`);
+    setPayments(data.items);
+    setPaymentsTotal(data.total);
+
+    if (filter === 'all') {
+      const presets = await adminFetch<Paged<PresetPurchaseRow>>(
+        `/preset-purchases?limit=${PAGE_SIZE}&offset=0`,
+      );
+      setPresetPurchases(presets.items);
+      setPresetPurchasesTotal(presets.total);
+    } else {
+      setPresetPurchases([]);
+      setPresetPurchasesTotal(0);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const headers = authHeaders();
       switch (activeTab) {
-        case 'users': {
-          const usersResponse = await fetch(`${ADMIN_API}/users`, { headers });
-          if (!usersResponse.ok) throw new Error(usersResponse.status === 403 ? 'Нужна роль ADMIN' : 'Не удалось загрузить пользователей');
-          setUsers(await usersResponse.json());
+        case 'overview':
+          await loadOverview();
           break;
-        }
-        case 'posts': {
-          const postsResponse = await fetch(`${ADMIN_API}/posts`, { headers });
-          if (!postsResponse.ok) throw new Error(postsResponse.status === 403 ? 'Нужна роль ADMIN' : 'Не удалось загрузить посты');
-          setPosts(await postsResponse.json());
+        case 'purchases':
+          await loadPurchases(purchaseFilter);
           break;
-        }
-        case 'soundtoks': {
-          const soundToksResponse = await fetch(`${ADMIN_API}/soundtoks`, { headers });
-          if (!soundToksResponse.ok) throw new Error(soundToksResponse.status === 403 ? 'Нужна роль ADMIN' : 'Не удалось загрузить видео');
-          setSoundToks(await soundToksResponse.json());
+        case 'users':
+          await loadUsers(debouncedQuery);
           break;
-        }
+        case 'posts':
+          await loadPosts();
+          break;
+        case 'soundtoks':
+          await loadSoundToks();
+          break;
       }
-    } catch (e: any) {
-      console.error('Failed to fetch data:', e);
-      setError(e?.message || 'Ошибка загрузки');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Ошибка загрузки';
+      setError(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    activeTab,
+    purchaseFilter,
+    debouncedQuery,
+    loadOverview,
+    loadPurchases,
+    loadUsers,
+    loadPosts,
+    loadSoundToks,
+  ]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   const deleteUser = async (userId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этого пользователя?')) return;
+    if (!confirm('Удалить этого пользователя?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/users/${userId}`, { method: 'DELETE', headers: authHeaders() });
+      const res = await fetch(`${ADMIN_API}/users/${userId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error('Не удалось удалить');
-      setUsers(users.filter(u => u.id !== userId));
-    } catch (e) {
-      console.error('Failed to delete user:', e);
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setUsersTotal((n) => Math.max(0, n - 1));
+    } catch {
       alert('Не удалось удалить пользователя');
     }
   };
 
   const banUser = async (userId: string) => {
-    if (!confirm('Вы уверены, что хотите забанить этого пользователя?')) return;
+    if (!confirm('Забанить (удалить) этого пользователя?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/users/${userId}/ban`, { method: 'PATCH', headers: authHeaders() });
+      const res = await fetch(`${ADMIN_API}/users/${userId}/ban`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error('Не удалось забанить');
-      await fetchData();
-    } catch (e) {
-      console.error('Failed to ban user:', e);
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setUsersTotal((n) => Math.max(0, n - 1));
+    } catch {
       alert('Не удалось забанить пользователя');
     }
   };
 
   const deletePost = async (postId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этот пост?')) return;
+    if (!confirm('Удалить этот пост?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/posts/${postId}`, { method: 'DELETE', headers: authHeaders() });
+      const res = await fetch(`${ADMIN_API}/posts/${postId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error('Не удалось удалить');
-      setPosts(posts.filter(p => p.id !== postId));
-    } catch (e) {
-      console.error('Failed to delete post:', e);
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setPostsTotal((n) => Math.max(0, n - 1));
+    } catch {
       alert('Не удалось удалить пост');
     }
   };
 
   const deleteSoundTok = async (soundTokId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить это видео?')) return;
+    if (!confirm('Удалить это видео?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/soundtoks/${soundTokId}`, { method: 'DELETE', headers: authHeaders() });
+      const res = await fetch(`${ADMIN_API}/soundtoks/${soundTokId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error('Не удалось удалить');
-      setSoundToks(soundToks.filter(s => s.id !== soundTokId));
-    } catch (e) {
-      console.error('Failed to delete soundtok:', e);
+      setSoundToks((prev) => prev.filter((s) => s.id !== soundTokId));
+      setSoundToksTotal((n) => Math.max(0, n - 1));
+    } catch {
       alert('Не удалось удалить видео');
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ru-RU');
-  };
-
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-white text-xl">Загрузка...</div>
-      </div>
-    );
-  }
+  const tabs = useMemo(
+    () =>
+      [
+        { id: 'overview' as const, label: 'Обзор', icon: BarChart3 },
+        { id: 'purchases' as const, label: 'Покупки', icon: CreditCard },
+        {
+          id: 'users' as const,
+          label: `Пользователи${stats ? ` (${stats.totals.users})` : usersTotal ? ` (${usersTotal})` : ''}`,
+          icon: Users,
+        },
+        {
+          id: 'posts' as const,
+          label: `Посты${stats ? ` (${stats.totals.posts})` : postsTotal ? ` (${postsTotal})` : ''}`,
+          icon: FileText,
+        },
+        {
+          id: 'soundtoks' as const,
+          label: `Видео${stats ? ` (${stats.totals.soundToks})` : soundToksTotal ? ` (${soundToksTotal})` : ''}`,
+          icon: Video,
+        },
+      ] as const,
+    [stats, usersTotal, postsTotal, soundToksTotal],
+  );
 
   return (
     <div className="h-full flex flex-col bg-gray-900 min-h-0">
-      <div className="bg-gray-800 border-b border-gray-700 p-3 sm:p-4">
+      <div className="bg-gray-800 border-b border-gray-700 p-3 sm:p-4 flex items-center justify-between gap-3">
         <h1 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
           <Shield size={22} className="sm:w-6 sm:h-6" />
           Админ панель
         </h1>
+        <button
+          type="button"
+          onClick={() => void fetchData()}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm"
+          title="Обновить"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Обновить
+        </button>
       </div>
 
       {error && (
@@ -171,146 +391,409 @@ export default function AdminPanel() {
 
       <div className="bg-gray-800 border-b border-gray-700 overflow-x-auto">
         <div className="flex min-w-max sm:min-w-0">
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
-              activeTab === 'users'
-                ? 'text-purple-400 border-b-2 border-purple-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Users size={18} className="inline mr-2" />
-            Пользователи ({users.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('posts')}
-            className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
-              activeTab === 'posts'
-                ? 'text-purple-400 border-b-2 border-purple-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <FileText size={18} className="inline mr-2" />
-            Посты ({posts.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('soundtoks')}
-            className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
-              activeTab === 'soundtoks'
-                ? 'text-purple-400 border-b-2 border-purple-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Video size={18} className="inline mr-2" />
-            Видео ({soundToks.length})
-          </button>
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3 sm:px-5 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
+                  active
+                    ? 'text-emerald-400 border-b-2 border-emerald-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Icon size={16} className="inline mr-1.5 -mt-0.5" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+        {loading && !stats && activeTab === 'overview' ? (
+          <div className="h-40 flex items-center justify-center text-gray-400">Загрузка…</div>
+        ) : null}
+
+        {activeTab === 'overview' && stats && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <StatCard
+                icon={<Crown size={18} />}
+                label="Покупки подписок"
+                value={String(stats.purchases.subscriptions.count)}
+                hint={formatRub(stats.purchases.subscriptions.revenueRub)}
+              />
+              <StatCard
+                icon={<Coins size={18} />}
+                label="Покупки токенов"
+                value={String(stats.purchases.tokens.count)}
+                hint={formatRub(stats.purchases.tokens.revenueRub)}
+              />
+              <StatCard
+                icon={<Package size={18} />}
+                label="Покупки пресетов"
+                value={String(stats.purchases.presets.count)}
+                hint={formatRub(stats.purchases.presets.revenueRub)}
+              />
+              <StatCard
+                icon={<CreditCard size={18} />}
+                label="Выручка всего"
+                value={formatRub(stats.purchases.totalRevenueRub)}
+                hint={`Ожидают оплаты: ${stats.totals.pendingPayments}`}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <MiniStat label="Пользователи" value={stats.totals.users} />
+              <MiniStat label="Активные Pro" value={stats.plans.activePro} />
+              <MiniStat label="Активные Platinum" value={stats.plans.activePlatinum} />
+              <MiniStat label="Пресеты в каталоге" value={stats.totals.presetsPublished} />
+            </div>
+
+            {Object.keys(stats.byKind).length > 0 && (
+              <section className="bg-gray-800/80 rounded-xl border border-gray-700 p-4">
+                <h2 className="text-white font-semibold mb-3">Разбивка платежей</h2>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {Object.entries(stats.byKind).map(([kind, row]) => (
+                    <div
+                      key={kind}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-gray-900/60 px-3 py-2 text-sm"
+                    >
+                      <span className="text-gray-300">{kindLabel(kind)}</span>
+                      <span className="text-gray-400">
+                        {row.count} · {formatRub(row.revenueRub)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <div className="grid lg:grid-cols-2 gap-4">
+              <section className="bg-gray-800/80 rounded-xl border border-gray-700 p-4">
+                <h2 className="text-white font-semibold mb-3">Последние платежи</h2>
+                {stats.recent.payments.length === 0 ? (
+                  <p className="text-gray-500 text-sm">Пока нет успешных платежей</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {stats.recent.payments.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex items-start justify-between gap-3 text-sm border-b border-gray-700/60 pb-2 last:border-0"
+                      >
+                        <div>
+                          <p className="text-white">{kindLabel(p.kind)}</p>
+                          <p className="text-gray-400">@{p.user.username}</p>
+                          <p className="text-gray-500 text-xs">{formatDate(p.createdAt)}</p>
+                        </div>
+                        <span className="text-emerald-400 font-medium whitespace-nowrap">
+                          {formatRub(p.amountRub)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="bg-gray-800/80 rounded-xl border border-gray-700 p-4">
+                <h2 className="text-white font-semibold mb-3">Последние покупки пресетов</h2>
+                {stats.recent.presetPurchases.length === 0 ? (
+                  <p className="text-gray-500 text-sm">Пока нет покупок пресетов</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {stats.recent.presetPurchases.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex items-start justify-between gap-3 text-sm border-b border-gray-700/60 pb-2 last:border-0"
+                      >
+                        <div>
+                          <p className="text-white">{p.preset.title}</p>
+                          <p className="text-gray-400">@{p.buyer.username}</p>
+                          <p className="text-gray-500 text-xs">{formatDate(p.purchasedAt)}</p>
+                        </div>
+                        <span className="text-emerald-400 font-medium whitespace-nowrap">
+                          {formatRub(Math.round(p.amountCents / 100))}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'purchases' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ['all', 'Все'],
+                  ['subscriptions', 'Подписки'],
+                  ['tokens', 'Токены'],
+                  ['presets', 'Пресеты'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setPurchaseFilter(id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                    purchaseFilter === id
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {loading ? (
+              <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
+            ) : (
+              <>
+                {purchaseFilter !== 'presets' && (
+                  <section className="space-y-3">
+                    <h2 className="text-white font-medium">
+                      Платежи ({paymentsTotal})
+                    </h2>
+                    {payments.length === 0 ? (
+                      <p className="text-gray-500 text-sm">Нет платежей</p>
+                    ) : (
+                      payments.map((p) => (
+                        <div key={p.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <p className="text-white font-medium">{kindLabel(p.kind)}</p>
+                              <p className="text-gray-400 text-sm">
+                                @{p.user.username} · {p.user.email}
+                              </p>
+                              <p className="text-gray-500 text-xs">{formatDate(p.createdAt)}</p>
+                              <p className="text-gray-500 text-xs mt-1 truncate max-w-xl">
+                                {p.description}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-emerald-400 font-semibold">
+                                {formatRub(p.amountRub)}
+                              </p>
+                              <p className="text-xs text-gray-400">{p.status}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </section>
+                )}
+
+                {(purchaseFilter === 'presets' || purchaseFilter === 'all') && (
+                  <section className="space-y-3">
+                    <h2 className="text-white font-medium">
+                      Пресеты ({presetPurchasesTotal})
+                    </h2>
+                    {presetPurchases.length === 0 ? (
+                      <p className="text-gray-500 text-sm">Нет покупок пресетов</p>
+                    ) : (
+                      presetPurchases.map((p) => (
+                        <div key={p.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <p className="text-white font-medium">{p.preset.title}</p>
+                              <p className="text-gray-400 text-sm">
+                                @{p.buyer.username} · {p.buyer.email}
+                              </p>
+                              <p className="text-gray-500 text-xs">
+                                {formatDate(p.purchasedAt)}
+                              </p>
+                            </div>
+                            <p className="text-emerald-400 font-semibold">
+                              {formatRub(Math.round(p.amountCents / 100))}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {activeTab === 'users' && (
           <div className="space-y-4">
-            {users.map((user) => (
-              <div key={user.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <p className="text-white font-medium">@{user.username}</p>
-                    <p className="text-gray-400 text-sm">{user.email}</p>
-                    <p className="text-gray-500 text-xs">{formatDate(user.createdAt)}</p>
-                    <span className={`inline-block px-2 py-1 text-xs rounded ${
-                      user.role === 'ADMIN'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-600 text-gray-300'
-                    }`}>
-                      {user.role}
-                    </span>
+            <div className="relative max-w-md">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+              />
+              <input
+                value={userQuery}
+                onChange={(e) => setUserQuery(e.target.value)}
+                placeholder="Поиск по username или email…"
+                className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+            <p className="text-gray-500 text-xs">Найдено: {usersTotal}</p>
+            {loading ? (
+              <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
+            ) : (
+              <div className="space-y-3">
+                {users.map((user) => (
+                  <div key={user.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="text-white font-medium">@{user.username}</p>
+                        <p className="text-gray-400 text-sm">{user.email}</p>
+                        <p className="text-gray-500 text-xs">{formatDate(user.createdAt)}</p>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          <span
+                            className={`inline-block px-2 py-0.5 text-xs rounded ${
+                              user.role === 'ADMIN'
+                                ? 'bg-emerald-700 text-white'
+                                : 'bg-gray-600 text-gray-300'
+                            }`}
+                          >
+                            {user.role}
+                          </span>
+                          <span className="inline-block px-2 py-0.5 text-xs rounded bg-gray-700 text-gray-200">
+                            {user.plan}
+                          </span>
+                          <span className="inline-block px-2 py-0.5 text-xs rounded bg-gray-700 text-gray-200">
+                            {user.tokenBalance} ток.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => banUser(user.id)}
+                          className="p-2 bg-orange-600 hover:bg-orange-700 rounded-lg text-white"
+                          title="Забанить"
+                        >
+                          <Ban size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteUser(user.id)}
+                          className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+                          title="Удалить"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'posts' && (
+          <div className="space-y-3">
+            <p className="text-gray-500 text-xs">Всего: {postsTotal}</p>
+            {loading ? (
+              <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
+            ) : (
+              posts.map((post) => (
+                <div key={post.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white mb-2 line-clamp-3">{post.content}</p>
+                      <p className="text-gray-400 text-sm mb-1">
+                        Автор: @{post.author.username}
+                      </p>
+                      <p className="text-gray-500 text-xs">{formatDate(post.createdAt)}</p>
+                      {post.media?.length > 0 && (
+                        <p className="text-gray-400 text-xs mt-2">
+                          Медиа: {post.media.map((m) => m.type).join(', ')}
+                        </p>
+                      )}
+                    </div>
                     <button
-                      onClick={() => banUser(user.id)}
-                      className="p-2 bg-orange-600 hover:bg-orange-700 rounded-lg text-white"
-                      title="Забанить"
-                    >
-                      <Ban size={16} />
-                    </button>
-                    <button
-                      onClick={() => deleteUser(user.id)}
+                      type="button"
+                      onClick={() => deletePost(post.id)}
                       className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
-                      title="Удалить"
+                      title="Удалить пост"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'posts' && (
-          <div className="space-y-4">
-            {posts.map((post) => (
-              <div key={post.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-white mb-2">{post.content}</p>
-                    <p className="text-gray-400 text-sm mb-2">
-                      Автор: @{post.author.username}
-                    </p>
-                    <p className="text-gray-500 text-xs">{formatDate(post.createdAt)}</p>
-                    {post.media && post.media.length > 0 && (
-                      <div className="mt-2">
-                        <span className="text-gray-400 text-xs">
-                          Медиа: {post.media.map(m => m.type).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => deletePost(post.id)}
-                    className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white ml-4"
-                    title="Удалить пост"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
         {activeTab === 'soundtoks' && (
-          <div className="space-y-4">
-            {soundToks.map((soundTok) => (
-              <div key={soundTok.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-white mb-2">{soundTok.description}</p>
-                    <p className="text-gray-400 text-sm mb-2">
-                      Автор: @{soundTok.author.username} | Лайки: {soundTok.likes}
-                    </p>
-                    <p className="text-gray-500 text-xs">{formatDate(soundTok.createdAt)}</p>
-                    {soundTok.videoUrl && (
-                      <div className="mt-2">
-                        <span className="text-gray-400 text-xs">
-                          Видео: {soundTok.videoUrl}
-                        </span>
-                      </div>
-                    )}
+          <div className="space-y-3">
+            <p className="text-gray-500 text-xs">Всего: {soundToksTotal}</p>
+            {loading ? (
+              <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
+            ) : (
+              soundToks.map((soundTok) => (
+                <div key={soundTok.id} className="bg-gray-800 rounded-lg p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white mb-2 line-clamp-3">{soundTok.description}</p>
+                      <p className="text-gray-400 text-sm mb-1">
+                        Автор: @{soundTok.author.username} · Лайки: {soundTok.likes}
+                      </p>
+                      <p className="text-gray-500 text-xs">{formatDate(soundTok.createdAt)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteSoundTok(soundTok.id)}
+                      className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+                      title="Удалить видео"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => deleteSoundTok(soundTok.id)}
-                    className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white ml-4"
-                    title="Удалить видео"
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-700 bg-gray-800/80 p-4">
+      <div className="flex items-center gap-2 text-gray-400 text-xs uppercase tracking-wide mb-2">
+        {icon}
+        {label}
+      </div>
+      <p className="text-white text-2xl font-semibold">{value}</p>
+      <p className="text-gray-400 text-sm mt-1">{hint}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-gray-700/80 bg-gray-800/50 px-4 py-3">
+      <p className="text-gray-400 text-xs">{label}</p>
+      <p className="text-white text-xl font-semibold mt-1">{value}</p>
     </div>
   );
 }

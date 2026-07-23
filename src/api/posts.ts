@@ -54,9 +54,25 @@ export const postsApi = {
     return response.data;
   },
   
-  getPosts: async (sort: 'latest' | 'trending' = 'latest', tag?: string) => {
-    const response = await api.get('/posts', { params: { sort, ...(tag && { tag }) } });
-    return response.data;
+  getPosts: async (
+    sort: 'latest' | 'trending' = 'latest',
+    tag?: string,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<{ items: Post[]; total: number; hasMore: boolean; limit: number; offset: number }> => {
+    const response = await api.get('/posts', {
+      params: {
+        sort,
+        ...(tag && { tag }),
+        limit: opts?.limit ?? 30,
+        offset: opts?.offset ?? 0,
+      },
+    });
+    const data = response.data;
+    // Backward-compat if an older API still returns a bare array
+    if (Array.isArray(data)) {
+      return { items: data, total: data.length, hasMore: false, limit: data.length, offset: 0 };
+    }
+    return data;
   },
 
   getPost: async (id: string): Promise<Post> => (await api.get(`/posts/${id}`)).data,

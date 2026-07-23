@@ -678,6 +678,8 @@ interface VideoFeedProps {
   onLike: (id: string) => void;
   onCommentCountChange?: (id: string, count: number) => void;
   initialIndex?: number;
+  /** Fired when the user is near the end — used to prefetch the next page. */
+  onNearEnd?: () => void;
 }
 
 function CommentAvatar({ author }: { author: Comment['author'] }) {
@@ -696,6 +698,7 @@ export default function VideoFeed({
   onLike,
   onCommentCountChange,
   initialIndex = 0,
+  onNearEnd,
 }: VideoFeedProps) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
@@ -771,6 +774,13 @@ export default function VideoFeed({
     const safeIndex = Math.min(Math.max(initialIndex, 0), soundToks.length - 1);
     setCurrentIndex(safeIndex);
   }, [initialIndex, soundToks.length]);
+
+  useEffect(() => {
+    if (!onNearEnd || soundToks.length === 0) return;
+    if (currentIndex >= soundToks.length - 3) {
+      onNearEnd();
+    }
+  }, [currentIndex, soundToks.length, onNearEnd]);
 
   useEffect(() => {
     if (!currentUser) return;

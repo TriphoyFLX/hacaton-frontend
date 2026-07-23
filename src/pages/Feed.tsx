@@ -1409,20 +1409,45 @@ export default function Feed() {
   const selectedTag = new URLSearchParams(location.search).get('tag')?.replace(/^#/, '').trim() || '';
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [activeTab, setActiveTab] = useState<'trending' | 'latest'>('trending');
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const PAGE_SIZE = 30;
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await postsApi.getPosts(activeTab, selectedTag);
-      setPosts(data ?? []);
+      const data = await postsApi.getPosts(activeTab, selectedTag, { limit: PAGE_SIZE, offset: 0 });
+      setPosts(data.items ?? []);
+      setHasMore(Boolean(data.hasMore));
     } catch {
       setPosts([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
   }, [activeTab, selectedTag]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await postsApi.getPosts(activeTab, selectedTag, {
+        limit: PAGE_SIZE,
+        offset: posts.length,
+      });
+      setPosts((current) => {
+        const seen = new Set(current.map((p) => p.id));
+        return [...current, ...(data.items ?? []).filter((p) => !seen.has(p.id))];
+      });
+      setHasMore(Boolean(data.hasMore));
+    } catch {
+      /* keep current list */
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [activeTab, selectedTag, posts.length, loadingMore, hasMore]);
 
   useEffect(() => {
     void fetchPosts();
@@ -1543,6 +1568,19 @@ export default function Feed() {
               <div className="empty-label">Нет публикаций</div>
               <div className="empty-hint">Будьте первым, кто создаст пост</div>
             </motion.div>
+          )}
+
+          {!loading && hasMore && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0 32px' }}>
+              <button
+                type="button"
+                className="feed-tab"
+                onClick={() => void loadMore()}
+                disabled={loadingMore}
+              >
+                {loadingMore ? 'Загрузка…' : 'Показать ещё'}
+              </button>
+            </div>
           )}
         </div>
       </div>
