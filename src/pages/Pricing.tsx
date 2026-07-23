@@ -248,7 +248,7 @@ export default function Pricing() {
         </div>
 
         <p className="pr-sub" style={{ marginTop: 28 }}>
-          Оплата через ЮKassa (тест). После оплаты вернётесь на эту страницу.
+          Оплата через ЮKassa. После оплаты вернётесь на эту страницу.
           {' '}
           <Link to="/offer">Оферта</Link>
           {' · '}
