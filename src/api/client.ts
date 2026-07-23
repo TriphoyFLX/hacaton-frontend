@@ -3,11 +3,14 @@ import { getAuthToken } from '../lib/authToken';
 
 const configuredApiOrigin = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '');
 
-// In production the API is reverse-proxied by Nginx under the same domain.
-// Falling back to the current origin avoids requests from a visitor's phone
-// being sent to its own localhost:5002.
+const defaultApiOrigin = import.meta.env.DEV
+  ? 'http://localhost:5002'
+  : (typeof window !== 'undefined' ? window.location.origin : '');
+
 export const API_ORIGIN = configuredApiOrigin
-  || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5002');
+  || defaultApiOrigin;
+export const SOCKET_ORIGIN = import.meta.env.VITE_SOCKET_URL?.replace(/\/$/, '')
+  || API_ORIGIN;
 
 export const api = axios.create({
   baseURL: `${API_ORIGIN}/api`,
@@ -19,7 +22,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = getAuthToken();
-  if (token) {
+  if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   // FormData must keep its multipart boundary — never force application/json
@@ -39,7 +42,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 && getAuthToken()) {
+    const requestUrl = String(error.config?.url || '');
+    const isCredentialRequest = /\/auth\/(login|register|verify-email|resend-code)$/.test(requestUrl);
+    if (error.response?.status === 401 && getAuthToken() && !isCredentialRequest) {
       const { useAuthStore } = await import('../store/authStore');
       useAuthStore.getState().logout();
 

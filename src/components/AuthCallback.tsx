@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { authApi } from '../api/auth';
-import { setAuthToken } from '../lib/authToken';
+import { clearAuthSession } from '../lib/authToken';
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -11,19 +11,21 @@ export default function AuthCallback() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const token = hashParams.get('token') || searchParams.get('token');
     if (!token) {
       setError('Нет токена авторизации');
       return;
     }
+    window.history.replaceState(null, '', window.location.pathname);
 
     (async () => {
       try {
-        setAuthToken(token);
-        const { data: user } = await authApi.getMe();
+        const { data: user } = await authApi.getMe(token);
         setSession(user, token);
         navigate('/dashboard', { replace: true });
       } catch {
+        clearAuthSession();
         setError('Не удалось войти через соцсеть');
       }
     })();

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { SOCKET_ORIGIN } from '../api/client';
 
 // Types matching backend
 export interface MessageReaction {
@@ -117,7 +118,6 @@ interface UseSocketReturn {
   subscribeToUser: (userId: string) => void;
 }
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5002';
 const MAX_RECONNECT_ATTEMPTS = 5;
 
 export function useSocket(token: string | null, options: UseSocketOptions = {}): UseSocketReturn {
@@ -141,7 +141,7 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
       return;
     }
 
-    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {
+    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_ORIGIN, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,

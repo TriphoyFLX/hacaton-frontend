@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import SearchModal from './SearchModal';
 import { AppNotification, notificationsApi } from '../api/notifications';
 import { useAuthStore } from '../store/authStore';
-import { API_ORIGIN } from '../api/client';
+import { API_ORIGIN, SOCKET_ORIGIN } from '../api/client';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
 
@@ -108,14 +109,29 @@ ${FONT_IMPORT}
 .notifications-wrap {
   position: relative;
 }
+.notifications-backdrop {
+  position: fixed;
+  z-index: 4999;
+  inset: 0;
+  border: 0;
+  background: transparent;
+}
 .notifications-panel {
-  position: absolute;
-  z-index: 100;
-  top: calc(100% + 8px);
-  right: 0;
+  --bg-surface: #111111;
+  --bg-elevated: #181818;
+  --border-mid: #232323;
+  --text-primary: #f0ede8;
+  --text-secondary: #c5c0b8;
+  --text-muted: #737373;
+  position: fixed;
+  z-index: 5000;
+  top: 67px;
+  right: 20px;
   width: min(380px, calc(100vw - 24px));
-  max-height: min(520px, calc(100vh - 90px));
+  max-height: min(520px, calc(100dvh - 83px - var(--app-bottom-nav, 0px)));
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 8px;
   border: 1px solid var(--border-mid);
   border-radius: 10px;
@@ -123,7 +139,12 @@ ${FONT_IMPORT}
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 .notifications-title {
+  position: sticky;
+  z-index: 1;
+  top: -8px;
   padding: 8px 10px;
+  border-bottom: 1px solid var(--border-mid);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
@@ -166,6 +187,7 @@ ${FONT_IMPORT}
 .notification-copy {
   min-width: 0;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .notification-time {
   display: block;
@@ -193,6 +215,13 @@ ${FONT_IMPORT}
 
   .header-hint {
     display: none;
+  }
+
+  .notifications-panel {
+    top: 65px;
+    right: 12px;
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 77px - var(--app-bottom-nav, 0px));
   }
 }
 `;
@@ -238,8 +267,17 @@ export default function Header() {
   }, [loadNotifications]);
 
   useEffect(() => {
+    if (!isNotificationsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsNotificationsOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isNotificationsOpen]);
+
+  useEffect(() => {
     if (!token) return;
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5002', {
+    const socket = io(SOCKET_ORIGIN, {
       auth: { token },
       transports: ['websocket', 'polling'],
     });
@@ -307,31 +345,41 @@ export default function Header() {
               <IconBell />
               {unreadCount > 0 && <span className="header-dot" />}
             </button>
-            {isNotificationsOpen && (
-              <div className="notifications-panel" role="dialog" aria-label="Уведомления">
-                <div className="notifications-title">Уведомления</div>
-                {notifications.length === 0 ? (
-                  <div className="notifications-empty">Пока нет новых уведомлений</div>
-                ) : notifications.map((notification) => (
-                  <button
-                    key={notification.id}
-                    className={`notification-item ${notification.readAt ? '' : 'unread'}`}
-                    onClick={() => void openNotification(notification)}
-                  >
-                    <span className="notification-avatar">
-                      {notification.actor.avatar ? <img src={notification.actor.avatar.startsWith('http') ? notification.actor.avatar : `${API_ORIGIN}${notification.actor.avatar}`} alt="" /> : notification.actor.username[0]?.toUpperCase()}
-                    </span>
-                    <span className="notification-copy">
-                      {notificationText(notification)}
-                      <span className="notification-time">{new Date(notification.createdAt).toLocaleString('ru-RU')}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </header>
+
+      {isNotificationsOpen && typeof document !== 'undefined' && createPortal(
+        <>
+          <button
+            type="button"
+            className="notifications-backdrop"
+            aria-label="Закрыть уведомления"
+            onClick={() => setIsNotificationsOpen(false)}
+          />
+          <div className="notifications-panel" role="dialog" aria-label="Уведомления">
+            <div className="notifications-title">Уведомления</div>
+            {notifications.length === 0 ? (
+              <div className="notifications-empty">Пока нет новых уведомлений</div>
+            ) : notifications.map((notification) => (
+              <button
+                key={notification.id}
+                className={`notification-item ${notification.readAt ? '' : 'unread'}`}
+                onClick={() => void openNotification(notification)}
+              >
+                <span className="notification-avatar">
+                  {notification.actor.avatar ? <img src={notification.actor.avatar.startsWith('http') ? notification.actor.avatar : `${API_ORIGIN}${notification.actor.avatar}`} alt="" /> : notification.actor.username[0]?.toUpperCase()}
+                </span>
+                <span className="notification-copy">
+                  {notificationText(notification)}
+                  <span className="notification-time">{new Date(notification.createdAt).toLocaleString('ru-RU')}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body,
+      )}
       
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </>

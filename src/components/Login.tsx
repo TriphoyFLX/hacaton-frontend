@@ -347,6 +347,7 @@ export default function Login() {
       google_failed: 'Не удалось войти через Google',
       vk_denied: 'Вход через VK отменён',
       vk_failed: 'Не удалось войти через VK',
+      oauth_state: 'Сессия входа истекла. Попробуйте войти ещё раз',
     };
     setError(map[err] || 'Ошибка входа через соцсеть');
   }, [searchParams]);

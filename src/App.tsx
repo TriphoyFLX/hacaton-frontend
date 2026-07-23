@@ -39,7 +39,7 @@ function Lazy({ children }: { children: ReactNode }) {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Public SEO / marketing — crawlable without login */}
         <Route path="/" element={<Landing variant="home" />} />

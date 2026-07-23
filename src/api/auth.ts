@@ -13,7 +13,9 @@ export const authApi = {
   resendCode: (email: string) =>
     api.post('/auth/resend-code', { email }),
 
-  getMe: () => api.get('/auth/me'),
+  getMe: (token?: string) => api.get('/auth/me', token
+    ? { headers: { Authorization: `Bearer ${token}` } }
+    : undefined),
 
   getProviders: () => api.get<{ google: boolean; vk: boolean }>('/auth/providers'),
 
