@@ -24,6 +24,7 @@ const PAGE_SIZE = 40;
 
 type Tab = 'overview' | 'purchases' | 'reports' | 'users' | 'posts' | 'soundtoks';
 type PurchaseFilter = 'all' | 'subscriptions' | 'tokens' | 'presets';
+type PaymentStatusFilter = 'ALL' | 'SUCCEEDED' | 'PENDING' | 'CANCELED';
 type ReportStatusFilter = 'OPEN' | 'REVIEWING' | 'RESOLVED' | 'DISMISSED' | 'ALL';
 
 function authHeaders(): HeadersInit {
@@ -71,6 +72,49 @@ interface AdminStats {
     totalRevenueRub: number;
   };
   byKind: Record<string, { count: number; revenueRub: number }>;
+  funnel?: {
+    clicked: number;
+    pending: number;
+    paid: number;
+    canceled: number;
+    abandonedPending: number;
+    conversionPct: number;
+    cancelPct: number;
+    uniquePayers: number;
+    avgTicketRub: number;
+    last7d: {
+      clicked: number;
+      paid: number;
+      canceled: number;
+      revenueRub: number;
+      conversionPct: number;
+    };
+    last30d: {
+      clicked: number;
+      paid: number;
+      canceled: number;
+      revenueRub: number;
+      conversionPct: number;
+    };
+    byKind: Record<
+      string,
+      {
+        started: number;
+        paid: number;
+        canceled: number;
+        pending: number;
+        revenueRub: number;
+        conversionPct: number;
+      }
+    >;
+    daily: Array<{
+      date: string;
+      clicked: number;
+      paid: number;
+      canceled: number;
+      revenueRub: number;
+    }>;
+  };
   recent: {
     payments: Array<{
       id: string;
@@ -175,6 +219,7 @@ function kindLabel(kind: string) {
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [purchaseFilter, setPurchaseFilter] = useState<PurchaseFilter>('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('ALL');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
@@ -225,7 +270,7 @@ export default function AdminPanel() {
     setSoundToksTotal(data.total);
   }, []);
 
-  const loadPurchases = useCallback(async (filter: PurchaseFilter) => {
+  const loadPurchases = useCallback(async (filter: PurchaseFilter, status: PaymentStatusFilter) => {
     if (filter === 'presets') {
       const data = await adminFetch<Paged<PresetPurchaseRow>>(
         `/preset-purchases?limit=${PAGE_SIZE}&offset=0`,
@@ -240,7 +285,7 @@ export default function AdminPanel() {
     const qs = new URLSearchParams({
       limit: String(PAGE_SIZE),
       offset: '0',
-      status: 'SUCCEEDED',
+      status,
     });
     if (filter === 'subscriptions' || filter === 'tokens') qs.set('kind', filter);
     const data = await adminFetch<Paged<PaymentRow>>(`/payments?${qs}`);
@@ -280,7 +325,7 @@ export default function AdminPanel() {
           await loadOverview();
           break;
         case 'purchases':
-          await loadPurchases(purchaseFilter);
+          await loadPurchases(purchaseFilter, paymentStatusFilter);
           break;
         case 'reports':
           await loadReports(reportStatusFilter);
@@ -304,6 +349,7 @@ export default function AdminPanel() {
   }, [
     activeTab,
     purchaseFilter,
+    paymentStatusFilter,
     reportStatusFilter,
     debouncedQuery,
     loadOverview,
@@ -520,6 +566,128 @@ export default function AdminPanel() {
               <MiniStat label="Открытые жалобы" value={stats.totals.openReports ?? 0} />
             </div>
 
+            {stats.funnel && (
+              <section className="bg-gray-800/80 rounded-xl border border-gray-700 p-4 space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <h2 className="text-white font-semibold">Воронка оплаты</h2>
+                  <p className="text-xs text-gray-500">
+                    Клик «Оплатить» = попытка · письмо только после реальной оплаты
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatCard
+                    icon={<CreditCard size={18} />}
+                    label="Нажали оплатить"
+                    value={String(stats.funnel.clicked)}
+                    hint={`Конверсия ${stats.funnel.conversionPct}%`}
+                  />
+                  <StatCard
+                    icon={<Coins size={18} />}
+                    label="Оплатили"
+                    value={String(stats.funnel.paid)}
+                    hint={`Средний чек ${formatRub(stats.funnel.avgTicketRub)}`}
+                  />
+                  <StatCard
+                    icon={<Package size={18} />}
+                    label="Отменили / ушли"
+                    value={String(stats.funnel.canceled)}
+                    hint={`Отвал ${stats.funnel.cancelPct}%`}
+                  />
+                  <StatCard
+                    icon={<BarChart3 size={18} />}
+                    label="Ждут оплаты"
+                    value={String(stats.funnel.pending)}
+                    hint={`Брошено >1ч: ${stats.funnel.abandonedPending}`}
+                  />
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <MiniStat label="Уник. плательщики" value={stats.funnel.uniquePayers} />
+                  <MiniStat
+                    label="7д клики → оплата"
+                    value={`${stats.funnel.last7d.clicked} → ${stats.funnel.last7d.paid}`}
+                  />
+                  <MiniStat
+                    label="7д конверсия"
+                    value={`${stats.funnel.last7d.conversionPct}%`}
+                  />
+                  <MiniStat
+                    label="7д выручка"
+                    value={formatRub(stats.funnel.last7d.revenueRub)}
+                  />
+                  <MiniStat
+                    label="30д клики → оплата"
+                    value={`${stats.funnel.last30d.clicked} → ${stats.funnel.last30d.paid}`}
+                  />
+                  <MiniStat
+                    label="30д конверсия"
+                    value={`${stats.funnel.last30d.conversionPct}%`}
+                  />
+                  <MiniStat
+                    label="30д выручка"
+                    value={formatRub(stats.funnel.last30d.revenueRub)}
+                  />
+                  <MiniStat
+                    label="30д отмены"
+                    value={stats.funnel.last30d.canceled}
+                  />
+                </div>
+
+                {Object.keys(stats.funnel.byKind).length > 0 && (
+                  <div>
+                    <h3 className="text-gray-300 text-sm font-medium mb-2">По продуктам</h3>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {Object.entries(stats.funnel.byKind).map(([kind, row]) => (
+                        <div
+                          key={kind}
+                          className="rounded-lg bg-gray-900/60 px-3 py-2 text-sm space-y-1"
+                        >
+                          <div className="flex justify-between gap-2">
+                            <span className="text-gray-300">{kindLabel(kind)}</span>
+                            <span className="text-emerald-400">{row.conversionPct}%</span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            клик {row.started} · оплата {row.paid} · отмена {row.canceled} · ждёт{' '}
+                            {row.pending}
+                          </p>
+                          <p className="text-xs text-gray-400">{formatRub(row.revenueRub)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {stats.funnel.daily.some((d) => d.clicked > 0) && (
+                  <div>
+                    <h3 className="text-gray-300 text-sm font-medium mb-2">14 дней</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="text-gray-500 border-b border-gray-700">
+                          <tr>
+                            <th className="py-1.5 pr-3 font-medium">Дата</th>
+                            <th className="py-1.5 pr-3 font-medium">Клики</th>
+                            <th className="py-1.5 pr-3 font-medium">Оплаты</th>
+                            <th className="py-1.5 pr-3 font-medium">Отмены</th>
+                            <th className="py-1.5 font-medium">Выручка</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.funnel.daily.map((d) => (
+                            <tr key={d.date} className="border-b border-gray-800 text-gray-300">
+                              <td className="py-1.5 pr-3 font-mono text-gray-500">{d.date}</td>
+                              <td className="py-1.5 pr-3">{d.clicked}</td>
+                              <td className="py-1.5 pr-3 text-emerald-400">{d.paid}</td>
+                              <td className="py-1.5 pr-3 text-amber-400/90">{d.canceled}</td>
+                              <td className="py-1.5">{formatRub(d.revenueRub)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
             {Object.keys(stats.byKind).length > 0 && (
               <section className="bg-gray-800/80 rounded-xl border border-gray-700 p-4">
                 <h2 className="text-white font-semibold mb-3">Разбивка платежей</h2>
@@ -619,6 +787,32 @@ export default function AdminPanel() {
               ))}
             </div>
 
+            {purchaseFilter !== 'presets' && (
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ['ALL', 'Все статусы'],
+                    ['SUCCEEDED', 'Оплачено'],
+                    ['PENDING', 'Нажали / ждут'],
+                    ['CANCELED', 'Отменено'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setPaymentStatusFilter(id)}
+                    className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                      paymentStatusFilter === id
+                        ? 'bg-amber-700/80 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {loading ? (
               <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
             ) : (
@@ -648,7 +842,21 @@ export default function AdminPanel() {
                               <p className="text-emerald-400 font-semibold">
                                 {formatRub(p.amountRub)}
                               </p>
-                              <p className="text-xs text-gray-400">{p.status}</p>
+                              <p
+                                className={`text-xs ${
+                                  p.status === 'SUCCEEDED'
+                                    ? 'text-emerald-400'
+                                    : p.status === 'CANCELED'
+                                      ? 'text-amber-400'
+                                      : 'text-sky-400'
+                                }`}
+                              >
+                                {p.status === 'SUCCEEDED'
+                                  ? 'Оплачено'
+                                  : p.status === 'CANCELED'
+                                    ? 'Отменено'
+                                    : 'Нажали / ждут'}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -961,7 +1169,7 @@ function StatCard({
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: number }) {
+function MiniStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-xl border border-gray-700/80 bg-gray-800/50 px-4 py-3">
       <p className="text-gray-400 text-xs">{label}</p>
