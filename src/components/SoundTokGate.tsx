@@ -21,7 +21,7 @@ export default function SoundTokGate({ children }: { children?: ReactNode }) {
   const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
   const [params] = useSearchParams();
   const location = useLocation();
-  const sharedId = params.get('v');
+  const sharedId = (params.get('v') || '').trim() || null;
 
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {

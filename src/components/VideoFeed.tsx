@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2, MoreVertical, Repeat2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2, MoreVertical, Repeat2, Download } from 'lucide-react';
 import { SoundTok, SoundTokAuthor, soundTokApi, Comment } from '../api/soundtok';
 import { soundsApi } from '../api/sounds';
 import { followsApi } from '../api/follows';
-import { API_ORIGIN } from '../api/client';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount, formatRelativeTime, pluralizeComments } from '../lib/format';
 import { useAuthStore } from '../store/authStore';
@@ -13,6 +12,7 @@ import {
   setSoundTokAudioPreference,
   shouldPreferSoundTokAudio,
 } from '../lib/mediaUnlock';
+import { downloadSoundTokWithWatermark } from '../lib/soundtokDownload';
 import ShareSoundTokModal from './ShareSoundTokModal';
 import AdminBadge from './AdminBadge';
 import PlatinumBadge from './PlatinumBadge';
@@ -1186,6 +1186,7 @@ export default function VideoFeed({
     Record<string, { isReposted: boolean; repostsCount: number; repostPreview?: SoundTokAuthor[] }>
   >({});
   const [repostingId, setRepostingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [repostsSheetId, setRepostsSheetId] = useState<string | null>(null);
   const [repostUsers, setRepostUsers] = useState<Array<{ id: string; createdAt: string; user: SoundTokAuthor }>>([]);
   const [repostsLoading, setRepostsLoading] = useState(false);
@@ -1313,6 +1314,26 @@ export default function VideoFeed({
       setRepostUsers([]);
     } finally {
       setRepostsLoading(false);
+    }
+  };
+
+  const handleDownloadSoundTok = async (tok: SoundTok) => {
+    if (downloadingId) return;
+    setDownloadingId(tok.id);
+    setMenuOpenId(null);
+    try {
+      const usesBed =
+        Boolean(tok.sound?.audioUrl) && tok.sound!.audioUrl !== tok.videoUrl;
+      await downloadSoundTokWithWatermark({
+        videoUrl: tok.videoUrl,
+        audioUrl: usesBed ? tok.sound?.audioUrl : null,
+        filename: `soundlab-${tok.author?.username || 'soundtok'}-${tok.id.slice(-6)}.webm`,
+      });
+    } catch (error) {
+      console.error('Failed to download SoundTok:', error);
+      window.alert('Не удалось скачать видео. Попробуйте ещё раз.');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -2127,7 +2148,7 @@ export default function VideoFeed({
                 }}
                 src={
                   Math.abs(index - currentIndex) <= 1
-                    ? `${API_ORIGIN}${soundTok.videoUrl}`
+                    ? resolveMediaUrl(soundTok.videoUrl) || undefined
                     : undefined
                 }
                 className="vf-video"
@@ -2197,7 +2218,7 @@ export default function VideoFeed({
                   ref={(el) => {
                     bedAudioRefs.current[index] = el;
                   }}
-                  src={`${API_ORIGIN}${soundTok.sound.audioUrl}`}
+                  src={resolveMediaUrl(soundTok.sound.audioUrl) || undefined}
                   loop
                   preload="metadata"
                 />
@@ -2452,6 +2473,19 @@ export default function VideoFeed({
                       </button>
                       {menuOpenId === soundTok.id && (
                         <div className="vf-more-menu" role="menu">
+                          <button
+                            type="button"
+                            className="vf-more-item"
+                            role="menuitem"
+                            disabled={downloadingId === soundTok.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDownloadSoundTok(soundTok);
+                            }}
+                          >
+                            <Download size={16} />
+                            {downloadingId === soundTok.id ? 'Скачивание…' : 'Скачать'}
+                          </button>
                           <button
                             type="button"
                             className="vf-more-item"

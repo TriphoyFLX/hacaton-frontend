@@ -611,6 +611,13 @@ ${FONT_IMPORT}
   background: #0a0a0a;
 }
 
+/* Guests render outside Layout — need explicit viewport height */
+.st-root--feed.st-root--guest {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
+}
+
 .st-feed-mode {
   position: absolute;
   inset: 0;
@@ -866,13 +873,14 @@ export default function SoundTok() {
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [guestKey] = useState(() => (guestMode ? getOrCreateGuestKey() : undefined));
+  const [sharedLoadError, setSharedLoadError] = useState(false);
   const PAGE_SIZE = 8;
 
-  const sharedVideoId = searchParams.get('v');
+  const sharedVideoId = (searchParams.get('v') || '').trim() || null;
   const openCommentsFromQuery = searchParams.get('c') === '1';
   const hasVideos = soundToks.length > 0;
   const authNext = encodeURIComponent(
-    sharedVideoId ? `/soundtok?v=${sharedVideoId}` : '/soundtok'
+    sharedVideoId ? `/soundtok?v=${encodeURIComponent(sharedVideoId)}` : '/soundtok'
   );
 
   const orderedSoundToks = useMemo(() => {
@@ -896,6 +904,7 @@ export default function SoundTok() {
 
   const fetchSoundToks = async () => {
     try {
+      setSharedLoadError(false);
       if (guestMode) {
         if (!sharedVideoId) {
           setSoundToks([]);
@@ -925,6 +934,10 @@ export default function SoundTok() {
       setHasMore(Boolean(data.hasMore));
     } catch (error) {
       console.error('Failed to fetch SoundToks:', error);
+      if (guestMode && sharedVideoId) {
+        setSharedLoadError(true);
+        setSoundToks([]);
+      }
       showToast('Не удалось загрузить видео', 'error');
     } finally {
       setLoading(false);
@@ -1069,7 +1082,7 @@ export default function SoundTok() {
   }
 
   return (
-    <div className={`st-root ${soundToks.length > 0 ? 'st-root--feed' : ''}`}>
+    <div className={`st-root ${soundToks.length > 0 ? 'st-root--feed' : ''} ${guestMode ? 'st-root--guest' : ''}`}>
       <style>{css}</style>
 
       {/* Toast notifications */}
@@ -1107,20 +1120,41 @@ export default function SoundTok() {
               <IconPlay />
             </div>
             {guestMode ? (
-              <>
-                <div className="st-empty-title">Войдите, чтобы смотреть SoundTok</div>
-                <div className="st-empty-desc">
-                  Зарегистрируйтесь или войдите, чтобы открыть ленту коротких музыкальных видео.
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <Link className="st-btn st-btn-gradient" to={`/register?next=${authNext}`}>
-                    Регистрация
-                  </Link>
-                  <Link className="st-btn st-btn-ghost" to={`/login?next=${authNext}`}>
-                    Войти
-                  </Link>
-                </div>
-              </>
+              sharedVideoId ? (
+                <>
+                  <div className="st-empty-title">
+                    {sharedLoadError ? 'Не удалось открыть видео' : 'Видео не найдено'}
+                  </div>
+                  <div className="st-empty-desc">
+                    {sharedLoadError
+                      ? 'Проверьте ссылку или попробуйте позже. Можно также войти в аккаунт и открыть SoundTok.'
+                      : 'По этой ссылке видео недоступно. Возможно, его удалили.'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <Link className="st-btn st-btn-gradient" to={`/register?next=${authNext}`}>
+                      Регистрация
+                    </Link>
+                    <Link className="st-btn st-btn-ghost" to={`/login?next=${authNext}`}>
+                      Войти
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="st-empty-title">Войдите, чтобы смотреть SoundTok</div>
+                  <div className="st-empty-desc">
+                    Зарегистрируйтесь или войдите, чтобы открыть ленту коротких музыкальных видео.
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <Link className="st-btn st-btn-gradient" to={`/register?next=${authNext}`}>
+                      Регистрация
+                    </Link>
+                    <Link className="st-btn st-btn-ghost" to={`/login?next=${authNext}`}>
+                      Войти
+                    </Link>
+                  </div>
+                </>
+              )
             ) : (
               <>
                 <div className="st-empty-title">Запусти свой первый музыкальный клип</div>

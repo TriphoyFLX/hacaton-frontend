@@ -50,7 +50,8 @@ api.interceptors.response.use(
 
       const path = window.location.pathname;
       if (!path.startsWith('/login') && !path.startsWith('/register')) {
-        window.location.href = '/login';
+        const next = encodeURIComponent(`${path}${window.location.search || ''}`);
+        window.location.href = `/login?next=${next}`;
       }
     }
     return Promise.reject(error);

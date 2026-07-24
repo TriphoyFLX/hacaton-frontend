@@ -3,6 +3,31 @@ const SOUNDTOK_SOUND_KEY = 'soundtok_sound';
 
 let unlockedInSession = false;
 
+/** Tiny silent WAV as ArrayBuffer — turned into a blob: URL (CSP-safe vs data:). */
+function createSilentWavBlobUrl(): string {
+  const sampleRate = 8000;
+  const numSamples = 8;
+  const bytes = new Uint8Array(44 + numSamples * 2);
+  const view = new DataView(bytes.buffer);
+  const writeStr = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + numSamples * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, numSamples * 2, true);
+  return URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+}
+
 function readFlag(key: string): string | null {
   try {
     return sessionStorage.getItem(key);
@@ -43,13 +68,18 @@ export function unlockMediaPlayback(): void {
   }
 
   try {
-    const silence = new Audio(
-      'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=',
-    );
+    const silenceUrl = createSilentWavBlobUrl();
+    const silence = new Audio(silenceUrl);
     silence.volume = 0.01;
-    void silence.play().then(() => {
-      silence.pause();
-    }).catch(() => undefined);
+    void silence
+      .play()
+      .then(() => {
+        silence.pause();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        URL.revokeObjectURL(silenceUrl);
+      });
   } catch {
     // ignore
   }
