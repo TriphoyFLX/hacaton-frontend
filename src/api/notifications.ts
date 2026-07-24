@@ -1,6 +1,6 @@
 import api from './client';
 
-export type NotificationType = 'LIKE' | 'COMMENT' | 'FOLLOW' | 'MESSAGE';
+export type NotificationType = 'LIKE' | 'COMMENT' | 'FOLLOW' | 'MESSAGE' | 'REPOST';
 
 export interface AppNotification {
   id: string;
@@ -23,6 +23,8 @@ export const notificationsApi = {
     (await api.get<{ unreadCount: number }>('/notifications/unread-count')).data.unreadCount,
   markRead: async (ids?: string[]) =>
     (await api.patch<{ unreadCount: number }>('/notifications/read', ids ? { ids } : {})).data,
+  remove: async (id: string) =>
+    (await api.delete<{ deletedCount: number; unreadCount: number }>(`/notifications/${id}`)).data,
   clear: async () =>
     (await api.delete<{ deletedCount: number; unreadCount: number }>('/notifications')).data,
 };

@@ -379,11 +379,17 @@ export default function Header() {
 
   const notificationText = (notification: AppNotification) => {
     const name = notification.actor.displayName || `@${notification.actor.username}`;
+    if (notification.type === 'REPOST') {
+      if (notification.entityType === 'soundtok_same_repost') {
+        return `${name} сделал(а) репост той же публикации`;
+      }
+      return `${name} сделал(а) репост вашего видео`;
+    }
     if (notification.entityType === 'soundtok') {
       if (notification.type === 'LIKE') return `${name} оценил(а) ваше видео`;
       if (notification.type === 'COMMENT') return `${name} прокомментировал(а) ваше видео`;
     }
-    const actions: Record<AppNotification['type'], string> = {
+    const actions: Record<Exclude<AppNotification['type'], 'REPOST'>, string> = {
       LIKE: 'оценил(а) вашу публикацию',
       COMMENT: 'оставил(а) комментарий к публикации',
       FOLLOW: 'подписался(ась) на вас',
@@ -393,13 +399,23 @@ export default function Header() {
   };
 
   const openNotification = async (notification: AppNotification) => {
-    if (!notification.readAt) {
-      const result = await notificationsApi.markRead([notification.id]);
-      setUnreadCount(result.unreadCount);
-      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item));
-    }
     setIsNotificationsOpen(false);
-    if (notification.entityType === 'soundtok' && notification.entityId) {
+    setNotifications((current) => current.filter((item) => item.id !== notification.id));
+    if (!notification.readAt) {
+      setUnreadCount((count) => Math.max(0, count - 1));
+    }
+
+    try {
+      const result = await notificationsApi.remove(notification.id);
+      setUnreadCount(result.unreadCount);
+    } catch {
+      // keep local dismiss even if delete fails
+    }
+
+    if (
+      (notification.entityType === 'soundtok' || notification.entityType === 'soundtok_same_repost') &&
+      notification.entityId
+    ) {
       const base = `/soundtok?v=${encodeURIComponent(notification.entityId)}`;
       navigate(notification.type === 'COMMENT' ? `${base}&c=1` : base);
       return;
