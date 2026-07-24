@@ -6,6 +6,7 @@ import { syncRecentProfile } from '../lib/recentProfiles';
 import FollowListModal from '../components/FollowListModal';
 import BattleRatingCard from '../components/BattleRatingCard';
 import AdminBadge from '../components/AdminBadge';
+import ProfileMediaTabs from '../components/ProfileMediaTabs';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
 
@@ -729,6 +730,29 @@ export default function Profile() {
     }
   };
 
+  const handleLikedPrivacyChange = async (value: boolean) => {
+    try {
+      const result = await profileApi.updateProfile({ likedSoundToksPublic: value });
+      if (result.success && result.user) {
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...result.user,
+                likedSoundToksPublic: result.user!.likedSoundToksPublic,
+              }
+            : result.user!
+        );
+        setSaveStatus('success');
+      } else {
+        setSaveStatus('error');
+      }
+    } catch (error) {
+      console.error('Failed to update likes privacy:', error);
+      setSaveStatus('error');
+    }
+  };
+
   const getFieldError = (field: string) => {
     return errors.find(e => e.field === field)?.message;
   };
@@ -970,12 +994,16 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Posts */}
+        {/* SoundTok / Likes */}
         <div className="posts-section">
-          <div className="section-heading">Посты</div>
-          <div className="posts-empty">
-            <div className="posts-empty-label">Нет публикаций</div>
-          </div>
+          <ProfileMediaTabs
+            identifier={profile.username || profile.id}
+            isOwner
+            soundToksCount={profile.soundToksCount ?? 0}
+            likedSoundToksCount={profile.likedSoundToksCount}
+            likedSoundToksPublic={Boolean(profile.likedSoundToksPublic)}
+            onPrivacyChange={handleLikedPrivacyChange}
+          />
         </div>
 
       </div>

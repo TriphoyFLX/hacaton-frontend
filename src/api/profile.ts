@@ -8,12 +8,14 @@ export interface UserProfile {
   avatar?: string | null;
   bio?: string | null;
   usernameChangeAvailableAt?: string | null;
+  likedSoundToksPublic?: boolean;
   birthDate?: string;
   role?: string;
   createdAt: string;
   updatedAt?: string;
   postsCount?: number;
   soundToksCount?: number;
+  likedSoundToksCount?: number;
   followersCount?: number;
   followingCount?: number;
   isFollowing?: boolean;
@@ -36,6 +38,7 @@ export interface UpdateProfileData {
   username?: string;
   displayName?: string;
   bio?: string;
+  likedSoundToksPublic?: boolean;
 }
 
 export interface ValidationError {
@@ -94,6 +97,46 @@ export const profileApi = {
   searchUsers: async (query: string, limit: number = 10): Promise<ProfileSearchUser[]> => {
     const response = await api.get(`/profile/search?q=${encodeURIComponent(query)}&limit=${limit}`);
     return response.data;
+  },
+
+  getUserSoundToks: async (
+    identifier: string,
+    opts?: { limit?: number; offset?: number }
+  ) => {
+    const response = await api.get(`/profile/${encodeURIComponent(identifier)}/soundtoks`, {
+      params: {
+        limit: opts?.limit ?? 24,
+        offset: opts?.offset ?? 0,
+      },
+    });
+    return response.data as {
+      userId: string;
+      items: import('./soundtok').SoundTok[];
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+  },
+
+  getUserLikedSoundToks: async (
+    identifier: string,
+    opts?: { limit?: number; offset?: number }
+  ) => {
+    const response = await api.get(`/profile/${encodeURIComponent(identifier)}/liked-soundtoks`, {
+      params: {
+        limit: opts?.limit ?? 24,
+        offset: opts?.offset ?? 0,
+      },
+    });
+    return response.data as {
+      userId: string;
+      items: import('./soundtok').SoundTok[];
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
   },
 };
 

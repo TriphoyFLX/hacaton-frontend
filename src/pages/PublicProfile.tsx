@@ -11,6 +11,7 @@ import FollowListModal from '../components/FollowListModal';
 import BattleRatingCard from '../components/BattleRatingCard';
 import AdminBadge from '../components/AdminBadge';
 import ReportUserModal from '../components/ReportUserModal';
+import ProfileMediaTabs from '../components/ProfileMediaTabs';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -728,13 +729,29 @@ export default function PublicProfile() {
           </div>
         </div>
 
-        {/* Posts */}
+        {/* SoundTok / Likes */}
         <div className="profile-posts">
-          <div className="posts-heading">Посты @{user.username}</div>
-          <div className="posts-empty">
-            <div className="posts-empty-icon">—</div>
-            <div className="posts-empty-label">Нет публикаций</div>
-          </div>
+          <ProfileMediaTabs
+            identifier={user.username || user.id}
+            isOwner={currentUser?.id === user.id}
+            soundToksCount={user.soundToksCount ?? 0}
+            likedSoundToksCount={user.likedSoundToksCount}
+            likedSoundToksPublic={Boolean(user.likedSoundToksPublic)}
+            onPrivacyChange={
+              currentUser?.id === user.id
+                ? async (value) => {
+                    const result = await profileApi.updateProfile({ likedSoundToksPublic: value });
+                    if (result.success && result.user) {
+                      setUser((prev) =>
+                        prev
+                          ? { ...prev, likedSoundToksPublic: result.user!.likedSoundToksPublic }
+                          : prev
+                      );
+                    }
+                  }
+                : undefined
+            }
+          />
         </div>
       </div>
 
