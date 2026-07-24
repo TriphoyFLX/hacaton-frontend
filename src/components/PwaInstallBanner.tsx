@@ -1,50 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Download, Share, X } from 'lucide-react';
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-};
-
-const DISMISS_KEY = 'sl_pwa_install_dismissed_v1';
-const DISMISS_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
-
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
-  const mq = window.matchMedia('(display-mode: standalone)').matches;
-  const ios = 'standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-  return mq || ios;
-}
-
-function isIosSafari(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent;
-  const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const webkit = /WebKit/.test(ua);
-  const notChrome = !/CriOS|FxiOS|EdgiOS/.test(ua);
-  return iOS && webkit && notChrome;
-}
-
-function wasDismissed(): boolean {
-  try {
-    const raw = localStorage.getItem(DISMISS_KEY);
-    if (!raw) return false;
-    const ts = Number(raw);
-    if (!Number.isFinite(ts)) return false;
-    return Date.now() - ts < DISMISS_MS;
-  } catch {
-    return false;
-  }
-}
-
-function markDismissed() {
-  try {
-    localStorage.setItem(DISMISS_KEY, String(Date.now()));
-  } catch {
-    /* ignore */
-  }
-}
+import { usePwaInstall } from '../hooks/usePwaInstall';
+import { wasPwaDismissed } from '../lib/pwa';
 
 const css = `
 .pwa-banner {
@@ -146,13 +104,13 @@ const css = `
 `;
 
 /**
- * Native install prompt (Android/Chrome) + iOS Safari “Add to Home Screen” tip.
+ * Native install prompt (Android/Chrome) + iOS Safari tip.
+ * Also auto-shows once so users learn SoundLab is a PWA.
  */
 export default function PwaInstallBanner() {
   const location = useLocation();
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const { standalone, canNativeInstall, iosSafari, install, dismiss } = usePwaInstall();
   const [visible, setVisible] = useState(false);
-  const [iosTip, setIosTip] = useState(false);
 
   const immersive =
     location.pathname === '/soundtok' ||
@@ -161,52 +119,44 @@ export default function PwaInstallBanner() {
     (location.pathname.startsWith('/chats/') && location.pathname !== '/chats');
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (isStandalone() || wasDismissed()) return;
+    if (standalone || wasPwaDismissed()) return;
 
-    const onBip = (event: Event) => {
-      event.preventDefault();
-      setDeferred(event as BeforeInstallPromptEvent);
-      setIosTip(false);
+    // Show as soon as Chrome exposes install, or after a short delay for discovery
+    if (canNativeInstall) {
       setVisible(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', onBip);
-
-    // iOS has no beforeinstallprompt — show Share tip after a short delay
-    const timer = window.setTimeout(() => {
-      if (!isStandalone() && !wasDismissed() && isIosSafari()) {
-        setIosTip(true);
-        setVisible(true);
-      }
-    }, 4500);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onBip);
-      window.clearTimeout(timer);
-    };
-  }, []);
-
-  const dismiss = () => {
-    markDismissed();
-    setVisible(false);
-    setDeferred(null);
-  };
-
-  const install = async () => {
-    if (!deferred) return;
-    await deferred.prompt();
-    try {
-      await deferred.userChoice;
-    } catch {
-      /* ignore */
+      return;
     }
-    setDeferred(null);
+
+    const timer = window.setTimeout(() => {
+      if (!standalone && !wasPwaDismissed()) setVisible(true);
+    }, 2800);
+
+    return () => window.clearTimeout(timer);
+  }, [standalone, canNativeInstall]);
+
+  const onDismiss = () => {
+    dismiss();
     setVisible(false);
-    markDismissed();
   };
 
-  if (!visible || immersive) return null;
+  const onInstall = async () => {
+    if (canNativeInstall) {
+      await install();
+      setVisible(false);
+      return;
+    }
+    if (iosSafari) {
+      window.alert(
+        'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
+      );
+      return;
+    }
+    window.alert(
+      'SoundLab можно установить как приложение (PWA).\n\nChrome/Edge: меню → «Установить приложение».\niPhone: Safari → Поделиться → «На экран Домой».',
+    );
+  };
+
+  if (!visible || immersive || standalone) return null;
 
   return (
     <>
@@ -216,30 +166,29 @@ export default function PwaInstallBanner() {
           <img src="/icons/icon-192.png" alt="" width={42} height={42} />
         </div>
         <div className="pwa-banner-body">
-          <p className="pwa-banner-title">Установить SoundLab</p>
-          {iosTip ? (
+          <p className="pwa-banner-title">SoundLab — это приложение</p>
+          {iosSafari ? (
             <p className="pwa-banner-text">
-              Нажмите <strong>Поделиться</strong> <Share size={12} style={{ display: 'inline', verticalAlign: '-2px' }} />
-              {' '}и выберите <strong>«На экран Домой»</strong> — приложение откроется как нативное.
+              Установите на домашний экран: <strong>Поделиться</strong>{' '}
+              <Share size={12} style={{ display: 'inline', verticalAlign: '-2px' }} />
+              {' '}→ <strong>«На экран Домой»</strong>. Работает как обычное приложение.
             </p>
           ) : (
             <p className="pwa-banner-text">
-              Добавьте на домашний экран: быстрее запуск, полноэкранный режим и удобнее на телефоне.
+              Добавьте SoundLab на телефон как PWA: быстрый запуск, полноэкранный режим, без магазина приложений.
             </p>
           )}
           <div className="pwa-banner-actions">
-            {!iosTip && deferred && (
-              <button type="button" className="pwa-banner-btn primary" onClick={() => void install()}>
-                <Download size={14} />
-                Установить
-              </button>
-            )}
-            <button type="button" className="pwa-banner-btn ghost" onClick={dismiss}>
+            <button type="button" className="pwa-banner-btn primary" onClick={() => void onInstall()}>
+              <Download size={14} />
+              {canNativeInstall ? 'Установить' : 'Как установить'}
+            </button>
+            <button type="button" className="pwa-banner-btn ghost" onClick={onDismiss}>
               Позже
             </button>
           </div>
         </div>
-        <button type="button" className="pwa-banner-close" aria-label="Закрыть" onClick={dismiss}>
+        <button type="button" className="pwa-banner-close" aria-label="Закрыть" onClick={onDismiss}>
           <X size={16} />
         </button>
       </div>

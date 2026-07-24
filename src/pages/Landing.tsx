@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import SeoHead from '../components/SeoHead';
+import PwaInstallButton from '../components/PwaInstallButton';
 
 type LandingVariant = 'home' | 'studio' | 'record';
 
@@ -52,6 +53,10 @@ const MODULES = [
     name: 'AI и проекты',
     text: 'Облачные проекты и AI-помощники, чтобы быстрее довести идею до демо.',
   },
+  {
+    name: 'Приложение (PWA)',
+    text: 'Установите SoundLab на телефон с сайта — без App Store и Google Play. Иконка на экране, полноэкранный режим.',
+  },
 ];
 
 const STEPS = [
@@ -100,6 +105,10 @@ const FAQ = [
   {
     q: 'Как купить пресет?',
     a: 'В маркетплейсе пресетов откройте карточку и оформите покупку. После оплаты пресет появится в вашей библиотеке и его можно скачать.',
+  },
+  {
+    q: 'Можно ли установить SoundLab на телефон?',
+    a: 'Да. SoundLab — это PWA: откройте сайт в браузере и установите как приложение. Android/Chrome — «Установить приложение», iPhone/Safari — Поделиться → «На экран Домой». Магазин приложений не нужен.',
   },
   {
     q: 'Как связаться с поддержкой?',
@@ -308,6 +317,37 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         }
         .sl-bottom-cta p { margin: 0; color: var(--muted); max-width: 36ch; line-height: 1.45; }
 
+        .sl-pwa-card {
+          margin-top: 8px;
+          padding: 22px 20px;
+          border: 1px solid var(--line);
+          border-radius: 16px;
+          background: linear-gradient(135deg, rgba(232,168,124,0.1), transparent 55%), var(--panel);
+          display: grid;
+          gap: 14px;
+        }
+        @media (min-width: 720px) {
+          .sl-pwa-card {
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 24px;
+          }
+        }
+        .sl-pwa-card h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.03em; }
+        .sl-pwa-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 52ch; }
+        .sl-pwa-card .sl-pwa-install {
+          display: inline-flex; align-items: center; gap: 8px;
+          border: 0; border-radius: 999px; padding: 11px 16px;
+          background: var(--ink); color: var(--bg); font-weight: 700; font-size: 13px;
+          cursor: pointer; font-family: inherit; white-space: nowrap;
+        }
+        .sl-pwa-card .sl-pwa-install:hover { opacity: 0.92; }
+        .sl-pwa-badge {
+          display: inline-block; margin-bottom: 8px;
+          font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+          letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+        }
+
         .sl-foot {
           border-top: 1px solid var(--line); padding: 28px 0 48px;
           display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between;
@@ -339,6 +379,9 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
               <Link to="/login" className="sl-btn">Войти</Link>
             </div>
             <p className="sl-note">
+              Есть PWA: установите SoundLab на телефон прямо с сайта — как обычное приложение, без магазина.
+            </p>
+            <p className="sl-note" style={{ marginTop: 8 }}>
               Это превью проекта. Студия, лента и остальные разделы доступны только авторизованным пользователям.
             </p>
           </div>
@@ -398,6 +441,20 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
               <Link to="/register" className="sl-btn sl-btn-primary">Зарегистрироваться</Link>
               <Link to="/login" className="sl-btn">Войти</Link>
             </div>
+          </div>
+        </section>
+
+        <section className="sl-section" aria-labelledby="pwa-heading">
+          <div className="sl-pwa-card">
+            <div>
+              <span className="sl-pwa-badge">PWA</span>
+              <h2 id="pwa-heading">Приложение на телефон</h2>
+              <p>
+                SoundLab ставится с сайта как настоящее приложение: иконка на домашнем экране,
+                полноэкранный режим, быстрый запуск. Без App Store и Google Play.
+              </p>
+            </div>
+            <PwaInstallButton className="sl-pwa-install" variant="inline" />
           </div>
         </section>
 

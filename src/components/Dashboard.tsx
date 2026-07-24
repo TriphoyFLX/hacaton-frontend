@@ -1,4 +1,6 @@
 import { useAuthStore } from '../store/authStore';
+import PwaInstallButton from './PwaInstallButton';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 
 // ─────────────────────────────────────────────────────────
 // DESIGN SYSTEM — matches Sidebar & Profile exactly
@@ -76,6 +78,27 @@ ${FONT_IMPORT}
 .db-card-sub   { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.08em;
                  text-transform:uppercase; color:var(--t3); margin-top:3px; }
 
+.db-pwa {
+  display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;
+  justify-content:space-between;
+}
+.db-pwa-copy { flex:1; min-width:200px; }
+.db-pwa-copy p {
+  margin:8px 0 0; color:var(--t2); font-size:13px; line-height:1.5;
+}
+.db-pwa-tag {
+  display:inline-block; margin-bottom:6px;
+  font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--amber);
+}
+.db-pwa-install {
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid var(--b3); border-radius:8px; padding:10px 14px;
+  background:var(--t1); color:var(--bg); font:600 12px 'Syne',sans-serif;
+  cursor:pointer; white-space:nowrap;
+}
+.db-pwa-install:hover { opacity:.92; }
+
 /* ── INFO GRID ── */
 .db-info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; }
 .db-info-item {
@@ -150,6 +173,7 @@ ${FONT_IMPORT}
 
 export default function Dashboard() {
   const { user, logout } = useAuthStore();
+  const { standalone } = usePwaInstall();
 
   const handleLogout = () => {
     logout();
@@ -186,6 +210,21 @@ export default function Dashboard() {
           <div className="db-hero-title">Добро пожаловать, @{user?.username}!</div>
           <div className="db-hero-desc">Ваш личный кабинет и управление профилем</div>
         </div>
+
+        {!standalone && (
+          <div className="db-card">
+            <div className="db-pwa">
+              <div className="db-pwa-copy">
+                <span className="db-pwa-tag">PWA</span>
+                <div className="db-card-title">Установите SoundLab на телефон</div>
+                <p>
+                  Это веб-приложение: иконка на экране, полноэкранный режим, быстрый запуск — без магазинов приложений.
+                </p>
+              </div>
+              <PwaInstallButton className="db-pwa-install" />
+            </div>
+          </div>
+        )}
 
         {/* User info card */}
         <div className="db-card">

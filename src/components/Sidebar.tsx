@@ -1,8 +1,11 @@
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { usePwaInstall } from '../hooks/usePwaInstall';
+import PwaInstallButton from './PwaInstallButton';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
 
@@ -143,6 +146,44 @@ ${FONT_IMPORT}
   height: 14px;
   background: var(--text-primary);
   border-radius: 2px;
+}
+
+.sb-install {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-hover);
+  margin-bottom: 1px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+.sb-install:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.sb-install-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.sb-install-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  padding: 2px 5px;
 }
 
 .sb-item-icon {
@@ -577,6 +618,23 @@ export default function Sidebar() {
   const isAdmin = user?.role === 'ADMIN';
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const avatarUrl = resolveMediaUrl(user?.avatar);
+  const { standalone, canNativeInstall, iosSafari, install } = usePwaInstall();
+
+  const handleInstallClick = async () => {
+    if (canNativeInstall) {
+      await install();
+      return;
+    }
+    if (iosSafari) {
+      window.alert(
+        'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
+      );
+      return;
+    }
+    window.alert(
+      'SoundLab — PWA-приложение.\n\nChrome/Edge: меню → «Установить приложение».\niPhone: Safari → Поделиться → «На экран Домой».',
+    );
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -659,6 +717,14 @@ export default function Sidebar() {
             <span className="sb-item-label">Админ</span>
           </NavLink>
         )}
+
+        {!standalone && (
+          <button type="button" className="sb-install" onClick={() => void handleInstallClick()}>
+            <span className="sb-item-icon"><Download size={14} /></span>
+            <span className="sb-install-label">Установить приложение</span>
+            <span className="sb-install-tag">PWA</span>
+          </button>
+        )}
       </nav>
 
       <nav className="sb-mobile-nav" aria-label="Основная навигация">
@@ -710,6 +776,13 @@ export default function Sidebar() {
               <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
                 <IconUser />Профиль
               </NavLink>
+              {!standalone && (
+                <PwaInstallButton
+                  variant="menu"
+                  className="sb-mobile-more-link"
+                  onDone={() => setIsMoreOpen(false)}
+                />
+              )}
               {isAdmin && (
                 <NavLink to="/admin" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
                   <IconShield />Админ
