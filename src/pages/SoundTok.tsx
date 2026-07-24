@@ -98,18 +98,6 @@ ${FONT_IMPORT}
   gap: 12px;
 }
 
-.st-count {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  padding: 6px 12px;
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
 /* ── BUTTONS ── */
 .st-btn {
   height: 38px;
@@ -600,14 +588,19 @@ ${FONT_IMPORT}
 .st-root--feed {
   position: relative;
   height: 100%;
+  max-height: 100%;
   min-height: 0;
   overflow: hidden;
+  overscroll-behavior: none;
+  contain: size layout paint;
   background: #0a0a0a;
 }
 
 .st-feed-mode {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: #0a0a0a;
 }
 
@@ -813,6 +806,7 @@ export default function SoundTok() {
   const PAGE_SIZE = 20;
 
   const sharedVideoId = searchParams.get('v');
+  const hasVideos = soundToks.length > 0;
 
   const orderedSoundToks = useMemo(() => {
     if (!sharedVideoId || soundToks.length === 0) return soundToks;
@@ -865,6 +859,20 @@ export default function SoundTok() {
   useEffect(() => {
     fetchSoundToks();
   }, []);
+
+  useEffect(() => {
+    if (!hasVideos) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [hasVideos]);
 
   const handleLike = async (id: string) => {
     const soundTok = soundToks.find(tok => tok.id === id);
@@ -984,7 +992,6 @@ export default function SoundTok() {
               </div>
             </div>
             <div className="st-header-right">
-              <div className="st-count">0 видео</div>
               <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
                 <IconPlus />
                 Создать

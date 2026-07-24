@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Users,
   FileText,
@@ -21,6 +21,239 @@ import { REPORT_REASON_OPTIONS } from '../api/reports';
 
 const ADMIN_API = `${API_ORIGIN}/api/admin`;
 const PAGE_SIZE = 40;
+const ADMIN_CACHE_TTL = 30_000;
+
+const ADMIN_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+
+.admin-root {
+  --admin-bg: #0a0a0a;
+  --admin-surface: rgba(17, 17, 17, 0.92);
+  --admin-raised: rgba(23, 23, 23, 0.94);
+  --admin-hover: #1d1d1d;
+  --admin-border: #242424;
+  --admin-border-strong: #323232;
+  --admin-text: #f0ede8;
+  --admin-secondary: #b7b1a8;
+  --admin-muted: #77736d;
+  --admin-accent: #ded8cd;
+  position: relative;
+  isolation: isolate;
+  color: var(--admin-text);
+  background:
+    radial-gradient(circle at 82% -10%, rgba(112, 96, 74, 0.12), transparent 34%),
+    radial-gradient(circle at -8% 55%, rgba(80, 88, 94, 0.08), transparent 30%),
+    var(--admin-bg) !important;
+  font-family: 'Syne', sans-serif;
+}
+.admin-root::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+.admin-root button,
+.admin-root input,
+.admin-root select,
+.admin-root textarea {
+  font-family: inherit;
+}
+.admin-root button {
+  transition: color .16s ease, border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.admin-root button:focus-visible,
+.admin-root input:focus-visible,
+.admin-root select:focus-visible,
+.admin-root textarea:focus-visible {
+  outline: 1px solid var(--admin-accent);
+  outline-offset: 2px;
+}
+.admin-root * {
+  scrollbar-width: thin;
+  scrollbar-color: #343434 transparent;
+}
+.admin-topbar {
+  min-height: 72px;
+  padding: 16px 22px !important;
+  border-color: var(--admin-border) !important;
+  background: rgba(10, 10, 10, .82) !important;
+  backdrop-filter: blur(18px);
+}
+.admin-title {
+  color: var(--admin-text) !important;
+  font-size: clamp(18px, 2vw, 25px) !important;
+  letter-spacing: -.035em;
+}
+.admin-title svg {
+  color: var(--admin-secondary);
+  stroke-width: 1.5;
+}
+.admin-refresh {
+  min-height: 38px;
+  padding: 8px 13px !important;
+  border: 1px solid var(--admin-border) !important;
+  border-radius: 9px !important;
+  background: var(--admin-surface) !important;
+  color: var(--admin-secondary) !important;
+}
+.admin-refresh:hover {
+  border-color: var(--admin-border-strong) !important;
+  background: var(--admin-hover) !important;
+  color: var(--admin-text) !important;
+}
+.admin-tabs {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  border-color: var(--admin-border) !important;
+  background: rgba(12, 12, 12, .92) !important;
+  backdrop-filter: blur(18px);
+}
+.admin-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.admin-tab::after {
+  content: '';
+  position: absolute;
+  right: 18px;
+  bottom: 0;
+  left: 18px;
+  height: 1px;
+  background: transparent;
+}
+.admin-tab:hover {
+  color: var(--admin-secondary);
+  background: rgba(255,255,255,.025);
+}
+.admin-tab.active {
+  color: var(--admin-text);
+}
+.admin-tab.active::after {
+  background: var(--admin-accent);
+}
+.admin-tab svg {
+  margin-right: 7px;
+  stroke-width: 1.6;
+}
+.admin-content {
+  padding: clamp(14px, 2.2vw, 26px) !important;
+}
+.admin-root [class~="bg-gray-800"],
+.admin-root [class*="bg-gray-800/"],
+.admin-root [class*="bg-gray-900/"] {
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface) !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .16);
+}
+.admin-root [class~="bg-gray-700"] {
+  background: var(--admin-raised) !important;
+}
+.admin-root [class*="border-gray-7"],
+.admin-root [class*="border-gray-8"] {
+  border-color: var(--admin-border) !important;
+}
+.admin-root .text-white,
+.admin-root .text-gray-200 {
+  color: var(--admin-text) !important;
+}
+.admin-root .text-gray-300,
+.admin-root .text-gray-400 {
+  color: var(--admin-secondary) !important;
+}
+.admin-root .text-gray-500 {
+  color: var(--admin-muted) !important;
+}
+.admin-root .text-emerald-400 {
+  color: #d5c5a8 !important;
+}
+.admin-root .bg-emerald-600 {
+  border: 1px solid #82745e !important;
+  background: #655a49 !important;
+}
+.admin-root [class*="bg-amber-700"] {
+  border: 1px solid #786447 !important;
+  background: #5c4d39 !important;
+}
+.admin-root .text-amber-400 {
+  color: #d9aa68 !important;
+}
+.admin-root .text-sky-400 {
+  color: #94b8cf !important;
+}
+.admin-root .bg-red-600,
+.admin-root [class*="bg-red-900"] {
+  border: 1px solid #663737 !important;
+  background: #402323 !important;
+}
+.admin-root .text-red-200 {
+  color: #e4a2a2 !important;
+}
+.admin-root input,
+.admin-root select,
+.admin-root textarea {
+  border: 1px solid var(--admin-border-strong) !important;
+  border-radius: 9px !important;
+  background: #101010 !important;
+  color: var(--admin-text) !important;
+}
+.admin-root input::placeholder,
+.admin-root textarea::placeholder {
+  color: #5f5b55;
+}
+.admin-root table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: 'DM Mono', monospace;
+}
+.admin-root thead {
+  color: var(--admin-muted) !important;
+}
+.admin-root tbody tr:hover {
+  background: rgba(255,255,255,.025);
+}
+.admin-root .font-mono,
+.admin-root time {
+  font-family: 'DM Mono', monospace !important;
+}
+
+@media (max-width: 640px) {
+  .admin-topbar {
+    min-height: 60px;
+    padding: 11px 13px !important;
+  }
+  .admin-refresh {
+    min-width: 38px;
+    padding: 8px !important;
+  }
+  .admin-refresh span {
+    display: none;
+  }
+  .admin-tab {
+    min-height: 44px;
+    padding: 0 13px;
+    font-size: 12px;
+  }
+  .admin-tab::after {
+    right: 13px;
+    left: 13px;
+  }
+}
+`;
 
 type Tab = 'overview' | 'purchases' | 'reports' | 'users' | 'posts' | 'soundtoks';
 type PurchaseFilter = 'all' | 'subscriptions' | 'tokens' | 'presets';
@@ -239,14 +472,15 @@ export default function AdminPanel() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const loadedAtRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQuery(userQuery.trim()), 300);
     return () => window.clearTimeout(t);
   }, [userQuery]);
 
-  const loadOverview = useCallback(async () => {
-    const data = await adminFetch<AdminStats>('/stats');
+  const loadOverview = useCallback(async (force = false) => {
+    const data = await adminFetch<AdminStats>(force ? '/stats?refresh=1' : '/stats');
     setStats(data);
   }, []);
 
@@ -288,14 +522,18 @@ export default function AdminPanel() {
       status,
     });
     if (filter === 'subscriptions' || filter === 'tokens') qs.set('kind', filter);
-    const data = await adminFetch<Paged<PaymentRow>>(`/payments?${qs}`);
+    const [data, presets] = await Promise.all([
+      adminFetch<Paged<PaymentRow>>(`/payments?${qs}`),
+      filter === 'all'
+        ? adminFetch<Paged<PresetPurchaseRow>>(
+            `/preset-purchases?limit=${PAGE_SIZE}&offset=0`,
+          )
+        : Promise.resolve(null),
+    ]);
     setPayments(data.items);
     setPaymentsTotal(data.total);
 
-    if (filter === 'all') {
-      const presets = await adminFetch<Paged<PresetPurchaseRow>>(
-        `/preset-purchases?limit=${PAGE_SIZE}&offset=0`,
-      );
+    if (presets) {
       setPresetPurchases(presets.items);
       setPresetPurchasesTotal(presets.total);
     } else {
@@ -316,13 +554,26 @@ export default function AdminPanel() {
     setReportsOpenCount(data.openCount ?? 0);
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
+    const cacheKey = [
+      activeTab,
+      activeTab === 'purchases' ? `${purchaseFilter}:${paymentStatusFilter}` : '',
+      activeTab === 'reports' ? reportStatusFilter : '',
+      activeTab === 'users' ? debouncedQuery : '',
+    ].join(':');
+
+    const loadedAt = loadedAtRef.current.get(cacheKey) ?? 0;
+    if (!force && Date.now() - loadedAt < ADMIN_CACHE_TTL) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       switch (activeTab) {
         case 'overview':
-          await loadOverview();
+          await loadOverview(force);
           break;
         case 'purchases':
           await loadPurchases(purchaseFilter, paymentStatusFilter);
@@ -340,6 +591,7 @@ export default function AdminPanel() {
           await loadSoundToks();
           break;
       }
+      loadedAtRef.current.set(cacheKey, Date.now());
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Ошибка загрузки';
       setError(message);
@@ -434,7 +686,7 @@ export default function AdminPanel() {
       if (!res.ok) throw new Error('Не удалось обновить');
       await loadReports(reportStatusFilter);
       if (stats) {
-        void loadOverview();
+        void loadOverview(true);
       }
     } catch {
       alert('Не удалось обновить жалобу');
@@ -477,20 +729,21 @@ export default function AdminPanel() {
   );
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 min-h-0">
-      <div className="bg-gray-800 border-b border-gray-700 p-3 sm:p-4 flex items-center justify-between gap-3">
-        <h1 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
+    <div className="admin-root h-full flex flex-col bg-gray-900 min-h-0">
+      <style>{ADMIN_CSS}</style>
+      <div className="admin-topbar bg-gray-800 border-b border-gray-700 p-3 sm:p-4 flex items-center justify-between gap-3">
+        <h1 className="admin-title text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
           <Shield size={22} className="sm:w-6 sm:h-6" />
           Админ панель
         </h1>
         <button
           type="button"
-          onClick={() => void fetchData()}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm"
+          onClick={() => void fetchData(true)}
+          className="admin-refresh inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm"
           title="Обновить"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Обновить
+          <span>Обновить</span>
         </button>
       </div>
 
@@ -500,7 +753,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <div className="bg-gray-800 border-b border-gray-700 overflow-x-auto">
+      <div className="admin-tabs bg-gray-800 border-b border-gray-700 overflow-x-auto">
         <div className="flex min-w-max sm:min-w-0">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -510,13 +763,9 @@ export default function AdminPanel() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3 sm:px-5 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition whitespace-nowrap ${
-                  active
-                    ? 'text-emerald-400 border-b-2 border-emerald-400'
-                    : 'text-gray-400 hover:text-white'
-                }`}
+                className={`admin-tab ${active ? 'active' : ''}`}
               >
-                <Icon size={16} className="inline mr-1.5 -mt-0.5" />
+                <Icon size={16} />
                 {tab.label}
               </button>
             );
@@ -524,7 +773,7 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+      <div className="admin-content flex-1 overflow-y-auto p-3 sm:p-4">
         {loading && !stats && activeTab === 'overview' ? (
           <div className="h-40 flex items-center justify-center text-gray-400">Загрузка…</div>
         ) : null}

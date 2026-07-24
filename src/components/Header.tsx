@@ -142,12 +142,32 @@ ${FONT_IMPORT}
   position: sticky;
   z-index: 1;
   top: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-mid);
   background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
+}
+.notifications-clear {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 10px 'DM Mono', monospace;
+  letter-spacing: .03em;
+}
+.notifications-clear:hover {
+  color: var(--text-primary);
+}
+.notifications-clear:disabled {
+  cursor: default;
+  opacity: .45;
 }
 .notification-item {
   display: flex;
@@ -246,6 +266,7 @@ export default function Header() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [clearingNotifications, setClearingNotifications] = useState(false);
   const token = useAuthStore((state) => state.token);
   const navigate = useNavigate();
 
@@ -318,6 +339,22 @@ export default function Header() {
     else navigate(`/profile/${notification.actor.username}`);
   };
 
+  const clearNotifications = async () => {
+    if (notifications.length === 0 || clearingNotifications) return;
+    if (!window.confirm('Очистить все уведомления?')) return;
+
+    setClearingNotifications(true);
+    try {
+      await notificationsApi.clear();
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch {
+      window.alert('Не удалось очистить уведомления. Попробуйте ещё раз.');
+    } finally {
+      setClearingNotifications(false);
+    }
+  };
+
   return (
     <>
       <header className="header-root">
@@ -358,7 +395,19 @@ export default function Header() {
             onClick={() => setIsNotificationsOpen(false)}
           />
           <div className="notifications-panel" role="dialog" aria-label="Уведомления">
-            <div className="notifications-title">Уведомления</div>
+            <div className="notifications-title">
+              <span>Уведомления</span>
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  className="notifications-clear"
+                  disabled={clearingNotifications}
+                  onClick={() => void clearNotifications()}
+                >
+                  {clearingNotifications ? 'ОЧИЩАЕМ…' : 'ОЧИСТИТЬ ВСЕ'}
+                </button>
+              )}
+            </div>
             {notifications.length === 0 ? (
               <div className="notifications-empty">Пока нет новых уведомлений</div>
             ) : notifications.map((notification) => (

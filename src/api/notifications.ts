@@ -21,4 +21,6 @@ export const notificationsApi = {
   getAll: async () => (await api.get<{ items: AppNotification[]; unreadCount: number }>('/notifications')).data,
   markRead: async (ids?: string[]) =>
     (await api.patch<{ unreadCount: number }>('/notifications/read', ids ? { ids } : {})).data,
+  clear: async () =>
+    (await api.delete<{ deletedCount: number; unreadCount: number }>('/notifications')).data,
 };
