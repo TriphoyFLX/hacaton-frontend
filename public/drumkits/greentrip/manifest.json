@@ -1155,6 +1155,558 @@
           "bytes": 101006
         }
       ]
+    },
+    {
+      "id": "oneshots",
+      "name": "One-shots",
+      "samples": [
+        {
+          "id": "oneshots/GREEN-ONESHOTS-1.wav",
+          "name": "GREEN ONESHOTS (1)",
+          "file": "GREEN-ONESHOTS-1.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-1.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-10.wav",
+          "name": "GREEN ONESHOTS (10)",
+          "file": "GREEN-ONESHOTS-10.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-10.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-11.wav",
+          "name": "GREEN ONESHOTS (11)",
+          "file": "GREEN-ONESHOTS-11.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-11.wav",
+          "bytes": 2835850
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-12.wav",
+          "name": "GREEN ONESHOTS (12)",
+          "file": "GREEN-ONESHOTS-12.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-12.wav",
+          "bytes": 2835850
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-13.wav",
+          "name": "GREEN ONESHOTS (13)",
+          "file": "GREEN-ONESHOTS-13.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-13.wav",
+          "bytes": 2835850
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-14.wav",
+          "name": "GREEN ONESHOTS (14)",
+          "file": "GREEN-ONESHOTS-14.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-14.wav",
+          "bytes": 2835850
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-15.wav",
+          "name": "GREEN ONESHOTS (15)",
+          "file": "GREEN-ONESHOTS-15.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-15.wav",
+          "bytes": 2835850
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-16.wav",
+          "name": "GREEN ONESHOTS (16)",
+          "file": "GREEN-ONESHOTS-16.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-16.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-17.wav",
+          "name": "GREEN ONESHOTS (17)",
+          "file": "GREEN-ONESHOTS-17.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-17.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-18.wav",
+          "name": "GREEN ONESHOTS (18)",
+          "file": "GREEN-ONESHOTS-18.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-18.wav",
+          "bytes": 2490966
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-19.wav",
+          "name": "GREEN ONESHOTS (19)",
+          "file": "GREEN-ONESHOTS-19.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-19.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-2.wav",
+          "name": "GREEN ONESHOTS (2)",
+          "file": "GREEN-ONESHOTS-2.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-2.wav",
+          "bytes": 594738
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-20.wav",
+          "name": "GREEN ONESHOTS (20)",
+          "file": "GREEN-ONESHOTS-20.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-20.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-21.wav",
+          "name": "GREEN ONESHOTS (21)",
+          "file": "GREEN-ONESHOTS-21.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-21.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-22.wav",
+          "name": "GREEN ONESHOTS (22)",
+          "file": "GREEN-ONESHOTS-22.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-22.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-23.wav",
+          "name": "GREEN ONESHOTS (23)",
+          "file": "GREEN-ONESHOTS-23.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-23.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-24.wav",
+          "name": "GREEN ONESHOTS (24)",
+          "file": "GREEN-ONESHOTS-24.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-24.wav",
+          "bytes": 2490966
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-25.wav",
+          "name": "GREEN ONESHOTS (25)",
+          "file": "GREEN-ONESHOTS-25.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-25.wav",
+          "bytes": 1245562
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-26.wav",
+          "name": "GREEN ONESHOTS (26)",
+          "file": "GREEN-ONESHOTS-26.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-26.wav",
+          "bytes": 4981778
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-27.wav",
+          "name": "GREEN ONESHOTS (27)",
+          "file": "GREEN-ONESHOTS-27.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-27.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-28.wav",
+          "name": "GREEN ONESHOTS (28)",
+          "file": "GREEN-ONESHOTS-28.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-28.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-29.wav",
+          "name": "GREEN ONESHOTS (29)",
+          "file": "GREEN-ONESHOTS-29.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-29.wav",
+          "bytes": 658442
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-3.wav",
+          "name": "GREEN ONESHOTS (3)",
+          "file": "GREEN-ONESHOTS-3.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-3.wav",
+          "bytes": 2378474
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-30.wav",
+          "name": "GREEN ONESHOTS (30)",
+          "file": "GREEN-ONESHOTS-30.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-30.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-31.wav",
+          "name": "GREEN ONESHOTS (31)",
+          "file": "GREEN-ONESHOTS-31.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-31.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-32.wav",
+          "name": "GREEN ONESHOTS (32)",
+          "file": "GREEN-ONESHOTS-32.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-32.wav",
+          "bytes": 1316726
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-33.wav",
+          "name": "GREEN ONESHOTS (33)",
+          "file": "GREEN-ONESHOTS-33.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-33.wav",
+          "bytes": 658442
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-34.wav",
+          "name": "GREEN ONESHOTS (34)",
+          "file": "GREEN-ONESHOTS-34.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-34.wav",
+          "bytes": 658442
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-35.wav",
+          "name": "GREEN ONESHOTS (35)",
+          "file": "GREEN-ONESHOTS-35.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-35.wav",
+          "bytes": 658442
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-36.wav",
+          "name": "GREEN ONESHOTS (36)",
+          "file": "GREEN-ONESHOTS-36.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-36.wav",
+          "bytes": 5266442
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-37.wav",
+          "name": "GREEN ONESHOTS (37)",
+          "file": "GREEN-ONESHOTS-37.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-37.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-38.wav",
+          "name": "GREEN ONESHOTS (38)",
+          "file": "GREEN-ONESHOTS-38.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-38.wav",
+          "bytes": 1975014
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-39.wav",
+          "name": "GREEN ONESHOTS (39)",
+          "file": "GREEN-ONESHOTS-39.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-39.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-4.wav",
+          "name": "GREEN ONESHOTS (4)",
+          "file": "GREEN-ONESHOTS-4.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-4.wav",
+          "bytes": 2378474
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-40.wav",
+          "name": "GREEN ONESHOTS (40)",
+          "file": "GREEN-ONESHOTS-40.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-40.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-41.wav",
+          "name": "GREEN ONESHOTS (41)",
+          "file": "GREEN-ONESHOTS-41.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-41.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-42.wav",
+          "name": "GREEN ONESHOTS (42)",
+          "file": "GREEN-ONESHOTS-42.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-42.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-43.wav",
+          "name": "GREEN ONESHOTS (43)",
+          "file": "GREEN-ONESHOTS-43.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-43.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-44.wav",
+          "name": "GREEN ONESHOTS (44)",
+          "file": "GREEN-ONESHOTS-44.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-44.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-45.wav",
+          "name": "GREEN ONESHOTS (45)",
+          "file": "GREEN-ONESHOTS-45.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-45.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-46.wav",
+          "name": "GREEN ONESHOTS (46)",
+          "file": "GREEN-ONESHOTS-46.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-46.wav",
+          "bytes": 4915354
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-47.wav",
+          "name": "GREEN ONESHOTS (47)",
+          "file": "GREEN-ONESHOTS-47.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-47.wav",
+          "bytes": 4915354
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-48.wav",
+          "name": "GREEN ONESHOTS (48)",
+          "file": "GREEN-ONESHOTS-48.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-48.wav",
+          "bytes": 5084846
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-49.wav",
+          "name": "GREEN ONESHOTS (49)",
+          "file": "GREEN-ONESHOTS-49.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-49.wav",
+          "bytes": 5084846
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-5.wav",
+          "name": "GREEN ONESHOTS (5)",
+          "file": "GREEN-ONESHOTS-5.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-5.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-50.wav",
+          "name": "GREEN ONESHOTS (50)",
+          "file": "GREEN-ONESHOTS-50.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-50.wav",
+          "bytes": 5084846
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-51.wav",
+          "name": "GREEN ONESHOTS (51)",
+          "file": "GREEN-ONESHOTS-51.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-51.wav",
+          "bytes": 5084846
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-52.wav",
+          "name": "GREEN ONESHOTS (52)",
+          "file": "GREEN-ONESHOTS-52.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-52.wav",
+          "bytes": 5266442
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-53.wav",
+          "name": "GREEN ONESHOTS (53)",
+          "file": "GREEN-ONESHOTS-53.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-53.wav",
+          "bytes": 1975014
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-54.wav",
+          "name": "GREEN ONESHOTS (54)",
+          "file": "GREEN-ONESHOTS-54.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-54.wav",
+          "bytes": 5084846
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-55.wav",
+          "name": "GREEN ONESHOTS (55)",
+          "file": "GREEN-ONESHOTS-55.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-55.wav",
+          "bytes": 2542498
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-56.wav",
+          "name": "GREEN ONESHOTS (56)",
+          "file": "GREEN-ONESHOTS-56.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-56.wav",
+          "bytes": 1906910
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-57.wav",
+          "name": "GREEN ONESHOTS (57)",
+          "file": "GREEN-ONESHOTS-57.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-57.wav",
+          "bytes": 635742
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-58.wav",
+          "name": "GREEN ONESHOTS (58)",
+          "file": "GREEN-ONESHOTS-58.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-58.wav",
+          "bytes": 1271326
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-59.wav",
+          "name": "GREEN ONESHOTS (59)",
+          "file": "GREEN-ONESHOTS-59.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-59.wav",
+          "bytes": 5084846
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-6.wav",
+          "name": "GREEN ONESHOTS (6)",
+          "file": "GREEN-ONESHOTS-6.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-6.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-60.wav",
+          "name": "GREEN ONESHOTS (60)",
+          "file": "GREEN-ONESHOTS-60.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-60.wav",
+          "bytes": 5084846
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-61.wav",
+          "name": "GREEN ONESHOTS (61)",
+          "file": "GREEN-ONESHOTS-61.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-61.wav",
+          "bytes": 2457754
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-62.wav",
+          "name": "GREEN ONESHOTS (62)",
+          "file": "GREEN-ONESHOTS-62.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-62.wav",
+          "bytes": 2457754
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-63.wav",
+          "name": "GREEN ONESHOTS (63)",
+          "file": "GREEN-ONESHOTS-63.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-63.wav",
+          "bytes": 3072154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-64.wav",
+          "name": "GREEN ONESHOTS (64)",
+          "file": "GREEN-ONESHOTS-64.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-64.wav",
+          "bytes": 5529754
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-65.wav",
+          "name": "GREEN ONESHOTS (65)",
+          "file": "GREEN-ONESHOTS-65.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-65.wav",
+          "bytes": 2457754
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-66.wav",
+          "name": "GREEN ONESHOTS (66)",
+          "file": "GREEN-ONESHOTS-66.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-66.wav",
+          "bytes": 4915354
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-67.wav",
+          "name": "GREEN ONESHOTS (67)",
+          "file": "GREEN-ONESHOTS-67.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-67.wav",
+          "bytes": 7372954
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-68.wav",
+          "name": "GREEN ONESHOTS (68)",
+          "file": "GREEN-ONESHOTS-68.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-68.wav",
+          "bytes": 1228954
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-69.wav",
+          "name": "GREEN ONESHOTS (69)",
+          "file": "GREEN-ONESHOTS-69.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-69.wav",
+          "bytes": 4915354
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-7.wav",
+          "name": "GREEN ONESHOTS (7)",
+          "file": "GREEN-ONESHOTS-7.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-7.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-70.wav",
+          "name": "GREEN ONESHOTS (70)",
+          "file": "GREEN-ONESHOTS-70.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-70.wav",
+          "bytes": 640154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-71.wav",
+          "name": "GREEN ONESHOTS (71)",
+          "file": "GREEN-ONESHOTS-71.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-71.wav",
+          "bytes": 2560154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-72.wav",
+          "name": "GREEN ONESHOTS (72)",
+          "file": "GREEN-ONESHOTS-72.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-72.wav",
+          "bytes": 2560154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-73.wav",
+          "name": "GREEN ONESHOTS (73)",
+          "file": "GREEN-ONESHOTS-73.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-73.wav",
+          "bytes": 2560154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-74.wav",
+          "name": "GREEN ONESHOTS (74)",
+          "file": "GREEN-ONESHOTS-74.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-74.wav",
+          "bytes": 2560154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-75.wav",
+          "name": "GREEN ONESHOTS (75)",
+          "file": "GREEN-ONESHOTS-75.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-75.wav",
+          "bytes": 2560154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-76.wav",
+          "name": "GREEN ONESHOTS (76)",
+          "file": "GREEN-ONESHOTS-76.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-76.wav",
+          "bytes": 2560154
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-77.wav",
+          "name": "GREEN ONESHOTS (77)",
+          "file": "GREEN-ONESHOTS-77.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-77.wav",
+          "bytes": 1189318
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-78.wav",
+          "name": "GREEN ONESHOTS (78)",
+          "file": "GREEN-ONESHOTS-78.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-78.wav",
+          "bytes": 1189318
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-8.wav",
+          "name": "GREEN ONESHOTS (8)",
+          "file": "GREEN-ONESHOTS-8.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-8.wav",
+          "bytes": 4756802
+        },
+        {
+          "id": "oneshots/GREEN-ONESHOTS-9.wav",
+          "name": "GREEN ONESHOTS (9)",
+          "file": "GREEN-ONESHOTS-9.wav",
+          "url": "/drumkits/greentrip/oneshots/GREEN-ONESHOTS-9.wav",
+          "bytes": 2378474
+        }
+      ]
     }
   ]
 }

@@ -2663,7 +2663,7 @@ function MIDISequencer() {
     e.target.value = '';
   };
 
-  const importAudioFile = useCallback(async (file: File) => {
+  const importAudioFile = useCallback(async (file: File, opts?: { allowLocalFallback?: boolean }) => {
     if (!project) return;
     if (!file.type.startsWith('audio/') && !/\.(wav|mp3|ogg|flac|m4a|aiff|aif)$/i.test(file.name)) {
       console.warn('Not an audio file:', file.name, file.type);
@@ -2671,7 +2671,22 @@ function MIDISequencer() {
     }
 
     try {
-      const { eng, id: sid, duration: sampleDuration } = await uploadAndLoadSample(file);
+      let eng: AudioEngine;
+      let sid: string;
+      let sampleDuration: number;
+
+      if (file.size > MAX_SAMPLE_BYTES && opts?.allowLocalFallback) {
+        eng = await ensureAudio();
+        const loaded = await eng.loadSample(file);
+        sid = loaded.id;
+        sampleDuration = loaded.duration;
+      } else {
+        const uploaded = await uploadAndLoadSample(file);
+        eng = uploaded.eng;
+        sid = uploaded.id;
+        sampleDuration = uploaded.duration;
+      }
+
       const tid = crypto.randomUUID();
 
       const newTrack: Track = {
@@ -2715,7 +2730,7 @@ function MIDISequencer() {
           : 'Не удалось загрузить сэмпл на сервер. Попробуйте другой файл.',
       );
     }
-  }, [project, uploadAndLoadSample, commitProject]);
+  }, [project, uploadAndLoadSample, commitProject, ensureAudio]);
 
   const addDefaultTrack = (type: InstrumentType) => {
     if (!project) return;
@@ -5071,7 +5086,7 @@ function MIDISequencer() {
         open={drumLibraryOpen}
         onClose={() => setDrumLibraryOpen(false)}
         onPick={async (_sample, file) => {
-          await importAudioFile(file);
+          await importAudioFile(file, { allowLocalFallback: true });
         }}
       />
     </div>
