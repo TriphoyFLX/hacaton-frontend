@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
+import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent, type ClipboardEvent as ReactClipboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy, X, Reply } from 'lucide-react';
+import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy, ImagePlus, X, Reply } from 'lucide-react';
 import { chatsApi, Chat, Message, MessageReplyPreview, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
 import { blocksApi, BlockStatus } from '../api/blocks';
 import { usersApi } from '../api/users';
@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { useChatSocket, Message as SocketMessage } from '../hooks/useSocket';
 import ConfirmDialog from '../components/ConfirmDialog';
+import GroupInfoPanel from '../components/GroupInfoPanel';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import {
   extractMentionQuery,
@@ -374,7 +375,16 @@ ${FONT_IMPORT}
   text-align: left;
   padding: 0;
   color: inherit;
-  cursor: default;
+  cursor: pointer;
+}
+.header-group-btn:hover .header-username {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 @media (max-width: 520px) {
   .header-block-label {
@@ -1214,7 +1224,275 @@ ${FONT_IMPORT}
   display: flex;
   align-items: flex-end;
   gap: 8px;
+  align-items: flex-end;
 }
+.attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-mid);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.attach-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.attach-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.image-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+.image-preview-bar img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.image-preview-meta {
+  flex: 1;
+  min-width: 0;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.image-preview-clear {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+}
+.message-image {
+  display: block;
+  max-width: min(260px, 70vw);
+  max-height: 320px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+.message-bubble.own .message-image {
+  margin-left: auto;
+}
+
+/* Group panel */
+.group-panel-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.group-panel-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(0,0,0,0.55);
+  cursor: pointer;
+}
+.group-panel-sheet {
+  position: relative;
+  width: min(480px, 100%);
+  max-height: min(82vh, 720px);
+  overflow: auto;
+  background: #111;
+  border: 1px solid #232323;
+  border-radius: 18px 18px 0 0;
+  padding: 18px 16px 28px;
+  z-index: 1;
+}
+.group-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.group-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+}
+.group-panel-close {
+  appearance: none;
+  border: 1px solid #2e2e2e;
+  background: transparent;
+  color: #c5c0b8;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.group-panel-avatar-block {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.group-panel-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  border: 1px solid #2e2e2e;
+  background: #181818;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: #6b6b6b;
+  flex-shrink: 0;
+}
+.group-panel-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.group-panel-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0ede8;
+}
+.group-panel-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: #6b6b6b;
+  margin-top: 2px;
+}
+.group-panel-avatar-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.group-panel-avatar-actions button {
+  appearance: none;
+  border: 1px solid #2e2e2e;
+  background: transparent;
+  color: #c5c0b8;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.group-panel-error {
+  color: #e74c3c;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.group-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.group-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px;
+  border-bottom: 1px solid #1c1c1c;
+}
+.group-member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1a1a1a;
+  display: grid;
+  place-items: center;
+  color: #c5c0b8;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.group-member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.group-member-info { flex: 1; min-width: 0; }
+.group-member-name {
+  font-size: 14px;
+  color: #f0ede8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.group-member-you {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: #6b6b6b;
+  text-transform: uppercase;
+}
+.group-member-sub {
+  font-size: 12px;
+  color: #6b6b6b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.group-member-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c5c0b8;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.group-member-actions {
+  display: flex;
+  gap: 4px;
+}
+.group-member-actions button {
+  appearance: none;
+  border: 1px solid #2e2e2e;
+  background: transparent;
+  color: #6b6b6b;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.group-member-actions button:hover {
+  color: #f0ede8;
+  border-color: #3d3d3d;
+}
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .message-input {
   flex: 1;
   min-height: 42px;
@@ -1343,6 +1621,7 @@ interface PendingMessage {
   senderId: string;
   receiverId?: string | null;
   chatId: string;
+  imageUrl?: string | null;
   createdAt: string;
   status: 'PENDING';
   clientMessageId: string;
@@ -1439,6 +1718,9 @@ export default function ChatPage() {
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
+  const [groupPanelOpen, setGroupPanelOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -1478,6 +1760,7 @@ export default function ChatPage() {
   });
   const stickToBottomRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const mentionSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markAsReadRef = useRef<(ids: string[]) => void>(() => {});
@@ -1646,6 +1929,7 @@ export default function ChatPage() {
       senderId: message.senderId,
       deletedAt: 'deletedAt' in message ? message.deletedAt : null,
       soundTokId: 'soundTokId' in message ? message.soundTokId : null,
+      imageUrl: 'imageUrl' in message ? message.imageUrl : null,
       sender,
     };
   };
@@ -1690,6 +1974,7 @@ export default function ChatPage() {
     const text = (reply.content || '').trim();
     if (text) return text.length > 120 ? `${text.slice(0, 120)}…` : text;
     if (reply.soundTokId) return 'Вложение SoundTok';
+    if (reply.imageUrl) return '📷 Фото';
     return 'Сообщение';
   };
 
@@ -1817,7 +2102,9 @@ export default function ChatPage() {
   }, [editingMessage]);
 
   const editingAllowsEmpty = Boolean(
-    editingMessage && 'soundTok' in editingMessage && editingMessage.soundTok,
+    editingMessage &&
+      (('soundTok' in editingMessage && editingMessage.soundTok) ||
+        ('imageUrl' in editingMessage && editingMessage.imageUrl)),
   );
 
   const replyComposePreview = useMemo(() => {
@@ -2163,15 +2450,40 @@ export default function ChatPage() {
     );
   };
 
+  const clearPendingImage = () => {
+    setPendingImage(null);
+    setPendingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const acceptImageFile = (file: File | null | undefined) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setSendError('Изображение слишком большое (макс. 8MB)');
+      return;
+    }
+    setPendingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setPendingImage(file);
+    setSendError(null);
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) {
       await saveEditMessage();
       return;
     }
-    if (!newMessage.trim() || !chatId || !canSendMessages || sending || isMessagingBlocked) return;
+    if ((!newMessage.trim() && !pendingImage) || !chatId || !canSendMessages || sending || isMessagingBlocked) return;
 
     const content = newMessage.trim();
+    const imageFile = pendingImage;
+    const localPreview = pendingImagePreview;
     const clientMessageId = `${chatId}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     const receiverId = isGroupChat ? undefined : otherUser?.id;
     const replyTarget = replyingTo;
@@ -2180,6 +2492,9 @@ export default function ChatPage() {
 
     setNewMessage('');
     setReplyingTo(null);
+    setPendingImage(null);
+    setPendingImagePreview(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
     setSending(true);
     setSendError(null);
     clearMentionSuggestions();
@@ -2190,6 +2505,7 @@ export default function ChatPage() {
       senderId: user!.id,
       receiverId,
       chatId,
+      imageUrl: localPreview,
       createdAt: new Date().toISOString(),
       status: 'PENDING',
       clientMessageId,
@@ -2201,11 +2517,18 @@ export default function ChatPage() {
     setMessages(prev => [...prev, optimisticMessage]);
 
     try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        const uploaded = await chatsApi.uploadImage(chatId, imageFile);
+        imageUrl = uploaded.imageUrl;
+      }
+
       let sent = false;
 
       if (isConnected) {
         const result = await sendChatMessage(content, receiverId, clientMessageId, {
           replyToId: replyToId || undefined,
+          imageUrl,
         });
         if (result.success && result.message) {
           confirmSentMessage(clientMessageId, {
@@ -2225,21 +2548,44 @@ export default function ChatPage() {
           receiverId,
           clientMessageId,
           undefined,
-          replyToId || undefined
+          replyToId || undefined,
+          imageUrl
         );
         confirmSentMessage(clientMessageId, serverMessage);
       }
+      if (localPreview) URL.revokeObjectURL(localPreview);
     } catch (error) {
       setMessages(prev => prev.filter(m => m.id !== clientMessageId));
       processedClientIds.current.delete(clientMessageId);
       setNewMessage(content);
       if (replyTarget) setReplyingTo(replyTarget);
+      if (imageFile) {
+        setPendingImage(imageFile);
+        setPendingImagePreview(localPreview);
+      } else if (localPreview) {
+        URL.revokeObjectURL(localPreview);
+      }
       setSendError(
         error instanceof Error ? error.message : 'Не удалось отправить сообщение'
       );
     } finally {
       setSending(false);
       sendChatTyping(false);
+    }
+  };
+
+  const handlePasteImage = (e: ReactClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          acceptImageFile(file);
+        }
+        break;
+      }
     }
   };
 
@@ -2472,9 +2818,13 @@ export default function ChatPage() {
             </button>
 
             {isGroupChat ? (
-              <div className="header-group-btn">
+              <button type="button" className="header-group-btn" onClick={() => setGroupPanelOpen(true)}>
                 <div className="header-avatar">
-                  <Users size={18} />
+                  {resolveMediaUrl(chat.avatar) ? (
+                    <img src={resolveMediaUrl(chat.avatar)!} alt={chat.name || 'Группа'} />
+                  ) : (
+                    <Users size={18} />
+                  )}
                 </div>
                 <div className="header-info">
                   <div className="header-username">{chat.name || 'Группа'}</div>
@@ -2482,7 +2832,7 @@ export default function ChatPage() {
                     {chat.memberCount || chat.users.length} участников
                   </div>
                 </div>
-              </div>
+              </button>
             ) : otherUser ? (
               <>
                 <button type="button" className="header-profile-btn" onClick={openProfile}>
@@ -2568,6 +2918,12 @@ export default function ChatPage() {
                   ? message.sender?.username
                   : undefined;
                 const sharedTok = !isDeleted && 'soundTok' in message ? message.soundTok : null;
+                const messageImage =
+                  !isDeleted && 'imageUrl' in message && message.imageUrl
+                    ? (message.imageUrl.startsWith('blob:')
+                        ? message.imageUrl
+                        : resolveMediaUrl(message.imageUrl))
+                    : null;
                 const reactionSummary = getReactionSummary(message);
                 const pickerOpen = reactionPickerId === message.id;
 
@@ -2625,6 +2981,16 @@ export default function ChatPage() {
                         <p className="message-deleted-text">Сообщение удалено</p>
                       ) : (
                         <>
+                          {messageImage && (
+                            <a href={messageImage} target="_blank" rel="noreferrer">
+                              <img
+                                className="message-image"
+                                src={messageImage}
+                                alt="Вложение"
+                                loading="lazy"
+                              />
+                            </a>
+                          )}
                           {sharedTok && (
                             <SharedSoundTokCard
                               sharedTok={sharedTok}
@@ -2644,7 +3010,7 @@ export default function ChatPage() {
                               })}
                             </p>
                           )}
-                          {!message.content && !sharedTok && (
+                          {!message.content && !sharedTok && !messageImage && (
                             <p className="message-text"> </p>
                           )}
                         </>
@@ -2834,13 +3200,40 @@ export default function ChatPage() {
                 ))}
               </div>
             )}
+            {pendingImagePreview && (
+              <div className="image-preview-bar">
+                <img src={pendingImagePreview} alt="Превью" />
+                <div className="image-preview-meta">Фото готово к отправке · Ctrl+V тоже работает</div>
+                <button type="button" className="image-preview-clear" onClick={clearPendingImage} aria-label="Убрать фото">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSendMessage} className="input-form">
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                hidden
+                onChange={(e) => acceptImageFile(e.target.files?.[0])}
+              />
+              <button
+                type="button"
+                className="attach-btn"
+                disabled={sending || isMessagingBlocked || !canSendMessages || !!editingId}
+                onClick={() => imageInputRef.current?.click()}
+                aria-label="Прикрепить фото"
+                title="Прикрепить фото"
+              >
+                <ImagePlus size={18} />
+              </button>
               <textarea
                 ref={inputRef}
                 rows={1}
                 value={newMessage}
                 onChange={handleTypingInput}
                 onKeyDown={handleInputKeyDown}
+                onPaste={handlePasteImage}
                 onSelect={(e) => {
                   const target = e.currentTarget;
                   updateMentionSuggestions(
@@ -2858,7 +3251,7 @@ export default function ChatPage() {
                       ? 'Измените сообщение…'
                       : replyingTo
                         ? `Ответ ${replyComposePreview.author}…`
-                        : 'Введите сообщение... @user'
+                        : 'Сообщение, @user или Ctrl+V фото…'
                 }
                 className={`message-input${editingId ? ' editing' : ''}`}
                 disabled={
@@ -2874,7 +3267,10 @@ export default function ChatPage() {
                 disabled={
                   editingId
                     ? editSaving || (!newMessage.trim() && !editingAllowsEmpty)
-                    : !newMessage.trim() || sending || isMessagingBlocked || !canSendMessages
+                    : (!newMessage.trim() && !pendingImage) ||
+                      sending ||
+                      isMessagingBlocked ||
+                      !canSendMessages
                 }
                 className="send-btn"
                 title={
@@ -2895,6 +3291,16 @@ export default function ChatPage() {
             </form>
           </div>
         </>
+      )}
+
+      {groupPanelOpen && chat && user && (
+        <GroupInfoPanel
+          chat={chat}
+          currentUserId={user.id}
+          onClose={() => setGroupPanelOpen(false)}
+          onChatUpdate={(updated) => setChat((prev) => (prev ? { ...prev, ...updated } : updated))}
+          onLeft={() => navigate('/chats')}
+        />
       )}
 
       {contextMenu && contextMessage && typeof document !== 'undefined' && createPortal(

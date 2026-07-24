@@ -22,6 +22,7 @@ export interface Message {
   chatId: string;
   soundTokId?: string | null;
   replyToId?: string | null;
+  imageUrl?: string | null;
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: Date | null;
@@ -99,6 +100,7 @@ interface ClientToServerEvents {
     receiverId?: string | null;
     soundTokId?: string;
     replyToId?: string;
+    imageUrl?: string;
   }, callback: (response: SocketMessageResponse) => void) => void;
   'message:read': (data: { messageIds: string[]; chatId: string }) => void;
   'message:deliver': (data: { messageId: string; chatId: string }) => void;
@@ -281,6 +283,7 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
       clientMessageId: string;
       soundTokId?: string;
       replyToId?: string;
+      imageUrl?: string;
     }): Promise<SocketMessageResponse> => {
       return new Promise((resolve) => {
         if (!socketRef.current?.connected) {
@@ -438,7 +441,7 @@ export function useChatSocket(
       content: string,
       receiverId: string | undefined,
       clientMessageId: string,
-      opts?: { soundTokId?: string; replyToId?: string }
+      opts?: { soundTokId?: string; replyToId?: string; imageUrl?: string }
     ) => {
       if (!chatId) {
         return { success: false, error: 'No chat selected', clientMessageId };
@@ -450,6 +453,7 @@ export function useChatSocket(
         clientMessageId,
         soundTokId: opts?.soundTokId,
         replyToId: opts?.replyToId,
+        imageUrl: opts?.imageUrl,
       });
     },
     [chatId, sendMessage]

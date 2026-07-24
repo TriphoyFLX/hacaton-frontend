@@ -1,9 +1,29 @@
 import api from './client';
 
+export type ChatMemberRole = 'MEMBER' | 'ADMIN';
+
+export interface ChatMember {
+  id: string;
+  userId: string;
+  chatId: string;
+  role?: ChatMemberRole;
+  pinnedAt?: string | null;
+  createdAt: string;
+  user: {
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+  };
+}
+
 export interface Chat {
   id: string;
   type?: 'DIRECT' | 'GROUP';
   name?: string | null;
+  avatar?: string | null;
+  creatorId?: string | null;
+  myRole?: ChatMemberRole;
   createdAt: string;
   updatedAt: string;
   unreadCount?: number;
@@ -16,52 +36,8 @@ export interface Chat {
     displayName?: string | null;
     avatar?: string | null;
   } | null;
-  users: Array<{
-    id: string;
-    userId: string;
-    chatId: string;
-    pinnedAt?: string | null;
-    createdAt: string;
-    user: {
-      id: string;
-      username: string;
-      displayName?: string | null;
-      avatar?: string | null;
-    };
-  }>;
-  messages: Array<{
-    id: string;
-    content: string;
-    senderId: string;
-    receiverId?: string | null;
-    chatId: string;
-    soundTokId?: string | null;
-    clientMessageId?: string | null;
-    status: 'SENT' | 'DELIVERED' | 'READ';
-    readAt?: string | null;
-    deletedAt?: string | null;
-    editedAt?: string | null;
-    createdAt: string;
-    sender: {
-      id: string;
-      username: string;
-      displayName?: string | null;
-      avatar?: string | null;
-    };
-    soundTok?: {
-      id: string;
-      description: string;
-      videoUrl?: string;
-      authorId: string;
-      author: {
-        id: string;
-        username: string;
-        displayName?: string | null;
-        avatar?: string | null;
-      };
-    } | null;
-    reactions?: MessageReaction[];
-  }>;
+  users: ChatMember[];
+  messages: Message[];
 }
 
 export interface MessageReaction {
@@ -83,6 +59,7 @@ export interface MessageReplyPreview {
   senderId: string;
   deletedAt?: string | null;
   soundTokId?: string | null;
+  imageUrl?: string | null;
   sender: {
     id: string;
     username: string;
@@ -98,6 +75,7 @@ export interface Message {
   chatId: string;
   soundTokId?: string | null;
   replyToId?: string | null;
+  imageUrl?: string | null;
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: string | null;
@@ -215,7 +193,8 @@ export const chatsApi = {
     receiverId?: string,
     clientMessageId?: string,
     soundTokId?: string,
-    replyToId?: string
+    replyToId?: string,
+    imageUrl?: string
   ) => {
     const response = await api.post(`/chats/${chatId}/messages`, {
       content,
@@ -223,7 +202,48 @@ export const chatsApi = {
       clientMessageId,
       soundTokId,
       replyToId,
+      imageUrl,
     });
+    return response.data;
+  },
+
+  uploadImage: async (chatId: string, file: File): Promise<{ imageUrl: string }> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await api.post(`/chats/${chatId}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  uploadGroupAvatar: async (chatId: string, file: File): Promise<Chat> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await api.post(`/chats/${chatId}/avatar`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  deleteGroupAvatar: async (chatId: string): Promise<Chat> => {
+    const response = await api.delete(`/chats/${chatId}/avatar`);
+    return response.data;
+  },
+
+  setMemberRole: async (
+    chatId: string,
+    userId: string,
+    role: ChatMemberRole
+  ): Promise<Chat> => {
+    const response = await api.patch(`/chats/${chatId}/members/${userId}/role`, { role });
+    return response.data;
+  },
+
+  removeMember: async (
+    chatId: string,
+    userId: string
+  ): Promise<Chat | { success: boolean; left?: boolean }> => {
+    const response = await api.delete(`/chats/${chatId}/members/${userId}`);
     return response.data;
   },
 

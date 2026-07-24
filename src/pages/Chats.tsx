@@ -966,6 +966,10 @@ export default function Chats() {
 
   const getChatAvatarContent = (chat: Chat) => {
     if (isGroupChat(chat)) {
+      const groupAvatar = resolveMediaUrl(chat.avatar);
+      if (groupAvatar) {
+        return <img src={groupAvatar} alt={chat.name || 'Группа'} />;
+      }
       return <Users size={20} />;
     }
     const otherUser = getOtherUser(chat);
@@ -991,6 +995,14 @@ export default function Chats() {
         return `${sender}: 🎬 ${label}`;
       }
       return `🎬 ${label}`;
+    }
+    if (lastMessage.imageUrl) {
+      const label = lastMessage.content?.trim() ? lastMessage.content : 'Фото';
+      if (isGroupChat(chat) && lastMessage.senderId !== user?.id) {
+        const sender = lastMessage.sender?.username || 'участник';
+        return `${sender}: 📷 ${label}`;
+      }
+      return `📷 ${label}`;
     }
     if (isGroupChat(chat) && lastMessage.senderId !== user?.id) {
       const sender = lastMessage.sender?.username || 'участник';

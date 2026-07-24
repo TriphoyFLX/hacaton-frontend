@@ -194,10 +194,72 @@ const css = `
   position: absolute;
   left: 0;
   right: 72px;
-  bottom: 0;
+  bottom: 14px;
   padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
   z-index: 8;
   color: #fff;
+}
+
+.vf-seek {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 14;
+  padding: 10px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  touch-action: none;
+  cursor: pointer;
+}
+.vf-seek-track {
+  position: relative;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.28);
+  transition: height 0.12s ease;
+}
+.vf-seek.active .vf-seek-track,
+.vf-seek:hover .vf-seek-track {
+  height: 6px;
+}
+.vf-seek-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: #fff;
+  pointer-events: none;
+}
+.vf-seek-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%) scale(0);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+  pointer-events: none;
+  transition: transform 0.12s ease;
+}
+.vf-seek.active .vf-seek-thumb,
+.vf-seek:hover .vf-seek-thumb {
+  transform: translate(-50%, -50%) scale(1);
+}
+.vf-seek-time {
+  position: absolute;
+  left: 12px;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.vf-seek.active .vf-seek-time,
+.vf-seek:hover .vf-seek-time {
+  opacity: 1;
 }
 
 .vf-author-row {
@@ -208,10 +270,25 @@ const css = `
 }
 
 .vf-author-name {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: #fff;
+  cursor: pointer;
   text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+.vf-author-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .vf-follow-chip {
@@ -507,6 +584,9 @@ const css = `
 }
 
 .vf-comment-avatar {
+  appearance: none;
+  border: none;
+  padding: 0;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -547,9 +627,12 @@ const css = `
 }
 
 .vf-comment-user {
-  border: 0;
+  appearance: none;
   background: transparent;
+  border: none;
   padding: 0;
+  margin: 0;
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
   color: rgba(255,255,255,0.6);
@@ -559,6 +642,7 @@ const css = `
 .vf-comment-user:hover {
   color: #fff;
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .vf-comment-time {
@@ -797,12 +881,12 @@ const css = `
 
   .vf-actions {
     right: 8px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(36px + env(safe-area-inset-bottom, 0px));
   }
 
   .vf-bottom-info {
     right: 56px;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
   }
 
 }
@@ -864,7 +948,13 @@ function CommentAvatar({
   const label = (author.displayName || author.username)[0]?.toUpperCase() ?? '?';
 
   return (
-    <button type="button" className="vf-comment-avatar" onClick={onOpen} title={`@${author.username}`}>
+    <button
+      type="button"
+      className="vf-comment-avatar"
+      onClick={onOpen}
+      title={`@${author.username}`}
+      aria-label={`Профиль @${author.username}`}
+    >
       {url ? <img src={url} alt={author.username} /> : label}
     </button>
   );
@@ -931,6 +1021,10 @@ export default function VideoFeed({
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isSeeking, setIsSeeking] = useState(false);
 
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
@@ -938,13 +1032,19 @@ export default function VideoFeed({
   const touchVelocity = useRef(0);
   const lastTouchTime = useRef(0);
   const animationRef = useRef<number | null>(null);
-  const lastWheelTime = useRef(0);
-  const wheelVelocity = useRef(0);
+  const wheelAccum = useRef(0);
+  const wheelLockUntil = useRef(0);
+  const wheelIdleTimer = useRef<number | null>(null);
+  const isSeekingRef = useRef(false);
+  const isAnimatingRef = useRef(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const seekRef = useRef<HTMLDivElement>(null);
 
-  const FLING_VELOCITY_THRESHOLD = 0.5;
-  const DRAG_THRESHOLD = 80;
+  const FLING_VELOCITY_THRESHOLD = 0.85;
+  const DRAG_THRESHOLD = 110;
+  const WHEEL_THRESHOLD = 56;
+  const WHEEL_COOLDOWN_MS = 750;
 
   const getCommentCount = (tok: SoundTok) =>
     localCounts[tok.id] ?? tok.commentsCount ?? 0;
@@ -1157,7 +1257,7 @@ export default function VideoFeed({
   }, [enableSound]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (commentsOpen) return;
+    if (commentsOpen || isSeekingRef.current || isAnimatingRef.current) return;
     enableSound();
     const touch = e.touches[0];
     touchStartY.current = touch.clientY;
@@ -1167,12 +1267,13 @@ export default function VideoFeed({
     touchVelocity.current = 0;
     setIsDragging(true);
     setIsAnimating(false);
+    isAnimatingRef.current = false;
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
   };
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (!isDragging || commentsOpen) return;
+      if (!isDragging || commentsOpen || isSeekingRef.current) return;
       const touch = e.touches[0];
       const currentY = touch.clientY;
       const diffY = touchStartY.current - currentY;
@@ -1184,8 +1285,8 @@ export default function VideoFeed({
       lastTouchTime.current = now;
       touchLastY.current = currentY;
       let resistance = 1;
-      if (currentIndex === 0 && diffY < 0) resistance = 0.4;
-      if (currentIndex === soundToks.length - 1 && diffY > 0) resistance = 0.4;
+      if (currentIndex === 0 && diffY < 0) resistance = 0.35;
+      if (currentIndex === soundToks.length - 1 && diffY > 0) resistance = 0.35;
       setDragOffset(diffY * resistance);
     },
     [isDragging, commentsOpen, currentIndex, soundToks.length]
@@ -1194,21 +1295,24 @@ export default function VideoFeed({
   const springToPosition = useCallback(
     (targetOffset: number, targetIndex: number | null = null) => {
       setIsAnimating(true);
+      isAnimatingRef.current = true;
       setIsDragging(false);
       const startOffset = dragOffset;
       const startTime = performance.now();
-      const duration = targetIndex === null ? 180 : 280;
+      const duration = targetIndex === null ? 220 : 320;
 
       const animate = (currentTime: number) => {
         const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
+        const progressAnim = Math.min(elapsed / duration, 1);
+        // smoother ease-out like TikTok
+        const eased = 1 - Math.pow(1 - progressAnim, 4);
         setDragOffset(startOffset + (targetOffset - startOffset) * eased);
-        if (progress < 1) {
+        if (progressAnim < 1) {
           animationRef.current = requestAnimationFrame(animate);
         } else {
           setDragOffset(0);
           setIsAnimating(false);
+          isAnimatingRef.current = false;
           if (targetIndex !== null) setCurrentIndex(targetIndex);
         }
       };
@@ -1217,13 +1321,24 @@ export default function VideoFeed({
     [dragOffset]
   );
 
+  const goToAdjacent = useCallback(
+    (direction: 1 | -1) => {
+      if (isAnimatingRef.current || isSeekingRef.current) return;
+      const next = currentIndex + direction;
+      if (next < 0 || next >= soundToks.length) return;
+      const stageHeight = stageRef.current?.clientHeight || window.innerHeight;
+      springToPosition(direction * stageHeight, next);
+    },
+    [currentIndex, soundToks.length, springToPosition]
+  );
+
   const handleTouchEnd = useCallback(() => {
-    if (!isDragging || commentsOpen) return;
+    if (!isDragging || commentsOpen || isSeekingRef.current) return;
     const dragDistance = dragOffset;
     const velocity = touchVelocity.current;
     const dragDuration = Date.now() - touchStartTime.current;
-    const isFlingUp = velocity > FLING_VELOCITY_THRESHOLD && dragDuration < 300;
-    const isFlingDown = velocity < -FLING_VELOCITY_THRESHOLD && dragDuration < 300;
+    const isFlingUp = velocity > FLING_VELOCITY_THRESHOLD && dragDuration < 280;
+    const isFlingDown = velocity < -FLING_VELOCITY_THRESHOLD && dragDuration < 280;
     const isSwipeUp = dragDistance > DRAG_THRESHOLD;
     const isSwipeDown = dragDistance < -DRAG_THRESHOLD;
     const stageHeight = stageRef.current?.clientHeight || window.innerHeight;
@@ -1240,33 +1355,136 @@ export default function VideoFeed({
   useEffect(() => {
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (wheelIdleTimer.current) window.clearTimeout(wheelIdleTimer.current);
     };
   }, []);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
-      if (commentsOpen) return;
+      if (commentsOpen || isSeekingRef.current) return;
       e.preventDefault();
       enableSound();
+
       const now = Date.now();
-      const deltaTime = now - lastWheelTime.current;
-      wheelVelocity.current += e.deltaY * 0.1;
-      const throttleTime = Math.max(150, 350 - Math.abs(wheelVelocity.current) * 50);
-      if (deltaTime < throttleTime) return;
-      lastWheelTime.current = now;
-      wheelVelocity.current *= 0.7;
-      if (Math.abs(wheelVelocity.current) > 3) {
-        if (wheelVelocity.current > 0 && currentIndex < soundToks.length - 1) {
-          setCurrentIndex((prev) => prev + 1);
-          wheelVelocity.current = 0;
-        } else if (wheelVelocity.current < 0 && currentIndex > 0) {
-          setCurrentIndex((prev) => prev - 1);
-          wheelVelocity.current = 0;
-        }
-      }
+      if (now < wheelLockUntil.current || isAnimatingRef.current) return;
+
+      const raw =
+        e.deltaMode === 1
+          ? e.deltaY * 16
+          : e.deltaMode === 2
+            ? e.deltaY * (stageRef.current?.clientHeight || window.innerHeight)
+            : e.deltaY;
+
+      // Ignore tiny trackpad noise
+      if (Math.abs(raw) < 1.5) return;
+
+      wheelAccum.current += raw;
+
+      if (wheelIdleTimer.current) window.clearTimeout(wheelIdleTimer.current);
+      wheelIdleTimer.current = window.setTimeout(() => {
+        wheelAccum.current = 0;
+      }, 140);
+
+      if (Math.abs(wheelAccum.current) < WHEEL_THRESHOLD) return;
+
+      const direction: 1 | -1 = wheelAccum.current > 0 ? 1 : -1;
+      wheelAccum.current = 0;
+      wheelLockUntil.current = now + WHEEL_COOLDOWN_MS;
+      goToAdjacent(direction);
     },
-    [commentsOpen, currentIndex, soundToks.length, enableSound]
+    [commentsOpen, enableSound, goToAdjacent]
   );
+
+  const formatSeekTime = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+    const total = Math.floor(seconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const seekFromClientX = useCallback((clientX: number) => {
+    const el = seekRef.current;
+    const video = videoRefs.current[currentIndex];
+    if (!el || !video || !Number.isFinite(video.duration) || video.duration <= 0) return;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const nextTime = ratio * video.duration;
+    video.currentTime = nextTime;
+    setProgress(ratio);
+    setCurrentTime(nextTime);
+    setDuration(video.duration);
+  }, [currentIndex]);
+
+  const handleSeekPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!isActiveVideoReady()) return;
+    enableSound();
+    isSeekingRef.current = true;
+    setIsSeeking(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    seekFromClientX(e.clientX);
+  };
+
+  const handleSeekPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isSeekingRef.current) return;
+    e.stopPropagation();
+    seekFromClientX(e.clientX);
+  };
+
+  const handleSeekPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isSeekingRef.current) return;
+    e.stopPropagation();
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    isSeekingRef.current = false;
+    setIsSeeking(false);
+  };
+
+  function isActiveVideoReady() {
+    const video = videoRefs.current[currentIndex];
+    return Boolean(video && Number.isFinite(video.duration) && video.duration > 0);
+  }
+
+  // Track playback progress for the active video
+  useEffect(() => {
+    setProgress(0);
+    setCurrentTime(0);
+    setDuration(0);
+    isSeekingRef.current = false;
+    setIsSeeking(false);
+
+    const video = videoRefs.current[currentIndex];
+    if (!video) return;
+
+    const onTime = () => {
+      if (isSeekingRef.current) return;
+      const dur = video.duration;
+      if (!Number.isFinite(dur) || dur <= 0) return;
+      setDuration(dur);
+      setCurrentTime(video.currentTime);
+      setProgress(Math.min(1, Math.max(0, video.currentTime / dur)));
+    };
+    const onMeta = () => {
+      if (Number.isFinite(video.duration)) setDuration(video.duration);
+    };
+
+    video.addEventListener('timeupdate', onTime);
+    video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('durationchange', onMeta);
+    onMeta();
+    onTime();
+
+    return () => {
+      video.removeEventListener('timeupdate', onTime);
+      video.removeEventListener('loadedmetadata', onMeta);
+      video.removeEventListener('durationchange', onMeta);
+    };
+  }, [currentIndex, soundToks]);
 
   const openComments = async (id: string) => {
     setCurrentSoundTokId(id);
@@ -1591,12 +1809,44 @@ export default function VideoFeed({
                   <div className="vf-gradient-top" />
                   <div className="vf-gradient-bottom" />
 
+                  <div
+                    ref={seekRef}
+                    className={`vf-seek ${isSeeking ? 'active' : ''}`}
+                    onPointerDown={handleSeekPointerDown}
+                    onPointerMove={handleSeekPointerMove}
+                    onPointerUp={handleSeekPointerUp}
+                    onPointerCancel={handleSeekPointerUp}
+                    onClick={(e) => e.stopPropagation()}
+                    role="slider"
+                    aria-label="Перемотка видео"
+                    aria-valuemin={0}
+                    aria-valuemax={Math.floor(duration) || 0}
+                    aria-valuenow={Math.floor(currentTime) || 0}
+                  >
+                    <div className="vf-seek-track">
+                      <div className="vf-seek-fill" style={{ width: `${progress * 100}%` }} />
+                      <div className="vf-seek-thumb" style={{ left: `${progress * 100}%` }} />
+                    </div>
+                    <div className="vf-seek-time">
+                      {formatSeekTime(currentTime)} / {formatSeekTime(duration)}
+                    </div>
+                  </div>
+
                   <div className="vf-bottom-info">
                     <div className="vf-author-row">
-                      <span className="vf-author-name">
+                      <button
+                        type="button"
+                        className="vf-author-name"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (soundTok.author?.username) {
+                            navigate(`/profile/${soundTok.author.username}`);
+                          }
+                        }}
+                      >
                         @{soundTok.author?.username || 'user'}
                         <AdminBadge role={soundTok.author?.role} size={12} />
-                      </span>
+                      </button>
                     </div>
                     {soundTok.description && (
                       <>
