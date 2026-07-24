@@ -3,8 +3,12 @@ export type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
-const DISMISS_KEY = 'sl_pwa_install_dismissed_v1';
+/** Device-scoped (localStorage), not tied to account. */
+const DISMISS_KEY = 'sl_pwa_install_dismissed_device_v1';
+const INSTALLED_KEY = 'sl_pwa_installed_device_v1';
 const DISMISS_MS = 1000 * 60 * 60 * 24 * 7;
+
+type RelatedApp = { id?: string; platform?: string; url?: string };
 
 export function isPwaStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -54,6 +58,64 @@ export function clearPwaDismissed() {
   }
 }
 
+export function markPwaInstalledOnDevice() {
+  try {
+    localStorage.setItem(INSTALLED_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isPwaMarkedInstalledOnDevice(): boolean {
+  try {
+    return localStorage.getItem(INSTALLED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detect if SoundLab PWA is already installed on THIS device
+ * (independent of which account is logged in).
+ */
+export async function detectPwaInstalledOnDevice(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  if (isPwaStandalone()) {
+    markPwaInstalledOnDevice();
+    return true;
+  }
+
+  if (isPwaMarkedInstalledOnDevice()) return true;
+
+  const nav = navigator as Navigator & {
+    getInstalledRelatedApps?: () => Promise<RelatedApp[]>;
+  };
+
+  if (typeof nav.getInstalledRelatedApps === 'function') {
+    try {
+      const apps = await nav.getInstalledRelatedApps();
+      const hit = apps.some((app) => {
+        if (app.platform && app.platform !== 'webapp') return false;
+        const url = (app.url || app.id || '').toLowerCase();
+        return (
+          url.includes('soundlab-studio.ru') ||
+          url.includes('manifest.webmanifest') ||
+          url.includes('/manifest')
+        );
+      });
+      if (hit) {
+        markPwaInstalledOnDevice();
+        return true;
+      }
+    } catch {
+      /* API unsupported / permission */
+    }
+  }
+
+  return false;
+}
+
 /** Shared deferred install event captured once for the whole app. */
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 const listeners = new Set<() => void>();
@@ -75,13 +137,31 @@ export function subscribeInstallPrompt(listener: () => void) {
 
 export function bindPwaInstallCapture() {
   if (typeof window === 'undefined') return () => undefined;
+
   const onBip = (event: Event) => {
     event.preventDefault();
+    // Browser only fires this when NOT already installed
     deferredPrompt = event as BeforeInstallPromptEvent;
     notify();
   };
+
+  const onInstalled = () => {
+    deferredPrompt = null;
+    markPwaInstalledOnDevice();
+    notify();
+  };
+
   window.addEventListener('beforeinstallprompt', onBip);
-  return () => window.removeEventListener('beforeinstallprompt', onBip);
+  window.addEventListener('appinstalled', onInstalled);
+
+  if (isPwaStandalone()) {
+    markPwaInstalledOnDevice();
+  }
+
+  return () => {
+    window.removeEventListener('beforeinstallprompt', onBip);
+    window.removeEventListener('appinstalled', onInstalled);
+  };
 }
 
 export async function promptPwaInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
@@ -91,8 +171,12 @@ export async function promptPwaInstall(): Promise<'accepted' | 'dismissed' | 'un
   try {
     const choice = await event.userChoice;
     deferredPrompt = null;
+    if (choice.outcome === 'accepted') {
+      markPwaInstalledOnDevice();
+    } else {
+      markPwaDismissed();
+    }
     notify();
-    markPwaDismissed();
     return choice.outcome;
   } catch {
     deferredPrompt = null;

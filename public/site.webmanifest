@@ -1,7 +1,7 @@
 {
-  "name": "SoundLab — онлайн студия звукозаписи",
+  "name": "SoundLab",
   "short_name": "SoundLab",
-  "description": "Записать трек онлайн в браузере: MIDI, вокал, биты, AI и SoundTok.",
+  "description": "Онлайн студия звукозаписи. Установите на компьютер или телефон.",
   "id": "/",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -11,6 +11,13 @@
   "theme_color": "#050505",
   "lang": "ru",
   "categories": ["music", "entertainment", "productivity"],
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://soundlab-studio.ru/manifest.webmanifest"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",

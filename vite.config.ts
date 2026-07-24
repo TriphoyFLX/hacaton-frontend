@@ -16,7 +16,7 @@ export default defineConfig({
       ],
       manifest: {
         id: '/',
-        name: 'SoundLab — онлайн студия звукозаписи',
+        name: 'SoundLab',
         short_name: 'SoundLab',
         description:
           'Онлайн студия звукозаписи. Установите на компьютер или телефон: ярлык на рабочем столе, MIDI, SoundTok и чаты.',
@@ -31,6 +31,12 @@ export default defineConfig({
         theme_color: '#050505',
         categories: ['music', 'entertainment', 'productivity'],
         prefer_related_applications: false,
+        related_applications: [
+          {
+            platform: 'webapp',
+            url: 'https://soundlab-studio.ru/manifest.webmanifest',
+          },
+        ],
         launch_handler: {
           client_mode: ['navigate-existing', 'auto'],
         },

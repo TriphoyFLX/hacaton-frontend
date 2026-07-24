@@ -178,7 +178,7 @@ ${FONT_IMPORT}
 
 export default function Dashboard() {
   const { user, logout } = useAuthStore();
-  const { standalone } = usePwaInstall();
+  const { standalone, installedOnDevice } = usePwaInstall();
 
   const handleLogout = () => {
     logout();
@@ -222,7 +222,7 @@ export default function Dashboard() {
           <div className="db-hero-desc">Ваш личный кабинет и управление профилем</div>
         </div>
 
-        {!standalone && (
+        {!standalone && !installedOnDevice && (
           <div className="db-card">
             <div className="db-pwa">
               <div className="db-pwa-copy">

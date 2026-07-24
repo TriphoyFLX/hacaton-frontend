@@ -33,12 +33,19 @@ if (typeof window !== 'undefined') {
   })
 }
 
-// Mark standalone PWA mode for CSS (safe-areas / chrome)
+// Mark standalone PWA mode for CSS (safe-areas / chrome) + device install flag
 if (typeof document !== 'undefined') {
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches ||
     ('standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone))
-  if (standalone) document.documentElement.classList.add('sl-pwa')
+  if (standalone) {
+    document.documentElement.classList.add('sl-pwa')
+    try {
+      localStorage.setItem('sl_pwa_installed_device_v1', '1')
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 createRoot(document.getElementById('root')!).render(

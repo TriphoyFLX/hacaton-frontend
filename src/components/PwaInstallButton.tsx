@@ -12,9 +12,10 @@ type Props = {
  * (desktop shortcut / Start menu + phone home screen).
  */
 export default function PwaInstallButton({ className = '', variant = 'button', onDone }: Props) {
-  const { standalone, canNativeInstall, iosSafari, install } = usePwaInstall();
+  const { standalone, installedOnDevice, canOfferInstall, canNativeInstall, iosSafari, install } =
+    usePwaInstall();
 
-  if (standalone) return null;
+  if (standalone || installedOnDevice || !canOfferInstall) return null;
 
   const handleClick = async () => {
     if (canNativeInstall) {

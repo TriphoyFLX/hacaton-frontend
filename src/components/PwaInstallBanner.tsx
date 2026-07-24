@@ -104,12 +104,20 @@ const css = `
 `;
 
 /**
- * Native install prompt (Android/Chrome) + iOS Safari tip.
- * Also auto-shows once so users learn SoundLab is a PWA.
+ * Install prompt — hidden if SoundLab is already installed on this device.
  */
 export default function PwaInstallBanner() {
   const location = useLocation();
-  const { standalone, canNativeInstall, iosSafari, install, dismiss } = usePwaInstall();
+  const {
+    ready,
+    standalone,
+    installedOnDevice,
+    canNativeInstall,
+    iosSafari,
+    canOfferInstall,
+    install,
+    dismiss,
+  } = usePwaInstall();
   const [visible, setVisible] = useState(false);
 
   const immersive =
@@ -119,20 +127,29 @@ export default function PwaInstallBanner() {
     (location.pathname.startsWith('/chats/') && location.pathname !== '/chats');
 
   useEffect(() => {
-    if (standalone || wasPwaDismissed()) return;
+    if (!ready || !canOfferInstall || wasPwaDismissed()) {
+      setVisible(false);
+      return;
+    }
 
-    // Show as soon as Chrome exposes install, or after a short delay for discovery
+    // Native install available (Chrome/Edge desktop & Android)
     if (canNativeInstall) {
       setVisible(true);
       return;
     }
 
+    // iOS tip only — no delayed spam on desktop browsers without install event
+    if (!iosSafari) {
+      setVisible(false);
+      return;
+    }
+
     const timer = window.setTimeout(() => {
-      if (!standalone && !wasPwaDismissed()) setVisible(true);
+      if (!wasPwaDismissed() && canOfferInstall) setVisible(true);
     }, 2800);
 
     return () => window.clearTimeout(timer);
-  }, [standalone, canNativeInstall]);
+  }, [ready, canOfferInstall, canNativeInstall, iosSafari]);
 
   const onDismiss = () => {
     dismiss();
@@ -149,18 +166,10 @@ export default function PwaInstallBanner() {
       window.alert(
         'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
       );
-      return;
     }
-    window.alert(
-      'SoundLab можно установить как приложение на компьютер и телефон.\n\n' +
-        'Windows / macOS (Chrome или Edge):\n' +
-        '• Иконка ⊕ / «Установить» в адресной строке, или\n' +
-        '• Меню ⋮ → «Установить приложение»\n\n' +
-        'После установки ярлык появится на рабочем столе и в меню «Пуск».',
-    );
   };
 
-  if (!visible || immersive || standalone) return null;
+  if (!visible || immersive || standalone || installedOnDevice || !canOfferInstall) return null;
 
   return (
     <>
@@ -170,12 +179,12 @@ export default function PwaInstallBanner() {
           <img src="/icons/icon-192.png" alt="" width={42} height={42} />
         </div>
         <div className="pwa-banner-body">
-          <p className="pwa-banner-title">Установить SoundLab на ПК</p>
+          <p className="pwa-banner-title">Установить SoundLab</p>
           {iosSafari ? (
             <p className="pwa-banner-text">
               Установите на домашний экран: <strong>Поделиться</strong>{' '}
               <Share size={12} style={{ display: 'inline', verticalAlign: '-2px' }} />
-              {' '}→ <strong>«На экран Домой»</strong>. Работает как обычное приложение.
+              {' '}→ <strong>«На экран Домой»</strong>.
             </p>
           ) : (
             <p className="pwa-banner-text">
@@ -185,7 +194,7 @@ export default function PwaInstallBanner() {
           <div className="pwa-banner-actions">
             <button type="button" className="pwa-banner-btn primary" onClick={() => void onInstall()}>
               <Download size={14} />
-              {canNativeInstall ? 'Установить' : 'Как установить'}
+              Установить
             </button>
             <button type="button" className="pwa-banner-btn ghost" onClick={onDismiss}>
               Позже

@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import SeoHead from '../components/SeoHead';
 import PwaInstallButton from '../components/PwaInstallButton';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 
 type LandingVariant = 'home' | 'studio' | 'record';
 
@@ -120,6 +121,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
   const token = useAuthStore((s) => s.token);
   const meta = VARIANT[variant];
   const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+  const { canOfferInstall } = usePwaInstall();
 
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
@@ -444,19 +446,21 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           </div>
         </section>
 
-        <section className="sl-section" aria-labelledby="pwa-heading">
-          <div className="sl-pwa-card">
-            <div>
-              <span className="sl-pwa-badge">PWA</span>
-              <h2 id="pwa-heading">Приложение на компьютер и телефон</h2>
-              <p>
-                SoundLab ставится с сайта как настоящее приложение: ярлык на рабочем столе и в «Пуск»,
-                отдельное окно, быстрый запуск. Без App Store и Google Play.
-              </p>
+        {canOfferInstall && (
+          <section className="sl-section" aria-labelledby="pwa-heading">
+            <div className="sl-pwa-card">
+              <div>
+                <span className="sl-pwa-badge">PWA</span>
+                <h2 id="pwa-heading">Приложение на компьютер и телефон</h2>
+                <p>
+                  SoundLab ставится с сайта как настоящее приложение: ярлык на рабочем столе и в «Пуск»,
+                  отдельное окно, быстрый запуск. Без App Store и Google Play.
+                </p>
+              </div>
+              <PwaInstallButton className="sl-pwa-install" variant="inline" />
             </div>
-            <PwaInstallButton className="sl-pwa-install" variant="inline" />
-          </div>
-        </section>
+          </section>
+        )}
 
         <section className="sl-section sl-faq" aria-label="Частые вопросы">
           <h2>Частые вопросы</h2>
