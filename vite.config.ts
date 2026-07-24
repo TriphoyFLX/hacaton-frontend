@@ -19,18 +19,21 @@ export default defineConfig({
         name: 'SoundLab — онлайн студия звукозаписи',
         short_name: 'SoundLab',
         description:
-          'Записать трек онлайн в браузере: MIDI, вокал, биты, AI и SoundTok. Студия без установки программ.',
+          'Онлайн студия звукозаписи. Установите на компьютер или телефон: ярлык на рабочем столе, MIDI, SoundTok и чаты.',
         lang: 'ru',
         dir: 'ltr',
         start_url: '/?source=pwa',
         scope: '/',
         display: 'standalone',
-        display_override: ['standalone', 'minimal-ui', 'browser'],
+        display_override: ['window-controls-overlay', 'standalone', 'minimal-ui', 'browser'],
         orientation: 'any',
         background_color: '#050505',
         theme_color: '#050505',
         categories: ['music', 'entertainment', 'productivity'],
         prefer_related_applications: false,
+        launch_handler: {
+          client_mode: ['navigate-existing', 'auto'],
+        },
         icons: [
           { src: '/icons/icon-48.png', sizes: '48x48', type: 'image/png', purpose: 'any' },
           { src: '/icons/icon-72.png', sizes: '72x72', type: 'image/png', purpose: 'any' },

@@ -721,7 +721,7 @@ export default function Sidebar() {
         {!standalone && (
           <button type="button" className="sb-install" onClick={() => void handleInstallClick()}>
             <span className="sb-item-icon"><Download size={14} /></span>
-            <span className="sb-install-label">Установить приложение</span>
+            <span className="sb-install-label">Установить на ПК</span>
             <span className="sb-install-tag">PWA</span>
           </button>
         )}

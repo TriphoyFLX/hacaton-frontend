@@ -216,9 +216,9 @@ export default function Dashboard() {
             <div className="db-pwa">
               <div className="db-pwa-copy">
                 <span className="db-pwa-tag">PWA</span>
-                <div className="db-card-title">Установите SoundLab на телефон</div>
+                <div className="db-card-title">Установите SoundLab на компьютер</div>
                 <p>
-                  Это веб-приложение: иконка на экране, полноэкранный режим, быстрый запуск — без магазинов приложений.
+                  PWA для ПК и телефона: ярлык на рабочем столе / в «Пуск», отдельное окно без панели браузера.
                 </p>
               </div>
               <PwaInstallButton className="db-pwa-install" />

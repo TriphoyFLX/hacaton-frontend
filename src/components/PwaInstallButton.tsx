@@ -8,7 +8,8 @@ type Props = {
 };
 
 /**
- * Visible entry point so users discover SoundLab can be installed as a PWA.
+ * Visible entry point so users discover SoundLab can be installed as a PWA
+ * (desktop shortcut / Start menu + phone home screen).
  */
 export default function PwaInstallButton({ className = '', variant = 'button', onDone }: Props) {
   const { standalone, canNativeInstall, iosSafari, install } = usePwaInstall();
@@ -29,7 +30,12 @@ export default function PwaInstallButton({ className = '', variant = 'button', o
       return;
     }
     window.alert(
-      'SoundLab — это PWA-приложение.\n\nВ Chrome/Edge: меню браузера → «Установить приложение» или «Добавить на главный экран».\n\nНа iPhone: Safari → Поделиться → «На экран Домой».',
+      'SoundLab — PWA-приложение для компьютера и телефона.\n\n' +
+        'Windows / macOS (Chrome или Edge):\n' +
+        '• Нажмите иконку установки в адресной строке, или\n' +
+        '• Меню ⋮ → «Установить приложение» / «Установить SoundLab»\n\n' +
+        'После установки появится ярлык на рабочем столе и в меню «Пуск».\n\n' +
+        'iPhone: Safari → Поделиться → «На экран Домой».',
     );
     onDone?.();
   };
@@ -38,7 +44,7 @@ export default function PwaInstallButton({ className = '', variant = 'button', o
     return (
       <button type="button" className={className} onClick={() => void handleClick()}>
         <Download size={16} />
-        Установить приложение
+        Установить на ПК / телефон
       </button>
     );
   }
@@ -47,7 +53,7 @@ export default function PwaInstallButton({ className = '', variant = 'button', o
     return (
       <button type="button" className={className} onClick={() => void handleClick()}>
         {iosSafari ? <Share size={14} /> : <Download size={14} />}
-        <span>Установить как приложение</span>
+        <span>Установить на компьютер</span>
       </button>
     );
   }
@@ -55,7 +61,7 @@ export default function PwaInstallButton({ className = '', variant = 'button', o
   return (
     <button type="button" className={className} onClick={() => void handleClick()}>
       <Download size={15} />
-      Установить приложение
+      Установить на ПК
     </button>
   );
 }

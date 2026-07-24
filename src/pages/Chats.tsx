@@ -1,11 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatsApi, Chat, resolveChatPinState } from '../api/chats';
+import { followsApi } from '../api/follows';
 import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { useSocket } from '../hooks/useSocket';
 import { Search, MessageCircle, Pin, PinOff, Users, Plus, X } from 'lucide-react';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+
+type GroupCandidate = {
+  id: string;
+  username: string;
+  displayName?: string | null;
+  avatar?: string | null;
+  fromChat?: boolean;
+  fromFollow?: boolean;
+};
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -553,6 +563,38 @@ ${FONT_IMPORT}
   opacity: 0.45;
   cursor: not-allowed;
 }
+.group-suggest-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+.group-search-meta {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.group-search-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+.group-search-empty {
+  padding: 14px 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
 .group-search-avatar {
   width: 28px;
   height: 28px;
@@ -682,6 +724,8 @@ export default function Chats() {
   const [groupCreating, setGroupCreating] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [followingUsers, setFollowingUsers] = useState<GroupCandidate[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchChats = async () => {
@@ -770,6 +814,90 @@ export default function Chats() {
   }, [memberSearch, showGroupModal]);
 
   useEffect(() => {
+    if (!showGroupModal || !user?.id) return;
+
+    let cancelled = false;
+    setSuggestionsLoading(true);
+    void followsApi
+      .getFollowing(user.id)
+      .then((list) => {
+        if (cancelled) return;
+        setFollowingUsers(
+          list.map((u) => ({
+            id: u.id,
+            username: u.username,
+            displayName: u.displayName,
+            avatar: u.avatar,
+            fromFollow: true,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setFollowingUsers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSuggestionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showGroupModal, user?.id]);
+
+  const suggestedMembers = useMemo(() => {
+    const map = new Map<string, GroupCandidate>();
+
+    for (const chat of chats) {
+      if (chat.type === 'GROUP') continue;
+      const other = chat.otherUser ?? chat.users.find((cu) => cu.user.id !== user?.id)?.user;
+      if (!other || other.id === user?.id) continue;
+      map.set(other.id, {
+        id: other.id,
+        username: other.username,
+        displayName: other.displayName,
+        avatar: other.avatar,
+        fromChat: true,
+        fromFollow: false,
+      });
+    }
+
+    for (const person of followingUsers) {
+      const existing = map.get(person.id);
+      if (existing) {
+        existing.fromFollow = true;
+        if (!existing.avatar && person.avatar) existing.avatar = person.avatar;
+        if (!existing.displayName && person.displayName) existing.displayName = person.displayName;
+      } else {
+        map.set(person.id, { ...person, fromFollow: true });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const score = (u: GroupCandidate) => (u.fromChat ? 2 : 0) + (u.fromFollow ? 1 : 0);
+      const diff = score(b) - score(a);
+      if (diff !== 0) return diff;
+      return a.username.localeCompare(b.username, 'ru');
+    });
+  }, [chats, followingUsers, user?.id]);
+
+  const visibleCandidates = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    if (query) {
+      return searchResults
+        .filter((u) => u.id !== user?.id)
+        .map((u) => {
+          const known = suggestedMembers.find((s) => s.id === u.id);
+          return {
+            ...u,
+            fromChat: known?.fromChat,
+            fromFollow: known?.fromFollow,
+          } as GroupCandidate;
+        });
+    }
+    return suggestedMembers;
+  }, [memberSearch, searchResults, suggestedMembers, user?.id]);
+
+  useEffect(() => {
     if (!pinError) return;
     const timer = setTimeout(() => setPinError(null), 4000);
     return () => clearTimeout(timer);
@@ -853,12 +981,21 @@ export default function Chats() {
     setSearchResults([]);
     setSelectedMembers([]);
     setGroupError(null);
+    setFollowingUsers([]);
   };
 
-  const addMember = (member: { id: string; username: string; displayName?: string | null }) => {
+  const addMember = (member: GroupCandidate) => {
     if (member.id === user?.id) return;
-    if (selectedMembers.some(m => m.id === member.id)) return;
-    setSelectedMembers(prev => [...prev, member]);
+    if (selectedMembers.some((m) => m.id === member.id)) return;
+    setSelectedMembers((prev) => [
+      ...prev,
+      {
+        id: member.id,
+        username: member.username,
+        displayName: member.displayName,
+        avatar: member.avatar,
+      },
+    ]);
     setMemberSearch('');
     setSearchResults([]);
   };
@@ -1132,12 +1269,19 @@ export default function Chats() {
                 className="group-field-input"
                 value={memberSearch}
                 onChange={(e) => setMemberSearch(e.target.value)}
-                placeholder="Поиск по username..."
+                placeholder="Поиск или выберите из списка..."
               />
-              {searchResults.length > 0 && (
-                <div className="group-search-results">
-                  {searchResults.map((result) => {
-                    const alreadyAdded = selectedMembers.some(m => m.id === result.id);
+              {!memberSearch.trim() && (
+                <div className="group-suggest-label" style={{ marginTop: 10 }}>
+                  Ваши чаты и подписки
+                </div>
+              )}
+              {suggestionsLoading && !memberSearch.trim() ? (
+                <div className="group-search-empty">Загрузка контактов...</div>
+              ) : visibleCandidates.length > 0 ? (
+                <div className="group-search-results" style={memberSearch.trim() ? { marginTop: 10 } : undefined}>
+                  {visibleCandidates.map((result) => {
+                    const alreadyAdded = selectedMembers.some((m) => m.id === result.id);
                     const isSelf = result.id === user?.id;
                     return (
                       <button
@@ -1160,9 +1304,22 @@ export default function Chats() {
                             {result.displayName}
                           </span>
                         )}
+                        <span className="group-search-meta">
+                          {result.fromChat && <span className="group-search-tag">чат</span>}
+                          {result.fromFollow && <span className="group-search-tag">подписка</span>}
+                          {alreadyAdded && <span className="group-search-tag">добавлен</span>}
+                        </span>
                       </button>
                     );
                   })}
+                </div>
+              ) : memberSearch.trim() ? (
+                <div className="group-search-empty">
+                  Никого не нашли. Попробуйте другой username.
+                </div>
+              ) : (
+                <div className="group-search-empty">
+                  Пока нет чатов и подписок. Найдите человека по username.
                 </div>
               )}
             </div>

@@ -152,7 +152,11 @@ export default function PwaInstallBanner() {
       return;
     }
     window.alert(
-      'SoundLab можно установить как приложение (PWA).\n\nChrome/Edge: меню → «Установить приложение».\niPhone: Safari → Поделиться → «На экран Домой».',
+      'SoundLab можно установить как приложение на компьютер и телефон.\n\n' +
+        'Windows / macOS (Chrome или Edge):\n' +
+        '• Иконка ⊕ / «Установить» в адресной строке, или\n' +
+        '• Меню ⋮ → «Установить приложение»\n\n' +
+        'После установки ярлык появится на рабочем столе и в меню «Пуск».',
     );
   };
 
@@ -166,7 +170,7 @@ export default function PwaInstallBanner() {
           <img src="/icons/icon-192.png" alt="" width={42} height={42} />
         </div>
         <div className="pwa-banner-body">
-          <p className="pwa-banner-title">SoundLab — это приложение</p>
+          <p className="pwa-banner-title">Установить SoundLab на ПК</p>
           {iosSafari ? (
             <p className="pwa-banner-text">
               Установите на домашний экран: <strong>Поделиться</strong>{' '}
@@ -175,7 +179,7 @@ export default function PwaInstallBanner() {
             </p>
           ) : (
             <p className="pwa-banner-text">
-              Добавьте SoundLab на телефон как PWA: быстрый запуск, полноэкранный режим, без магазина приложений.
+              Поставьте как приложение: ярлык на рабочем столе и в «Пуск», отдельное окно без панели браузера.
             </p>
           )}
           <div className="pwa-banner-actions">

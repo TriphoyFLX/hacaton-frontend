@@ -6,6 +6,8 @@ import SearchModal from './SearchModal';
 import { AppNotification, notificationsApi } from '../api/notifications';
 import { useAuthStore } from '../store/authStore';
 import { API_ORIGIN, SOCKET_ORIGIN } from '../api/client';
+import { usePwaInstall } from '../hooks/usePwaInstall';
+import PwaInstallButton from './PwaInstallButton';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
 
@@ -68,6 +70,31 @@ ${FONT_IMPORT}
   background: var(--bg-elevated);
   border-color: var(--border-hover);
   color: var(--text-primary);
+}
+.header-install {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.header-install:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+@media (min-width: 768px) {
+  .header-install { display: inline-flex; }
 }
 
 /* ── SVG ICONS ── */
@@ -269,6 +296,7 @@ export default function Header() {
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const token = useAuthStore((state) => state.token);
   const navigate = useNavigate();
+  const { standalone } = usePwaInstall();
 
   const loadNotifications = useCallback(async () => {
     if (!token) return;
@@ -361,6 +389,10 @@ export default function Header() {
         <style>{css}</style>
         
         <div className="header-inner">
+          {!standalone && (
+            <PwaInstallButton className="header-install" />
+          )}
+
           {/* Search button */}
           <button 
             className="header-btn"
