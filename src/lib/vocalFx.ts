@@ -45,6 +45,128 @@ export const VOCAL_FX_PRESETS: VocalFxPreset[] = [
   { id: 'brightpop', name: 'Pop', enabled: true, low: -3, mid: 2, high: 7, compress: 0.5, drive: 0.05, reverb: 0.15 },
 ];
 
+/** Artist / vibe vocal styles shown on /presets and available in Studio */
+export type CuratedVocalStyle = VocalFxPreset & {
+  tagline: string;
+  tags: string[];
+  accent: string;
+};
+
+export const CURATED_VOCAL_STYLES: CuratedVocalStyle[] = [
+  {
+    id: 'osamason',
+    name: 'Osamason',
+    tagline: 'Rage / pluggnb вокал: тонкий mid, airy top, лёгкий drive',
+    tags: ['rage', 'plugg', 'vocal'],
+    accent: 'linear-gradient(135deg,#1a0a12,#5b1d3a 45%,#c45a7a)',
+    enabled: true,
+    low: -6,
+    mid: 4,
+    high: 8,
+    compress: 0.62,
+    drive: 0.28,
+    reverb: 0.22,
+  },
+  {
+    id: 'carti',
+    name: 'Carti Babyvoice',
+    tagline: 'Высокий тонкий вокал, сильный air и короткий room',
+    tags: ['rage', 'babyvoice'],
+    accent: 'linear-gradient(135deg,#0d0d12,#2a1848 50%,#e8b4d8)',
+    enabled: true,
+    low: -8,
+    mid: 2,
+    high: 10,
+    compress: 0.48,
+    drive: 0.18,
+    reverb: 0.3,
+  },
+  {
+    id: 'yeat',
+    name: 'Yeat Tone',
+    tagline: 'Тонкий nasal mid + crunch, короткий wet',
+    tags: ['tonka', 'rage'],
+    accent: 'linear-gradient(135deg,#0a1210,#1e3d2f 45%,#7dffb3)',
+    enabled: true,
+    low: -5,
+    mid: 6,
+    high: 5,
+    compress: 0.58,
+    drive: 0.4,
+    reverb: 0.14,
+  },
+  {
+    id: 'ken-carson',
+    name: 'Ken Carson',
+    tagline: 'Агрессивный compressed vocal с distortion edge',
+    tags: ['opium', 'rage'],
+    accent: 'linear-gradient(135deg,#120808,#3a1010 50%,#ff5a5a)',
+    enabled: true,
+    low: -4,
+    mid: 5,
+    high: 7,
+    compress: 0.7,
+    drive: 0.55,
+    reverb: 0.16,
+  },
+  {
+    id: 'destroy-lonely',
+    name: 'Destroy Lonely',
+    tagline: 'Cold airy vocal, deep cut lows, spacious reverb',
+    tags: ['opium', 'melodic'],
+    accent: 'linear-gradient(135deg,#08080f,#1a1a2e 50%,#8a9cff)',
+    enabled: true,
+    low: -7,
+    mid: 1,
+    high: 9,
+    compress: 0.45,
+    drive: 0.12,
+    reverb: 0.38,
+  },
+  {
+    id: 'future',
+    name: 'Future Autotune',
+    tagline: 'Плотный mid, soft drive, radio-ish presence',
+    tags: ['trap', 'atlanta'],
+    accent: 'linear-gradient(135deg,#0c0c0c,#2a2118 50%,#e8c07a)',
+    enabled: true,
+    low: -3,
+    mid: 6,
+    high: 4,
+    compress: 0.72,
+    drive: 0.22,
+    reverb: 0.12,
+  },
+  {
+    id: 'travis',
+    name: 'Travis Atmosphere',
+    tagline: 'Тёмный low-cut + большой hall, cinematic wet',
+    tags: ['astro', 'psychedelic'],
+    accent: 'linear-gradient(135deg,#0a0a0a,#1a1420 45%,#9b7fd4)',
+    enabled: true,
+    low: -2,
+    mid: 3,
+    high: 2,
+    compress: 0.5,
+    drive: 0.15,
+    reverb: 0.58,
+  },
+  {
+    id: 'che',
+    name: 'Che / Underground',
+    tagline: 'Грязный lo-fi crunch, muted highs, tape feel',
+    tags: ['underground', 'lofi'],
+    accent: 'linear-gradient(135deg,#101008,#2a2818 50%,#c5b89a)',
+    enabled: true,
+    low: 2,
+    mid: -2,
+    high: -5,
+    compress: 0.55,
+    drive: 0.48,
+    reverb: 0.2,
+  },
+];
+
 export function clamp01(value: unknown): number {
   const num = typeof value === 'number' && Number.isFinite(value) ? value : 0;
   return Math.max(0, Math.min(1, num));
@@ -68,6 +190,33 @@ export function normalizeClipFx(
     drive: clamp01(fx?.drive),
     reverb: clamp01(fx?.reverb),
   };
+}
+
+export function clipFxFromPreset(preset: VocalFxPreset): ClipFx {
+  return normalizeClipFx({
+    enabled: preset.enabled,
+    low: preset.low,
+    mid: preset.mid,
+    high: preset.high,
+    compress: preset.compress,
+    drive: preset.drive,
+    reverb: preset.reverb,
+  });
+}
+
+export function findVocalPresetById(id: string): VocalFxPreset | undefined {
+  return (
+    CURATED_VOCAL_STYLES.find((p) => p.id === id) ||
+    VOCAL_FX_PRESETS.find((p) => p.id === id)
+  );
+}
+
+/** Built-in + curated styles for Studio FX chips */
+export function allStudioVocalPresets(): VocalFxPreset[] {
+  const curatedAsPresets: VocalFxPreset[] = CURATED_VOCAL_STYLES.map(
+    ({ tagline: _t, tags: _tags, accent: _a, ...fx }) => fx,
+  );
+  return [...VOCAL_FX_PRESETS, ...curatedAsPresets];
 }
 
 export function makeDistortionCurve(amount: number): Float32Array {
@@ -335,7 +484,7 @@ export class VocalLiveSession {
 }
 
 export function presetNameForFx(fx: ClipFx): string {
-  const match = VOCAL_FX_PRESETS.find(
+  const match = allStudioVocalPresets().find(
     p =>
       p.enabled === fx.enabled
       && p.low === fx.low

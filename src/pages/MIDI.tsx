@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import '../styles/daw.css';
 import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
@@ -15,13 +15,17 @@ import {
   EQ_GAIN_LIMIT,
   EQ_BANDS,
   type ClipFx,
-  VOCAL_FX_PRESETS,
   clampEqGain,
   normalizeClipFx,
   makeDistortionCurve,
   createImpulseReverb,
   isVocalPresetAllowed,
 } from '../lib/vocalFx';
+import {
+  consumePendingVocalPreset,
+  queueVocalPresetForStudio,
+  studioFxChipPresets,
+} from '../lib/studioVocalPresets';
 import { useBilling } from '../hooks/useBilling';
 import { Link, useNavigate } from 'react-router-dom';
 import { postsApi } from '../api/posts';
@@ -1402,6 +1406,9 @@ function MIDISequencer() {
   const [publishError, setPublishError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [vocalPanelClipId, setVocalPanelClipId] = useState<string | null>(null);
+  const defaultVocalFxRef = useRef<ClipFx | null>(null);
+  const pendingVocalAppliedRef = useRef(false);
+  const [presetBanner, setPresetBanner] = useState<string | null>(null);
   const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedMicId, setSelectedMicId] = useState(() => {
     try { return localStorage.getItem('soundlab_mic_id') || ''; } catch { return ''; }
@@ -1456,6 +1463,45 @@ function MIDISequencer() {
       return recipe(prev);
     });
   }, [pushHistory]);
+
+  // From /presets «Открыть в студии»
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('vocalPreset');
+    if (fromUrl) {
+      queueVocalPresetForStudio(fromUrl);
+      params.delete('vocalPreset');
+      const qs = params.toString();
+      const path = window.location.pathname;
+      window.history.replaceState({}, '', qs ? `${path}?${qs}` : path);
+    }
+    const pending = consumePendingVocalPreset();
+    if (!pending) return;
+    defaultVocalFxRef.current = pending.fx;
+    pendingVocalAppliedRef.current = false;
+    setPresetBanner(`Пресет «${pending.name}» — применится к вокалу / новому take`);
+  }, []);
+
+  useEffect(() => {
+    if (!project || !defaultVocalFxRef.current || pendingVocalAppliedRef.current) return;
+    const fx = defaultVocalFxRef.current;
+    const vocal =
+      project.arrangement.find((c) => c.id === vocalPanelClipId && c.isVocal) ||
+      project.arrangement.find((c) => selectedClipIds.includes(c.id) && c.isVocal) ||
+      project.arrangement.find((c) => c.isVocal);
+    if (!vocal) return;
+    pendingVocalAppliedRef.current = true;
+    commitProject((prev) => ({
+      ...prev,
+      arrangement: prev.arrangement.map((c) =>
+        c.id === vocal.id ? { ...c, fx: normalizeClipFx(fx), eq: { enabled: fx.enabled, low: fx.low, mid: fx.mid, high: fx.high } } : c,
+      ),
+    }));
+    setVocalPanelClipId(vocal.id);
+    setSelectedClipIds([vocal.id]);
+    setEditorView('playlist');
+    setPresetBanner(`Пресет применён к «${vocal.name || 'вокал'}»`);
+  }, [project, vocalPanelClipId, selectedClipIds, commitProject]);
 
   const undo = useCallback(() => {
     const snap = historyRef.current.pop();
@@ -3331,7 +3377,7 @@ function MIDISequencer() {
           for (let i = 0; i < PLAYLIST_LANES; i++) {
             if (!usedLanes.has(i)) { lane = i; break; }
           }
-          const flatFx = normalizeClipFx(undefined);
+          const flatFx = normalizeClipFx(defaultVocalFxRef.current ?? undefined);
           const clip: PlaylistClip = {
             id: crypto.randomUUID(),
             patternId: '',
@@ -3345,7 +3391,7 @@ function MIDISequencer() {
             sampleSeconds: trimmedDuration,
             isVocal: true,
             gain: 1,
-            eq: { enabled: false, low: 0, mid: 0, high: 0 },
+            eq: { enabled: flatFx.enabled, low: flatFx.low, mid: flatFx.mid, high: flatFx.high },
             fx: flatFx,
           };
           commitProject(prev => {
@@ -4009,6 +4055,40 @@ function MIDISequencer() {
           </button>
         </div>
       </header>
+
+      {presetBanner && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '10px 16px',
+            background: 'linear-gradient(90deg, rgba(155,127,212,0.18), rgba(232,180,216,0.1))',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            fontSize: 13,
+            color: '#e8e4dc',
+          }}
+        >
+          <span>{presetBanner}</span>
+          <button
+            type="button"
+            onClick={() => setPresetBanner(null)}
+            style={{
+              appearance: 'none',
+              border: '1px solid rgba(255,255,255,0.15)',
+              background: 'transparent',
+              color: '#c5c0b8',
+              borderRadius: 6,
+              padding: '4px 8px',
+              cursor: 'pointer',
+              fontSize: 12,
+            }}
+          >
+            OK
+          </button>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="st-body">
@@ -5092,7 +5172,7 @@ function MIDISequencer() {
                   </div>
 
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {VOCAL_FX_PRESETS.map(preset => {
+                    {studioFxChipPresets().map(preset => {
                       const allowed = isVocalPresetAllowed(preset.id, vocalPresetsUnlocked);
                       const active = clipFx.enabled === preset.enabled
                         && clipFx.low === preset.low
@@ -5130,7 +5210,7 @@ function MIDISequencer() {
                             color: active ? '#ffb3b3' : '#999',
                           }}
                         >
-                          {preset.name}{!allowed ? ' рџ”’' : ''}
+                          {preset.name}{!allowed ? ' 🔒' : ''}
                         </button>
                       );
                     })}
