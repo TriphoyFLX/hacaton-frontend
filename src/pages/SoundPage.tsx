@@ -396,7 +396,7 @@ export default function SoundPage() {
                         aria-label={item.description || 'Открыть видео'}
                       >
                         {src ? (
-                          <video src={src} muted playsInline preload="metadata" />
+                          <video src={src} muted playsInline disablePictureInPicture preload="metadata" />
                         ) : (
                           <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
                             <Play size={22} />

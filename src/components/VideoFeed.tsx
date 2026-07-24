@@ -2189,6 +2189,7 @@ export default function VideoFeed({
                 className="vf-video"
                 loop
                 playsInline
+                disablePictureInPicture
                 preload={index === currentIndex ? 'metadata' : 'none'}
                 muted={
                   index !== currentIndex ||

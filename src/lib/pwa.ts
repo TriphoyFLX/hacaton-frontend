@@ -11,13 +11,33 @@ const DISMISS_MS = 1000 * 60 * 60 * 24 * 7;
 
 type RelatedApp = { id?: string; platform?: string; url?: string };
 
+const listeners = new Set<() => void>();
+
+function notify() {
+  listeners.forEach((fn) => fn());
+}
+
+export function subscribeInstallPrompt(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** True when SoundLab runs as an installed app window (not a browser tab). */
 export function isPwaStandalone(): boolean {
   if (typeof window === 'undefined') return false;
-  const mq = window.matchMedia('(display-mode: standalone)').matches;
-  const ios =
+  const modes = [
+    '(display-mode: standalone)',
+    '(display-mode: window-controls-overlay)',
+    '(display-mode: minimal-ui)',
+    '(display-mode: fullscreen)',
+  ];
+  if (modes.some((q) => window.matchMedia(q).matches)) return true;
+  return (
     'standalone' in navigator &&
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-  return mq || ios;
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  );
 }
 
 export function isIosSafari(): boolean {
@@ -49,6 +69,7 @@ export function markPwaDismissed() {
   } catch {
     /* ignore */
   }
+  notify();
 }
 
 export function clearPwaDismissed() {
@@ -57,6 +78,7 @@ export function clearPwaDismissed() {
   } catch {
     /* ignore */
   }
+  notify();
 }
 
 export function markPwaInstalledOnDevice() {
@@ -66,6 +88,7 @@ export function markPwaInstalledOnDevice() {
   } catch {
     /* ignore */
   }
+  notify();
 }
 
 export function clearPwaInstalledOnDevice() {
@@ -74,6 +97,7 @@ export function clearPwaInstalledOnDevice() {
   } catch {
     /* ignore */
   }
+  notify();
 }
 
 export function isPwaMarkedInstalledOnDevice(): boolean {
@@ -106,21 +130,29 @@ export function clearPwaUninstallFeedbackPending() {
   } catch {
     /* ignore */
   }
+  notify();
 }
 
 function isSoundLabRelatedApp(app: RelatedApp): boolean {
   if (app.platform && app.platform !== 'webapp') return false;
   const url = (app.url || app.id || '').toLowerCase();
+  if (!url) {
+    // Some Chromium builds only return platform for the current origin's PWA
+    return app.platform === 'webapp';
+  }
+  const origin =
+    typeof window !== 'undefined' ? window.location.origin.toLowerCase() : '';
   return (
     url.includes('soundlab-studio.ru') ||
     url.includes('manifest.webmanifest') ||
-    url.includes('/manifest')
+    url.includes('/manifest') ||
+    (origin.length > 0 && url.startsWith(origin))
   );
 }
 
 /**
  * Detect if SoundLab PWA is already installed on THIS device.
- * Also clears the device flag when uninstall is detected.
+ * Uninstall is only confirmed via beforeinstallprompt (reliable Chromium signal).
  */
 export async function detectPwaInstalledOnDevice(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -137,53 +169,40 @@ export async function detectPwaInstalledOnDevice(): Promise<boolean> {
   if (typeof nav.getInstalledRelatedApps === 'function') {
     try {
       const apps = await nav.getInstalledRelatedApps();
-      const hit = apps.some(isSoundLabRelatedApp);
-      if (hit) {
+      if (apps.some(isSoundLabRelatedApp)) {
         markPwaInstalledOnDevice();
         return true;
       }
-      // Related-apps says not installed — if we thought it was, user uninstalled
-      if (isPwaMarkedInstalledOnDevice()) {
-        handlePwaUninstalledOnDevice();
-      }
-      return false;
+      // Empty / no match is NOT proof of uninstall — API is flaky across browsers.
+      // Uninstall is handled only when beforeinstallprompt fires.
     } catch {
       /* API unsupported / permission */
     }
   }
 
-  // Without related-apps API, trust the device flag until beforeinstallprompt clears it
   return isPwaMarkedInstalledOnDevice();
 }
 
 /** Called when we detect uninstall on this device (not account-scoped). */
 export function handlePwaUninstalledOnDevice() {
   const wasInstalled = isPwaMarkedInstalledOnDevice();
-  clearPwaInstalledOnDevice();
-  clearPwaDismissed();
-  if (wasInstalled) {
-    markPwaUninstallFeedbackPending();
+  try {
+    localStorage.removeItem(INSTALLED_KEY);
+    localStorage.removeItem(DISMISS_KEY);
+    if (wasInstalled) {
+      localStorage.setItem(UNINSTALL_FEEDBACK_KEY, '1');
+    }
+  } catch {
+    /* ignore */
   }
   notify();
 }
 
 /** Shared deferred install event captured once for the whole app. */
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
-const listeners = new Set<() => void>();
-
-function notify() {
-  listeners.forEach((fn) => fn());
-}
 
 export function getDeferredInstallPrompt() {
   return deferredPrompt;
-}
-
-export function subscribeInstallPrompt(listener: () => void) {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
 }
 
 export function bindPwaInstallCapture() {
@@ -202,7 +221,6 @@ export function bindPwaInstallCapture() {
   const onInstalled = () => {
     deferredPrompt = null;
     markPwaInstalledOnDevice();
-    notify();
   };
 
   window.addEventListener('beforeinstallprompt', onBip);
@@ -212,9 +230,38 @@ export function bindPwaInstallCapture() {
     markPwaInstalledOnDevice();
   }
 
+  // Re-check when user returns to the tab (e.g. after installing from OS UI)
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible') return;
+    void detectPwaInstalledOnDevice();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
+
+  const mediaQueries = [
+    window.matchMedia('(display-mode: standalone)'),
+    window.matchMedia('(display-mode: window-controls-overlay)'),
+  ];
+  const onDisplayMode = () => {
+    if (isPwaStandalone()) markPwaInstalledOnDevice();
+    notify();
+  };
+  mediaQueries.forEach((mq) => {
+    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onDisplayMode);
+    else mq.addListener(onDisplayMode);
+  });
+
+  void detectPwaInstalledOnDevice();
+
   return () => {
     window.removeEventListener('beforeinstallprompt', onBip);
     window.removeEventListener('appinstalled', onInstalled);
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('focus', onVisible);
+    mediaQueries.forEach((mq) => {
+      if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onDisplayMode);
+      else mq.removeListener(onDisplayMode);
+    });
   };
 }
 
@@ -237,4 +284,18 @@ export async function promptPwaInstall(): Promise<'accepted' | 'dismissed' | 'un
     notify();
     return 'unavailable';
   }
+}
+
+/** Single source of truth for install UI across Header / Sidebar / Dashboard / Landing. */
+export function getPwaInstallSnapshot() {
+  const standalone = isPwaStandalone();
+  const installedOnDevice = standalone || isPwaMarkedInstalledOnDevice();
+  return {
+    standalone,
+    installedOnDevice,
+    hideInstallUi: installedOnDevice,
+    hasDeferred: Boolean(deferredPrompt),
+    uninstallFeedbackPending: isPwaUninstallFeedbackPending(),
+    dismissed: wasPwaDismissed(),
+  };
 }

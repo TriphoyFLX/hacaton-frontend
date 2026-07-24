@@ -604,7 +604,7 @@ export default function ProfileMediaTabs({
                   aria-label={item.description || 'Открыть SoundTok'}
                 >
                   {src ? (
-                    <video src={src} muted playsInline preload="metadata" />
+                    <video src={src} muted playsInline disablePictureInPicture preload="metadata" />
                   ) : (
                     <div className="pmt-fallback">
                       <Play size={22} />

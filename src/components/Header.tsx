@@ -302,7 +302,7 @@ export default function Header() {
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const token = useAuthStore((state) => state.token);
   const navigate = useNavigate();
-  const { standalone, installedOnDevice } = usePwaInstall();
+  const { canOfferInstall, ready } = usePwaInstall();
 
   const loadUnreadBadge = useCallback(async () => {
     if (!token) return;
@@ -447,7 +447,7 @@ export default function Header() {
         <style>{css}</style>
         
         <div className="header-inner">
-          {!standalone && !installedOnDevice && (
+          {ready && canOfferInstall && (
             <PwaInstallButton className="header-install" />
           )}
 

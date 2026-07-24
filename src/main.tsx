@@ -11,7 +11,10 @@ import '@fontsource/dm-mono/latin-400.css'
 import '@fontsource/dm-mono/latin-500.css'
 import './index.css'
 import './styles/responsive.css'
+import { installDisablePictureInPicture } from './lib/disablePictureInPicture'
 import App from './App.tsx'
+
+installDisablePictureInPicture()
 
 function registerServiceWorker() {
   // Auto-update service worker: new deploys activate without sticky stale shells
@@ -58,6 +61,8 @@ if (typeof window !== 'undefined') {
 if (typeof document !== 'undefined') {
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
     ('standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone))
   if (standalone) {
     document.documentElement.classList.add('sl-pwa')

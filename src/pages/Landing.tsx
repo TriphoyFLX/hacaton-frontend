@@ -121,7 +121,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
   const token = useAuthStore((s) => s.token);
   const meta = VARIANT[variant];
   const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
-  const { canOfferInstall } = usePwaInstall();
+  const { canOfferInstall, ready } = usePwaInstall();
 
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
@@ -613,7 +613,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           </div>
         </section>
 
-        {canOfferInstall && (
+        {ready && canOfferInstall && (
           <section className="sl-section" aria-labelledby="pwa-heading">
             <div className="sl-pwa-card">
               <div>

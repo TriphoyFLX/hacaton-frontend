@@ -2,16 +2,13 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   bindPwaInstallCapture,
   getDeferredInstallPrompt,
+  getPwaInstallSnapshot,
   isIosSafari,
-  isPwaStandalone,
   promptPwaInstall,
   subscribeInstallPrompt,
   markPwaDismissed,
   clearPwaDismissed,
-  wasPwaDismissed,
   detectPwaInstalledOnDevice,
-  isPwaMarkedInstalledOnDevice,
-  isPwaUninstallFeedbackPending,
   clearPwaUninstallFeedbackPending,
 } from '../lib/pwa';
 
@@ -23,6 +20,21 @@ function ensureCapture() {
   bindPwaInstallCapture();
 }
 
+function useInstallSnapshot() {
+  return useSyncExternalStore(
+    subscribeInstallPrompt,
+    getPwaInstallSnapshot,
+    () => ({
+      standalone: false,
+      installedOnDevice: false,
+      hideInstallUi: false,
+      hasDeferred: false,
+      uninstallFeedbackPending: false,
+      dismissed: false,
+    }),
+  );
+}
+
 function useDeferredPrompt() {
   return useSyncExternalStore(
     subscribeInstallPrompt,
@@ -32,27 +44,18 @@ function useDeferredPrompt() {
 }
 
 export function usePwaInstall() {
+  const snap = useInstallSnapshot();
   const deferred = useDeferredPrompt();
-  const [standalone, setStandalone] = useState(() => isPwaStandalone());
-  const [installedOnDevice, setInstalledOnDevice] = useState(() =>
-    isPwaStandalone() || isPwaMarkedInstalledOnDevice(),
-  );
-  const [uninstallFeedbackPending, setUninstallFeedbackPending] = useState(() =>
-    isPwaUninstallFeedbackPending(),
-  );
   const [iosSafari, setIosSafari] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     ensureCapture();
-    setStandalone(isPwaStandalone());
     setIosSafari(isIosSafari());
 
     let cancelled = false;
-    void detectPwaInstalledOnDevice().then((installed) => {
+    void detectPwaInstalledOnDevice().then(() => {
       if (cancelled) return;
-      setInstalledOnDevice(installed);
-      setUninstallFeedbackPending(isPwaUninstallFeedbackPending());
       setReady(true);
     });
 
@@ -61,43 +64,27 @@ export function usePwaInstall() {
     };
   }, []);
 
-  useEffect(() => {
-    return subscribeInstallPrompt(() => {
-      setInstalledOnDevice(isPwaStandalone() || isPwaMarkedInstalledOnDevice());
-      setUninstallFeedbackPending(isPwaUninstallFeedbackPending());
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!deferred && isPwaMarkedInstalledOnDevice()) {
-      setInstalledOnDevice(true);
-    }
-    if (deferred && !isPwaMarkedInstalledOnDevice()) {
-      setInstalledOnDevice(false);
-    }
-  }, [deferred]);
-
-  const hideInstallUi = standalone || installedOnDevice;
+  const hideInstallUi = snap.hideInstallUi;
   const canNativeInstall = Boolean(deferred) && !hideInstallUi;
   const canShowIosTip = iosSafari && !hideInstallUi;
 
   return {
     ready,
-    standalone,
-    installedOnDevice,
-    uninstallFeedbackPending,
+    standalone: snap.standalone,
+    installedOnDevice: snap.installedOnDevice,
+    uninstallFeedbackPending: snap.uninstallFeedbackPending,
     iosSafari,
     canNativeInstall,
     canShowIosTip,
+    /** Show install blocks only when SoundLab is NOT installed on this device. */
     canOfferInstall: !hideInstallUi,
     hasDeferred: Boolean(deferred),
-    dismissed: wasPwaDismissed(),
+    dismissed: snap.dismissed,
     install: promptPwaInstall,
     dismiss: markPwaDismissed,
     clearDismiss: clearPwaDismissed,
     clearUninstallFeedback: () => {
       clearPwaUninstallFeedbackPending();
-      setUninstallFeedbackPending(false);
     },
   };
 }

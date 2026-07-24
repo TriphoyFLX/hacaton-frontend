@@ -490,12 +490,13 @@ export default function SoundRecordPage() {
       <style>{css}</style>
       <div className="sr-stage">
         {previewUrl ? (
-          <video ref={previewRef} className="sr-preview" playsInline loop muted />
+          <video ref={previewRef} className="sr-preview" playsInline disablePictureInPicture loop muted />
         ) : (
           <video
             ref={videoRef}
             className="sr-video"
             playsInline
+            disablePictureInPicture
             muted
             autoPlay
             style={{ transform: facing === 'user' ? 'scaleX(-1)' : undefined }}

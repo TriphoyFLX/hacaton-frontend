@@ -664,7 +664,7 @@ export default function Sidebar() {
   const isAdmin = user?.role === 'ADMIN';
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const avatarUrl = resolveMediaUrl(user?.avatar);
-  const { standalone, installedOnDevice, canNativeInstall, iosSafari, install } = usePwaInstall();
+  const { canOfferInstall, canNativeInstall, iosSafari, install, ready } = usePwaInstall();
 
   const handleInstallClick = async () => {
     if (canNativeInstall) {
@@ -793,7 +793,7 @@ export default function Sidebar() {
           </NavLink>
         )}
 
-        {!standalone && !installedOnDevice && (
+        {ready && canOfferInstall && (
           <button type="button" className="sb-install" onClick={() => void handleInstallClick()}>
             <span className="sb-item-icon"><Download size={14} /></span>
             <span className="sb-install-label">Установить на ПК</span>
@@ -855,7 +855,7 @@ export default function Sidebar() {
               <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
                 <IconUser />Профиль
               </NavLink>
-              {!standalone && !installedOnDevice && (
+              {ready && canOfferInstall && (
                 <PwaInstallButton
                   variant="menu"
                   className="sb-mobile-more-link"

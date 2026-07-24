@@ -1820,6 +1820,8 @@ function SharedSoundTokCard({
             src={videoUrl}
             controls
             playsInline
+            disablePictureInPicture
+            controlsList="nopictureinpicture"
             preload="metadata"
           />
         ) : (

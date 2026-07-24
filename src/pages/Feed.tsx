@@ -1139,7 +1139,7 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
             {previews.map((preview, index) => (
               <div key={index} className="cp-preview-item">
                 {files[index] && isVideoFile(files[index]) ? (
-                  <video src={preview} controls />
+                  <video src={preview} controls playsInline disablePictureInPicture controlsList="nopictureinpicture" />
                 ) : files[index] && isAudioFile(files[index]) ? (
                   <div className="cp-preview-audio">
                     <Music size={20} color="var(--text-muted)" />
@@ -1319,7 +1319,7 @@ function PostCard({
       case 'VIDEO':
         return (
           <div className="post-media">
-            <video src={fullUrl} controls />
+            <video src={fullUrl} controls playsInline disablePictureInPicture controlsList="nopictureinpicture" />
           </div>
         );
       case 'AUDIO':

@@ -159,6 +159,8 @@ export async function downloadSoundTokWithWatermark(
     opts.audioUrl && opts.audioUrl !== opts.videoUrl ? resolveMediaUrl(opts.audioUrl) : null;
 
   const video = document.createElement('video');
+  video.disablePictureInPicture = true;
+  video.setAttribute('disablepictureinpicture', '');
   video.playsInline = true;
   video.preload = 'auto';
   if (!videoSrc.startsWith(window.location.origin) && /^https?:\/\//i.test(videoSrc)) {
