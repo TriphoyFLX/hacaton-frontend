@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminBadge from '../components/AdminBadge';
+import { renderTextWithMentions } from '../utils/messageMentions';
 
 // ── Styles ──
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
@@ -791,8 +792,7 @@ ${FONT_IMPORT}
 .post-comments-panel { margin: 0 18px 16px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: rgba(0,0,0,.16); }
 .post-comment-list { display: grid; gap: 10px; max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
 .post-comment-form { display: flex; gap: 8px; }
-.post-comment-form input { flex: 1; min-width: 0; border: 1px solid var(--border-mid); border-radius: 7px; padding: 8px 10px; color: var(--text-primary); background: var(--bg); font: 12px 'Syne', sans-serif; }
-.post-comment-form button { border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer; background: var(--text-primary); color: var(--bg); font-weight: 700; }
+.post-comment-form > button { border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer; background: var(--text-primary); color: var(--bg); font-weight: 700; }
 .post-comment-reply-bar {
   display: flex;
   align-items: center;
@@ -801,12 +801,21 @@ ${FONT_IMPORT}
   margin-bottom: 8px;
   padding: 7px 9px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(110, 168, 254, 0.28);
+  background: rgba(110, 168, 254, 0.08);
   font-size: 11px;
   color: var(--text-secondary);
 }
-.post-comment-reply-bar strong { color: var(--text-primary); font-weight: 600; }
+.post-comment-reply-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(110, 168, 254, 0.18);
+  color: #8eb8ff;
+  font-weight: 700;
+}
 .post-comment-reply-cancel {
   border: 0;
   background: transparent;
@@ -817,6 +826,64 @@ ${FONT_IMPORT}
   padding: 2px;
 }
 .post-comment-reply-cancel:hover { color: var(--text-primary); }
+.post-comment-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.post-comment-input-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font: 12px/1.35 'Syne', sans-serif;
+  white-space: pre;
+  overflow: hidden;
+  color: var(--text-primary);
+  pointer-events: none;
+  z-index: 0;
+}
+.post-comment-input-mention {
+  color: #8eb8ff;
+  font-weight: 700;
+  background: rgba(110, 168, 254, 0.18);
+  border-radius: 4px;
+}
+.post-comment-form input {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-mid);
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: transparent;
+  caret-color: var(--text-primary);
+  background: var(--bg);
+  font: 12px/1.35 'Syne', sans-serif;
+}
+.post-comment-form input::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+.post-comment-form input:not(:placeholder-shown) {
+  /* keep typed text transparent so backdrop highlight shows */
+  color: transparent;
+}
+.post-comment-mention {
+  display: inline;
+  margin: 0;
+  padding: 0 2px;
+  border: none;
+  border-radius: 3px;
+  background: rgba(110, 168, 254, 0.14);
+  color: #8eb8ff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.post-comment-mention:hover { text-decoration: underline; }
 .post-action-error { margin-top: 8px; color: var(--red); font: 10px 'DM Mono', monospace; }
 .post-copy-status { font: 10px 'DM Mono', monospace; color: #86b892; margin-left: 5px; }
 .post-more-wrap { position: relative; }
@@ -1261,12 +1328,27 @@ function PostCard({
   };
   const startReply = (comment: PostComment) => {
     const rootId = comment.parentId || comment.id;
-    setReplyTo({ id: rootId, username: comment.author.username });
+    const username = comment.author.username;
+    const mention = `@${username} `;
+    setReplyTo({ id: rootId, username });
     setCommentText((prev) => {
-      const mention = `@${comment.author.username} `;
-      return prev.startsWith(mention) ? prev : mention;
+      const withoutOldMention = prev.replace(/^@[a-zA-Z0-9._]+ /, '');
+      return `${mention}${withoutOldMention}`;
     });
-    requestAnimationFrame(() => commentInputRef.current?.focus());
+    window.setTimeout(() => {
+      const input = commentInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(mention.length, mention.length);
+    }, 0);
+  };
+  const cancelReply = () => {
+    setCommentText((prev) => {
+      if (!replyTo) return prev;
+      const mention = `@${replyTo.username} `;
+      return prev.startsWith(mention) ? prev.slice(mention.length) : prev;
+    });
+    setReplyTo(null);
   };
   const deleteComment = async (commentId: string) => {
     if (!window.confirm('Удалить этот комментарий?')) return;
@@ -1379,7 +1461,8 @@ function PostCard({
     setShareStatus('');
     setShareOpen(true);
     try {
-      setChats(await chatsApi.getChats());
+      const data = await chatsApi.getChats({ limit: 60, offset: 0 });
+      setChats(data.items || []);
     } catch {
       setShareStatus('Не удалось загрузить список чатов');
     }
@@ -1532,8 +1615,12 @@ function PostCard({
                       >
                         @{comment.author.username}
                       </button>
-                      <span className={comment.isHidden ? 'post-comment-text hidden' : undefined}>
-                        {comment.text}
+                      <span className={comment.isHidden ? 'post-comment-text hidden' : 'post-comment-text'}>
+                        {renderTextWithMentions({
+                          text: comment.text,
+                          onMentionClick: (username) => navigate(`/profile/${username}`),
+                          mentionClassName: 'post-comment-mention',
+                        })}
                       </span>
                     </div>
                     <div className="post-comment-votes">
@@ -1589,26 +1676,43 @@ function PostCard({
         {replyTo && (
           <div className="post-comment-reply-bar">
             <span>
-              Ответ для <strong>@{replyTo.username}</strong>
+              Ответ для
+              <span className="post-comment-reply-chip">@{replyTo.username}</span>
             </span>
             <button
               type="button"
               className="post-comment-reply-cancel"
               aria-label="Отменить ответ"
-              onClick={() => setReplyTo(null)}
+              onClick={cancelReply}
             >
               <X size={14} />
             </button>
           </div>
         )}
         <form className="post-comment-form" onSubmit={submitComment}>
-          <input
-            ref={commentInputRef}
-            value={commentText}
-            onChange={(event) => setCommentText(event.target.value)}
-            maxLength={1000}
-            placeholder={replyTo ? `Ответ @${replyTo.username}…` : 'Написать комментарий…'}
-          />
+          <div className="post-comment-input-wrap">
+            {commentText && (
+              <div className="post-comment-input-backdrop" aria-hidden>
+                {replyTo && commentText.startsWith(`@${replyTo.username}`) ? (
+                  <>
+                    <span className="post-comment-input-mention">
+                      @{replyTo.username}
+                    </span>
+                    {commentText.slice(`@${replyTo.username}`.length)}
+                  </>
+                ) : (
+                  commentText
+                )}
+              </div>
+            )}
+            <input
+              ref={commentInputRef}
+              value={commentText}
+              onChange={(event) => setCommentText(event.target.value)}
+              maxLength={1000}
+              placeholder={replyTo ? `Ответ @${replyTo.username}…` : 'Написать комментарий…'}
+            />
+          </div>
           <button type="submit">Отправить</button>
         </form>
         {commentError && <div className="post-comment">{commentError}</div>}

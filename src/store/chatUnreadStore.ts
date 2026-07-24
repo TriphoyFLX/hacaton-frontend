@@ -18,17 +18,8 @@ export const useChatUnreadStore = create<ChatUnreadState>((set, get) => ({
   refresh: async () => {
     set({ loading: true });
     try {
-      const chats = await chatsApi.getChats();
-      const chatUnread: Record<string, number> = {};
-      let totalUnread = 0;
-
-      chats.forEach((chat: { id: string; unreadCount?: number }) => {
-        const count = chat.unreadCount || 0;
-        chatUnread[chat.id] = count;
-        totalUnread += count;
-      });
-
-      set({ chatUnread, totalUnread, loading: false });
+      const total = await chatsApi.getUnreadTotal();
+      set({ totalUnread: total, loading: false });
     } catch {
       set({ loading: false });
     }

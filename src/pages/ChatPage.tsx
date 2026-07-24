@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy, X } from 'lucide-react';
-import { chatsApi, Chat, Message, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
+import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy, X, Reply } from 'lucide-react';
+import { chatsApi, Chat, Message, MessageReplyPreview, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
 import { blocksApi, BlockStatus } from '../api/blocks';
 import { usersApi } from '../api/users';
 import { useAuthStore } from '../store/authStore';
@@ -713,6 +713,7 @@ ${FONT_IMPORT}
   line-height: 1.5;
   letter-spacing: 0.004em;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 .message-mention {
   display: inline;
@@ -778,6 +779,41 @@ ${FONT_IMPORT}
   max-height: 360px;
   object-fit: cover;
   background: #000;
+}
+.message-soundtok-poster {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 360px;
+  border: 0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(240,237,232,0.12), transparent 45%),
+    linear-gradient(160deg, #1a1a1a, #0d0d0d);
+  color: #f0ede8;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 24px 12px;
+}
+.message-soundtok-poster:hover {
+  filter: brightness(1.08);
+}
+.message-soundtok-play {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(240,237,232,0.92);
+  color: #0b0b0b;
+  font-size: 18px;
+  padding-left: 3px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+.message-soundtok-poster-label {
+  font: 600 12px 'Syne', sans-serif;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
 }
 .message-soundtok-footer {
   display: flex;
@@ -1014,6 +1050,114 @@ ${FONT_IMPORT}
   border: 1px solid var(--border-mid);
   background: var(--bg-elevated);
   border-left: 3px solid var(--accent);
+  cursor: text;
+}
+.reply-compose-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-elevated);
+  border-left: 3px solid #6ea8fe;
+  cursor: text;
+}
+.reply-compose-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: rgba(110, 168, 254, 0.12);
+  color: #6ea8fe;
+  flex-shrink: 0;
+}
+.reply-compose-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.reply-compose-body {
+  min-width: 0;
+  flex: 1;
+}
+.reply-compose-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6ea8fe;
+  margin-bottom: 2px;
+}
+.reply-compose-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reply-compose-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.reply-compose-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+.reply-compose-close svg {
+  width: 16px;
+  height: 16px;
+}
+.message-reply-quote {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  border-left: 3px solid rgba(110, 168, 254, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.message-bubble.own .message-reply-quote {
+  background: rgba(11, 11, 11, 0.12);
+  border-left-color: rgba(11, 11, 11, 0.45);
+}
+.message-reply-author {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6ea8fe;
+  margin-bottom: 2px;
+}
+.message-bubble.own .message-reply-author {
+  color: rgba(11, 11, 11, 0.75);
+}
+.message-reply-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.message-bubble.own .message-reply-text {
+  color: rgba(11, 11, 11, 0.65);
+}
+.message-row.reply-flash .message-bubble {
+  animation: reply-flash 1.1s ease;
+}
+@keyframes reply-flash {
+  0%, 100% { box-shadow: none; }
+  25% { box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.7); }
 }
 .edit-compose-icon {
   width: 28px;
@@ -1068,10 +1212,13 @@ ${FONT_IMPORT}
 }
 .input-form {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
 }
 .message-input {
   flex: 1;
+  min-height: 42px;
+  max-height: min(40vh, 220px);
   padding: 10px 16px;
   background: var(--bg-surface);
   border: 1px solid var(--border-mid);
@@ -1079,11 +1226,16 @@ ${FONT_IMPORT}
   color: var(--text-primary);
   font-family: 'Syne', sans-serif;
   font-size: 14px;
+  line-height: 1.4;
   outline: none;
+  resize: none;
+  overflow-y: auto;
   transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 .message-input.editing {
   border-color: rgba(240, 237, 232, 0.35);
+  min-height: 72px;
 }
 .message-input:focus {
   border-color: var(--border-hover);
@@ -1194,9 +1346,91 @@ interface PendingMessage {
   createdAt: string;
   status: 'PENDING';
   clientMessageId: string;
+  replyToId?: string | null;
+  replyTo?: MessageReplyPreview | null;
 }
 
 type DisplayMessage = Message | PendingMessage;
+
+type SharedTok = NonNullable<Message['soundTok']>;
+
+function SharedSoundTokCard({
+  sharedTok,
+  onOpenAuthor,
+}: {
+  sharedTok: SharedTok;
+  onOpenAuthor: (username: string) => void;
+}) {
+  const [active, setActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoUrl = resolveMediaUrl(sharedTok.videoUrl);
+  const sharedAuthor = sharedTok.author;
+  const sharedAuthorName =
+    sharedAuthor?.displayName ||
+    (sharedAuthor?.username ? `@${sharedAuthor.username}` : 'Автор');
+  const sharedUsername = sharedAuthor?.username ? `@${sharedAuthor.username}` : null;
+  const sharedAvatarUrl = resolveMediaUrl(sharedAuthor?.avatar);
+
+  useEffect(() => {
+    if (!active) return;
+    const el = videoRef.current;
+    if (!el) return;
+    void el.play().catch(() => undefined);
+  }, [active]);
+
+  return (
+    <div className="message-soundtok">
+      <div className="message-soundtok-media">
+        {active && videoUrl ? (
+          <video
+            ref={videoRef}
+            className="message-soundtok-video"
+            src={videoUrl}
+            controls
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <button
+            type="button"
+            className="message-soundtok-poster"
+            onClick={() => setActive(true)}
+            aria-label="Смотреть SoundTok"
+          >
+            <span className="message-soundtok-play" aria-hidden>
+              ▶
+            </span>
+            <span className="message-soundtok-poster-label">Нажмите, чтобы смотреть</span>
+          </button>
+        )}
+      </div>
+      <button
+        type="button"
+        className="message-soundtok-footer"
+        onClick={() => {
+          if (sharedAuthor?.username) onOpenAuthor(sharedAuthor.username);
+        }}
+      >
+        <div className="message-soundtok-avatar">
+          {sharedAvatarUrl ? (
+            <img src={sharedAvatarUrl} alt={sharedAuthor?.username || 'author'} />
+          ) : (
+            (sharedAuthor?.username?.[0] || '?').toUpperCase()
+          )}
+        </div>
+        <div className="message-soundtok-author-info">
+          <div className="message-soundtok-author-name">{sharedAuthorName}</div>
+          {sharedUsername && (
+            <div className="message-soundtok-author-username">{sharedUsername}</div>
+          )}
+        </div>
+      </button>
+      {sharedTok.description?.trim() && (
+        <div className="message-soundtok-desc">{sharedTok.description}</div>
+      )}
+    </div>
+  );
+}
 
 export default function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>();
@@ -1217,6 +1451,8 @@ export default function ChatPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [composerStash, setComposerStash] = useState('');
+  const [replyingTo, setReplyingTo] = useState<DisplayMessage | null>(null);
+  const [flashMessageId, setFlashMessageId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     messageId: string;
@@ -1235,7 +1471,13 @@ export default function ChatPage() {
   const [mentionIndex, setMentionIndex] = useState(0);
   const clearChatUnread = useChatUnreadStore((s) => s.clearChatUnread);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesMetaRef = useRef<{ length: number; lastId: string | null }>({
+    length: 0,
+    lastId: null,
+  });
+  const stickToBottomRef = useRef(true);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const mentionSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markAsReadRef = useRef<(ids: string[]) => void>(() => {});
@@ -1351,11 +1593,20 @@ export default function ChatPage() {
     }
   };
 
+  const resizeComposer = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const max = Math.min(window.innerHeight * 0.4, 220);
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+  };
+
   const startEditMessage = (message: DisplayMessage) => {
     if (!('content' in message) || message.status === 'PENDING') return;
     if ('deletedAt' in message && message.deletedAt) return;
     setReactionPickerId(null);
     setContextMenu(null);
+    setReplyingTo(null);
     if (!editingId) {
       setComposerStash(newMessage);
     }
@@ -1365,6 +1616,7 @@ export default function ChatPage() {
     requestAnimationFrame(() => {
       const input = inputRef.current;
       if (!input) return;
+      resizeComposer();
       input.focus();
       const len = input.value.length;
       input.setSelectionRange(len, len);
@@ -1374,13 +1626,83 @@ export default function ChatPage() {
     });
   };
 
+  const buildReplyPreview = (message: DisplayMessage): MessageReplyPreview => {
+    const sender =
+      'sender' in message && message.sender
+        ? {
+            id: message.sender.id,
+            username: message.sender.username,
+            displayName: message.sender.displayName,
+          }
+        : {
+            id: message.senderId,
+            username: user?.id === message.senderId ? user.username : 'пользователь',
+            displayName: null,
+          };
+
+    return {
+      id: message.id,
+      content: message.content || '',
+      senderId: message.senderId,
+      deletedAt: 'deletedAt' in message ? message.deletedAt : null,
+      soundTokId: 'soundTokId' in message ? message.soundTokId : null,
+      sender,
+    };
+  };
+
+  const startReplyMessage = (message: DisplayMessage) => {
+    if (message.status === 'PENDING') return;
+    if ('deletedAt' in message && message.deletedAt) return;
+    setReactionPickerId(null);
+    setContextMenu(null);
+    if (editingId) {
+      setEditingId(null);
+      setEditSaving(false);
+      setNewMessage(composerStash);
+      setComposerStash('');
+    }
+    setReplyingTo(message);
+    clearMentionSuggestions();
+    requestAnimationFrame(() => {
+      resizeComposer();
+      inputRef.current?.focus();
+    });
+  };
+
+  const cancelReplyMessage = () => {
+    setReplyingTo(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const scrollToRepliedMessage = (messageId: string) => {
+    const el = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setFlashMessageId(messageId);
+    window.setTimeout(() => {
+      setFlashMessageId((prev) => (prev === messageId ? null : prev));
+    }, 1200);
+  };
+
+  const getReplyPreviewText = (reply: MessageReplyPreview | null | undefined) => {
+    if (!reply) return '';
+    if (reply.deletedAt) return 'Сообщение удалено';
+    const text = (reply.content || '').trim();
+    if (text) return text.length > 120 ? `${text.slice(0, 120)}…` : text;
+    if (reply.soundTokId) return 'Вложение SoundTok';
+    return 'Сообщение';
+  };
+
   const cancelEditMessage = () => {
     setEditingId(null);
     setEditSaving(false);
     setNewMessage(composerStash);
     setComposerStash('');
     clearMentionSuggestions();
-    requestAnimationFrame(() => inputRef.current?.focus());
+    requestAnimationFrame(() => {
+      resizeComposer();
+      inputRef.current?.focus();
+    });
   };
 
   const saveEditMessage = async () => {
@@ -1401,7 +1723,10 @@ export default function ChatPage() {
       setNewMessage(composerStash);
       setComposerStash('');
       clearMentionSuggestions();
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        resizeComposer();
+        inputRef.current?.focus();
+      });
     } catch {
       setSendError('Не удалось изменить сообщение');
       setEditSaving(false);
@@ -1494,6 +1819,16 @@ export default function ChatPage() {
   const editingAllowsEmpty = Boolean(
     editingMessage && 'soundTok' in editingMessage && editingMessage.soundTok,
   );
+
+  const replyComposePreview = useMemo(() => {
+    if (!replyingTo) return { author: '', text: '' };
+    const preview = buildReplyPreview(replyingTo);
+    const author =
+      preview.sender.displayName?.trim() ||
+      preview.sender.username ||
+      'пользователь';
+    return { author, text: getReplyPreviewText(preview) };
+  }, [replyingTo, user]);
 
   const handleToggleReaction = async (messageId: string, emoji: string) => {
     if (!chatId) return;
@@ -1690,29 +2025,68 @@ export default function ChatPage() {
     }
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const isNearBottom = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 140;
   };
 
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    const el = messagesContainerRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // Scroll only on new messages / initial load — not on edit, reaction, or status updates
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, otherUserTyping]);
+    const lastId = messages.length ? messages[messages.length - 1]?.id ?? null : null;
+    const prev = prevMessagesMetaRef.current;
+    const isInitial = prev.length === 0 && messages.length > 0;
+    const lengthGrew = messages.length > prev.length;
+    const lastChanged = lastId !== null && lastId !== prev.lastId;
+    const isNewTail = lengthGrew || (lastChanged && messages.length >= prev.length);
+
+    prevMessagesMetaRef.current = { length: messages.length, lastId };
+
+    if (isInitial) {
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => scrollToBottom('auto'));
+      return;
+    }
+
+    if (isNewTail && (stickToBottomRef.current || isNearBottom())) {
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => scrollToBottom('smooth'));
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (!otherUserTyping) return;
+    if (stickToBottomRef.current || isNearBottom()) {
+      requestAnimationFrame(() => scrollToBottom('smooth'));
+    }
+  }, [otherUserTyping]);
 
   useEffect(() => {
     if (!chatId) return;
 
+    prevMessagesMetaRef.current = { length: 0, lastId: null };
+    stickToBottomRef.current = true;
+    setReplyingTo(null);
+    setFlashMessageId(null);
+
     const fetchChat = async () => {
       try {
-        const chats = await chatsApi.getChats();
-        const chatData = chats.find((c: Chat) => c.id === chatId);
-        const messagesData = await chatsApi.getMessages(chatId);
-
-        const resolvedChat = chatData || messagesData.chat;
+        const messagesData = await chatsApi.getMessages(chatId, { limit: 50 });
+        const resolvedChat = messagesData.chat;
         if (resolvedChat) {
           setChat(resolvedChat);
           
           // Process messages and track IDs
-          const loadedMessages = messagesData.messages || messagesData || [];
+          const loadedMessages = messagesData.messages || [];
           loadedMessages.forEach((m: Message) => {
             processedMessageIds.current.add(m.id);
             if (m.clientMessageId) {
@@ -1800,8 +2174,12 @@ export default function ChatPage() {
     const content = newMessage.trim();
     const clientMessageId = `${chatId}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     const receiverId = isGroupChat ? undefined : otherUser?.id;
+    const replyTarget = replyingTo;
+    const replyToId = replyTarget?.id;
+    const replyTo = replyTarget ? buildReplyPreview(replyTarget) : null;
 
     setNewMessage('');
+    setReplyingTo(null);
     setSending(true);
     setSendError(null);
     clearMentionSuggestions();
@@ -1815,6 +2193,8 @@ export default function ChatPage() {
       createdAt: new Date().toISOString(),
       status: 'PENDING',
       clientMessageId,
+      replyToId: replyToId ?? null,
+      replyTo,
     };
 
     processedClientIds.current.add(clientMessageId);
@@ -1824,7 +2204,9 @@ export default function ChatPage() {
       let sent = false;
 
       if (isConnected) {
-        const result = await sendChatMessage(content, receiverId, clientMessageId);
+        const result = await sendChatMessage(content, receiverId, clientMessageId, {
+          replyToId: replyToId || undefined,
+        });
         if (result.success && result.message) {
           confirmSentMessage(clientMessageId, {
             ...result.message,
@@ -1837,13 +2219,21 @@ export default function ChatPage() {
       }
 
       if (!sent) {
-        const serverMessage = await chatsApi.sendMessage(chatId, content, receiverId, clientMessageId);
+        const serverMessage = await chatsApi.sendMessage(
+          chatId,
+          content,
+          receiverId,
+          clientMessageId,
+          undefined,
+          replyToId || undefined
+        );
         confirmSentMessage(clientMessageId, serverMessage);
       }
     } catch (error) {
       setMessages(prev => prev.filter(m => m.id !== clientMessageId));
       processedClientIds.current.delete(clientMessageId);
       setNewMessage(content);
+      if (replyTarget) setReplyingTo(replyTarget);
       setSendError(
         error instanceof Error ? error.message : 'Не удалось отправить сообщение'
       );
@@ -1950,11 +2340,12 @@ export default function ChatPage() {
     });
   };
 
-  const handleTypingInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTypingInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const cursor = e.target.selectionStart ?? value.length;
     setNewMessage(value);
     updateMentionSuggestions(value, cursor);
+    requestAnimationFrame(resizeComposer);
 
     if (editingId) return;
 
@@ -1969,7 +2360,7 @@ export default function ChatPage() {
     }, 2000);
   };
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (mentionSuggestions.length > 0 && mentionRange) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -2001,11 +2392,21 @@ export default function ChatPage() {
       return;
     }
 
+    if (e.key === 'Escape' && replyingTo) {
+      e.preventDefault();
+      cancelReplyMessage();
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void handleSendMessage(e);
     }
   };
+
+  useEffect(() => {
+    requestAnimationFrame(resizeComposer);
+  }, [newMessage, editingId]);
 
   useEffect(() => {
     return () => {
@@ -2145,7 +2546,13 @@ export default function ChatPage() {
           )}
 
           {/* Messages */}
-          <div className="chat-messages">
+          <div
+            className="chat-messages"
+            ref={messagesContainerRef}
+            onScroll={() => {
+              stickToBottomRef.current = isNearBottom();
+            }}
+          >
             {messages.length === 0 ? (
               <div className="empty-chat">
                 <div className="empty-icon">—</div>
@@ -2161,14 +2568,6 @@ export default function ChatPage() {
                   ? message.sender?.username
                   : undefined;
                 const sharedTok = !isDeleted && 'soundTok' in message ? message.soundTok : null;
-                const sharedAuthor = sharedTok?.author;
-                const sharedAuthorName =
-                  sharedAuthor?.displayName ||
-                  (sharedAuthor?.username ? `@${sharedAuthor.username}` : 'Автор');
-                const sharedUsername = sharedAuthor?.username
-                  ? `@${sharedAuthor.username}`
-                  : null;
-                const sharedAvatarUrl = resolveMediaUrl(sharedAuthor?.avatar);
                 const reactionSummary = getReactionSummary(message);
                 const pickerOpen = reactionPickerId === message.id;
 
@@ -2178,7 +2577,7 @@ export default function ChatPage() {
                   <div
                     key={message.id}
                     data-message-id={message.id}
-                    className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''} ${pickerOpen ? 'picker-open' : ''}`}
+                    className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''} ${pickerOpen ? 'picker-open' : ''} ${flashMessageId === message.id ? 'reply-flash' : ''}`}
                   >
                     <div
                       className={`message-bubble ${isOwn ? 'own' : 'other'} ${isDeleted ? 'deleted' : ''} ${isEditing ? 'editing' : ''}`}
@@ -2207,57 +2606,30 @@ export default function ChatPage() {
                           @{senderName}
                         </button>
                       )}
+                      {'replyTo' in message && message.replyTo && (
+                        <button
+                          type="button"
+                          className="message-reply-quote"
+                          onClick={() => scrollToRepliedMessage(message.replyTo!.id)}
+                        >
+                          <div className="message-reply-author">
+                            {message.replyTo.sender.displayName?.trim() ||
+                              message.replyTo.sender.username}
+                          </div>
+                          <div className="message-reply-text">
+                            {getReplyPreviewText(message.replyTo)}
+                          </div>
+                        </button>
+                      )}
                       {isDeleted ? (
                         <p className="message-deleted-text">Сообщение удалено</p>
                       ) : (
                         <>
                           {sharedTok && (
-                            <div className="message-soundtok">
-                              <div className="message-soundtok-media">
-                                <video
-                                  className="message-soundtok-video"
-                                  src={resolveMediaUrl(sharedTok.videoUrl) || undefined}
-                                  controls
-                                  playsInline
-                                  preload="metadata"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                className="message-soundtok-footer"
-                                onClick={() => {
-                                  if (sharedAuthor?.username) {
-                                    openMentionProfile(sharedAuthor.username);
-                                  }
-                                }}
-                              >
-                                <div className="message-soundtok-avatar">
-                                  {sharedAvatarUrl ? (
-                                    <img
-                                      src={sharedAvatarUrl}
-                                      alt={sharedAuthor?.username || 'author'}
-                                    />
-                                  ) : (
-                                    (sharedAuthor?.username?.[0] || '?').toUpperCase()
-                                  )}
-                                </div>
-                                <div className="message-soundtok-author-info">
-                                  <div className="message-soundtok-author-name">
-                                    {sharedAuthorName}
-                                  </div>
-                                  {sharedUsername && (
-                                    <div className="message-soundtok-author-username">
-                                      {sharedUsername}
-                                    </div>
-                                  )}
-                                </div>
-                              </button>
-                              {sharedTok.description?.trim() && (
-                                <div className="message-soundtok-desc">
-                                  {sharedTok.description}
-                                </div>
-                              )}
-                            </div>
+                            <SharedSoundTokCard
+                              sharedTok={sharedTok}
+                              onOpenAuthor={(username) => openMentionProfile(username)}
+                            />
                           )}
                           {!!message.content &&
                             !(
@@ -2303,6 +2675,14 @@ export default function ChatPage() {
                     </div>
                     {!isPending && !isDeleted && (
                       <div className="message-actions">
+                        <button
+                          type="button"
+                          className="message-action-btn"
+                          title="Ответить"
+                          onClick={() => startReplyMessage(message)}
+                        >
+                          <Reply />
+                        </button>
                         <button
                           type="button"
                           className="message-action-btn"
@@ -2371,7 +2751,11 @@ export default function ChatPage() {
           {/* Input */}
           <div className="chat-input-area">
             {editingId && editingMessage && (
-              <div className="edit-compose-bar" role="status">
+              <div
+                className="edit-compose-bar"
+                role="status"
+                onClick={() => inputRef.current?.focus()}
+              >
                 <div className="edit-compose-icon" aria-hidden>
                   <Pencil />
                 </div>
@@ -2383,8 +2767,39 @@ export default function ChatPage() {
                   type="button"
                   className="edit-compose-close"
                   aria-label="Отменить редактирование"
-                  onClick={cancelEditMessage}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cancelEditMessage();
+                  }}
                   disabled={editSaving}
+                >
+                  <X />
+                </button>
+              </div>
+            )}
+            {!editingId && replyingTo && (
+              <div
+                className="reply-compose-bar"
+                role="status"
+                onClick={() => inputRef.current?.focus()}
+              >
+                <div className="reply-compose-icon" aria-hidden>
+                  <Reply />
+                </div>
+                <div className="reply-compose-body">
+                  <div className="reply-compose-title">
+                    Ответ {replyComposePreview.author}
+                  </div>
+                  <div className="reply-compose-preview">{replyComposePreview.text}</div>
+                </div>
+                <button
+                  type="button"
+                  className="reply-compose-close"
+                  aria-label="Отменить ответ"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cancelReplyMessage();
+                  }}
                 >
                   <X />
                 </button>
@@ -2420,9 +2835,9 @@ export default function ChatPage() {
               </div>
             )}
             <form onSubmit={handleSendMessage} className="input-form">
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
+                rows={1}
                 value={newMessage}
                 onChange={handleTypingInput}
                 onKeyDown={handleInputKeyDown}
@@ -2441,7 +2856,9 @@ export default function ChatPage() {
                     ? 'Сообщения недоступны'
                     : editingId
                       ? 'Измените сообщение…'
-                      : 'Введите сообщение... @user'
+                      : replyingTo
+                        ? `Ответ ${replyComposePreview.author}…`
+                        : 'Введите сообщение... @user'
                 }
                 className={`message-input${editingId ? ' editing' : ''}`}
                 disabled={
@@ -2450,6 +2867,7 @@ export default function ChatPage() {
                     : sending || isMessagingBlocked || !canSendMessages
                 }
                 maxLength={4000}
+                aria-label={editingId ? 'Редактирование сообщения' : 'Сообщение'}
               />
               <button
                 type="submit"
@@ -2459,7 +2877,11 @@ export default function ChatPage() {
                     : !newMessage.trim() || sending || isMessagingBlocked || !canSendMessages
                 }
                 className="send-btn"
-                title={editingId ? 'Сохранить' : 'Отправить'}
+                title={
+                  editingId
+                    ? 'Сохранить (Enter)'
+                    : 'Отправить (Enter, Shift+Enter — новая строка)'
+                }
                 aria-label={editingId ? 'Сохранить изменения' : 'Отправить сообщение'}
               >
                 {editSaving || sending ? (
@@ -2495,6 +2917,17 @@ export default function ChatPage() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="msg-ctx-item"
+            onClick={() => {
+              startReplyMessage(contextMessage);
+              closeContextMenu();
+            }}
+          >
+            <Reply />
+            Ответить
+          </button>
           <button
             type="button"
             className="msg-ctx-item"

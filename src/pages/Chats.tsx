@@ -454,6 +454,28 @@ ${FONT_IMPORT}
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.chats-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 18px;
+}
+.chats-load-more button {
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font: 600 12px 'Syne', sans-serif;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.chats-load-more button:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+.chats-load-more button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 
 /* ── GROUP MODAL ── */
 .group-modal-overlay {
@@ -704,7 +726,10 @@ export default function Chats() {
   const refreshUnread = useChatUnreadStore((s) => s.refresh);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const CHAT_PAGE_SIZE = 40;
   const [pinningId, setPinningId] = useState<string | null>(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -730,13 +755,35 @@ export default function Chats() {
 
   const fetchChats = async () => {
     try {
-      const data = await chatsApi.getChats();
-      setChats(data);
+      const data = await chatsApi.getChats({ limit: CHAT_PAGE_SIZE, offset: 0 });
+      setChats(data.items);
+      setHasMore(data.hasMore);
       refreshUnread();
     } catch (error) {
       console.error('Failed to fetch chats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreChats = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await chatsApi.getChats({
+        limit: CHAT_PAGE_SIZE,
+        offset: chats.length,
+      });
+      setChats((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        const next = data.items.filter((c) => !seen.has(c.id));
+        return [...prev, ...next];
+      });
+      setHasMore(data.hasMore);
+    } catch (error) {
+      console.error('Failed to load more chats:', error);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -931,7 +978,8 @@ export default function Chats() {
 
   const getLastMessage = (chat: Chat) => {
     if (!chat.messages || chat.messages.length === 0) return null;
-    return chat.messages[chat.messages.length - 1];
+    // List API returns latest message as the only/first item
+    return chat.messages[0];
   };
 
   const getPreviewText = (chat: Chat, lastMessage: Chat['messages'][0] | null) => {
@@ -1218,6 +1266,17 @@ export default function Chats() {
                 </div>
               );
             })}
+            {hasMore && !searchQuery.trim() && (
+              <div className="chats-load-more">
+                <button
+                  type="button"
+                  onClick={() => void loadMoreChats()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Загрузка…' : 'Показать ещё чаты'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

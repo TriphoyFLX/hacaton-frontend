@@ -21,6 +21,7 @@ export interface Message {
   receiverId?: string | null;
   chatId: string;
   soundTokId?: string | null;
+  replyToId?: string | null;
   clientMessageId?: string | null;
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: Date | null;
@@ -44,6 +45,18 @@ export interface Message {
       username: string;
       displayName?: string | null;
       avatar?: string | null;
+    };
+  } | null;
+  replyTo?: {
+    id: string;
+    content: string;
+    senderId: string;
+    deletedAt?: Date | string | null;
+    soundTokId?: string | null;
+    sender: {
+      id: string;
+      username: string;
+      displayName?: string | null;
     };
   } | null;
   reactions?: MessageReaction[];
@@ -85,6 +98,7 @@ interface ClientToServerEvents {
     clientMessageId: string;
     receiverId?: string | null;
     soundTokId?: string;
+    replyToId?: string;
   }, callback: (response: SocketMessageResponse) => void) => void;
   'message:read': (data: { messageIds: string[]; chatId: string }) => void;
   'message:deliver': (data: { messageId: string; chatId: string }) => void;
@@ -127,6 +141,8 @@ interface UseSocketReturn {
     chatId: string;
     receiverId?: string | null;
     clientMessageId: string;
+    soundTokId?: string;
+    replyToId?: string;
   }) => Promise<SocketMessageResponse>;
   markAsRead: (messageIds: string[], chatId: string) => void;
   sendTyping: (chatId: string, isTyping: boolean) => void;
@@ -263,6 +279,8 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
       chatId: string;
       receiverId?: string | null;
       clientMessageId: string;
+      soundTokId?: string;
+      replyToId?: string;
     }): Promise<SocketMessageResponse> => {
       return new Promise((resolve) => {
         if (!socketRef.current?.connected) {
@@ -416,11 +434,23 @@ export function useChatSocket(
   }, [otherUserId, isConnected, subscribeToUser]);
 
   const sendChatMessage = useCallback(
-    async (content: string, receiverId: string | undefined, clientMessageId: string) => {
+    async (
+      content: string,
+      receiverId: string | undefined,
+      clientMessageId: string,
+      opts?: { soundTokId?: string; replyToId?: string }
+    ) => {
       if (!chatId) {
         return { success: false, error: 'No chat selected', clientMessageId };
       }
-      return sendMessage({ content, chatId, receiverId, clientMessageId });
+      return sendMessage({
+        content,
+        chatId,
+        receiverId,
+        clientMessageId,
+        soundTokId: opts?.soundTokId,
+        replyToId: opts?.replyToId,
+      });
     },
     [chatId, sendMessage]
   );

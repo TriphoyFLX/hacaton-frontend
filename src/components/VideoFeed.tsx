@@ -15,6 +15,7 @@ import {
 } from '../lib/mediaUnlock';
 import ShareSoundTokModal from './ShareSoundTokModal';
 import AdminBadge from './AdminBadge';
+import { renderTextWithMentions } from '../utils/messageMentions';
 
 const css = `
 .vf-root {
@@ -652,11 +653,18 @@ const css = `
   color: rgba(255,255,255,0.55);
   font-size: 12px;
   background: #121212;
+  border-top: 1px solid rgba(110, 168, 254, 0.18);
 }
 
-.vf-reply-bar strong {
-  color: rgba(255,255,255,0.9);
-  font-weight: 600;
+.vf-reply-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(110, 168, 254, 0.2);
+  color: #8eb8ff;
+  font-weight: 700;
 }
 
 .vf-reply-cancel {
@@ -697,19 +705,67 @@ const css = `
   background: #121212;
 }
 
-.vf-sheet-input input {
+.vf-comment-input-wrap {
+  position: relative;
   flex: 1;
+  min-width: 0;
+}
+
+.vf-comment-input-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 10px 16px;
+  border-radius: 20px;
+  font: 14px/1.35 inherit;
+  white-space: pre;
+  overflow: hidden;
+  color: #fff;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.vf-comment-input-mention {
+  color: #8eb8ff;
+  font-weight: 700;
+  background: rgba(110, 168, 254, 0.22);
+  border-radius: 4px;
+}
+
+.vf-sheet-input input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
   background: rgba(255,255,255,0.08);
   border: none;
   border-radius: 20px;
   padding: 10px 16px;
-  color: #fff;
+  color: transparent;
+  caret-color: #fff;
   font-size: 14px;
+  line-height: 1.35;
   outline: none;
 }
 
 .vf-sheet-input input::placeholder {
   color: rgba(255,255,255,0.35);
+  opacity: 1;
+}
+
+.vf-comment-mention {
+  display: inline;
+  margin: 0;
+  padding: 0 2px;
+  border: none;
+  border-radius: 3px;
+  background: rgba(110, 168, 254, 0.18);
+  color: #8eb8ff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vf-comment-mention:hover {
+  text-decoration: underline;
 }
 
 .vf-send-btn {
@@ -1238,12 +1294,28 @@ export default function VideoFeed({
 
   const startReply = (comment: Comment) => {
     const rootId = comment.parentId || comment.id;
-    setReplyTo({ id: rootId, username: comment.author.username });
+    const username = comment.author.username;
+    const mention = `@${username} `;
+    setReplyTo({ id: rootId, username });
     setNewComment((prev) => {
-      const mention = `@${comment.author.username} `;
-      return prev.startsWith(mention) ? prev : mention;
+      const withoutOldMention = prev.replace(/^@[a-zA-Z0-9._]+ /, '');
+      return `${mention}${withoutOldMention}`;
     });
-    requestAnimationFrame(() => commentInputRef.current?.focus());
+    window.setTimeout(() => {
+      const input = commentInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(mention.length, mention.length);
+    }, 0);
+  };
+
+  const cancelReply = () => {
+    setNewComment((prev) => {
+      if (!replyTo) return prev;
+      const mention = `@${replyTo.username} `;
+      return prev.startsWith(mention) ? prev.slice(mention.length) : prev;
+    });
+    setReplyTo(null);
   };
 
   const openCommentProfile = (username: string) => {
@@ -1734,7 +1806,11 @@ export default function VideoFeed({
                           </span>
                         </div>
                         <div className={`vf-comment-text${comment.isHidden ? ' hidden' : ''}`}>
-                          {comment.text}
+                          {renderTextWithMentions({
+                            text: comment.text,
+                            onMentionClick: (username) => openCommentProfile(username),
+                            mentionClassName: 'vf-comment-mention',
+                          })}
                         </div>
                         <div className="vf-comment-actions">
                           <button
@@ -1793,13 +1869,14 @@ export default function VideoFeed({
             {replyTo && (
               <div className="vf-reply-bar">
                 <span>
-                  Ответ для <strong>@{replyTo.username}</strong>
+                  Ответ для
+                  <span className="vf-reply-chip">@{replyTo.username}</span>
                 </span>
                 <button
                   type="button"
                   className="vf-reply-cancel"
                   aria-label="Отменить ответ"
-                  onClick={() => setReplyTo(null)}
+                  onClick={cancelReply}
                 >
                   <X size={14} />
                 </button>
@@ -1807,17 +1884,33 @@ export default function VideoFeed({
             )}
 
             <form className="vf-sheet-input" onSubmit={handleSubmitComment}>
-              <input
-                ref={commentInputRef}
-                type="text"
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder={
-                  replyTo ? `Ответ @${replyTo.username}…` : 'Добавить комментарий...'
-                }
-                maxLength={500}
-                disabled={submittingComment}
-              />
+              <div className="vf-comment-input-wrap">
+                {newComment && (
+                  <div className="vf-comment-input-backdrop" aria-hidden>
+                    {replyTo && newComment.startsWith(`@${replyTo.username}`) ? (
+                      <>
+                        <span className="vf-comment-input-mention">
+                          @{replyTo.username}
+                        </span>
+                        {newComment.slice(`@${replyTo.username}`.length)}
+                      </>
+                    ) : (
+                      newComment
+                    )}
+                  </div>
+                )}
+                <input
+                  ref={commentInputRef}
+                  type="text"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder={
+                    replyTo ? `Ответ @${replyTo.username}…` : 'Добавить комментарий...'
+                  }
+                  maxLength={500}
+                  disabled={submittingComment}
+                />
+              </div>
               <button
                 type="submit"
                 className="vf-send-btn"

@@ -319,8 +319,8 @@ export default function ShareSoundTokModal({
     setLoading(true);
 
     chatsApi
-      .getChats()
-      .then((data) => setChats(Array.isArray(data) ? data : []))
+      .getChats({ limit: 60, offset: 0 })
+      .then((data) => setChats(data.items || []))
       .catch(() => setError('Не удалось загрузить чаты'))
       .finally(() => setLoading(false));
   }, [open]);
