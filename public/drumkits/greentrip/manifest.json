@@ -1,0 +1,1160 @@
+{
+  "id": "greentrip",
+  "name": "GREENTRIP",
+  "categories": [
+    {
+      "id": "808",
+      "name": "808",
+      "samples": [
+        {
+          "id": "808/GREEN-808-1.wav",
+          "name": "GREEN 808 (1)",
+          "file": "GREEN-808-1.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-1.wav",
+          "bytes": 1195014
+        },
+        {
+          "id": "808/GREEN-808-10.wav",
+          "name": "GREEN 808 (10)",
+          "file": "GREEN-808-10.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-10.wav",
+          "bytes": 1074138
+        },
+        {
+          "id": "808/GREEN-808-11.wav",
+          "name": "GREEN 808 (11)",
+          "file": "GREEN-808-11.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-11.wav",
+          "bytes": 1221022
+        },
+        {
+          "id": "808/GREEN-808-12.wav",
+          "name": "GREEN 808 (12)",
+          "file": "GREEN-808-12.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-12.wav",
+          "bytes": 2435510
+        },
+        {
+          "id": "808/GREEN-808-13.wav",
+          "name": "GREEN 808 (13)",
+          "file": "GREEN-808-13.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-13.wav",
+          "bytes": 374874
+        },
+        {
+          "id": "808/GREEN-808-14.wav",
+          "name": "GREEN 808 (14)",
+          "file": "GREEN-808-14.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-14.wav",
+          "bytes": 1478870
+        },
+        {
+          "id": "808/GREEN-808-15.wav",
+          "name": "GREEN 808 (15)",
+          "file": "GREEN-808-15.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-15.wav",
+          "bytes": 474566
+        },
+        {
+          "id": "808/GREEN-808-16.wav",
+          "name": "GREEN 808 (16)",
+          "file": "GREEN-808-16.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-16.wav",
+          "bytes": 1093852
+        },
+        {
+          "id": "808/GREEN-808-17.wav",
+          "name": "GREEN 808 (17)",
+          "file": "GREEN-808-17.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-17.wav",
+          "bytes": 476846
+        },
+        {
+          "id": "808/GREEN-808-18.wav",
+          "name": "GREEN 808 (18)",
+          "file": "GREEN-808-18.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-18.wav",
+          "bytes": 247014
+        },
+        {
+          "id": "808/GREEN-808-19.wav",
+          "name": "GREEN 808 (19)",
+          "file": "GREEN-808-19.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-19.wav",
+          "bytes": 1591734
+        },
+        {
+          "id": "808/GREEN-808-2.wav",
+          "name": "GREEN 808 (2)",
+          "file": "GREEN-808-2.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-2.wav",
+          "bytes": 667010
+        },
+        {
+          "id": "808/GREEN-808-20.wav",
+          "name": "GREEN 808 (20)",
+          "file": "GREEN-808-20.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-20.wav",
+          "bytes": 740726
+        },
+        {
+          "id": "808/GREEN-808-21.wav",
+          "name": "GREEN 808 (21)",
+          "file": "GREEN-808-21.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-21.wav",
+          "bytes": 1048582
+        },
+        {
+          "id": "808/GREEN-808-22.wav",
+          "name": "GREEN 808 (22)",
+          "file": "GREEN-808-22.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-22.wav",
+          "bytes": 715190
+        },
+        {
+          "id": "808/GREEN-808-23.wav",
+          "name": "GREEN 808 (23)",
+          "file": "GREEN-808-23.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-23.wav",
+          "bytes": 2221870
+        },
+        {
+          "id": "808/GREEN-808-24.wav",
+          "name": "GREEN 808 (24)",
+          "file": "GREEN-808-24.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-24.wav",
+          "bytes": 980970
+        },
+        {
+          "id": "808/GREEN-808-25.wav",
+          "name": "GREEN 808 (25)",
+          "file": "GREEN-808-25.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-25.wav",
+          "bytes": 2633298
+        },
+        {
+          "id": "808/GREEN-808-26.wav",
+          "name": "GREEN 808 (26)",
+          "file": "GREEN-808-26.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-26.wav",
+          "bytes": 1028726
+        },
+        {
+          "id": "808/GREEN-808-27.wav",
+          "name": "GREEN 808 (27)",
+          "file": "GREEN-808-27.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-27.wav",
+          "bytes": 1040674
+        },
+        {
+          "id": "808/GREEN-808-28.wav",
+          "name": "GREEN 808 (28)",
+          "file": "GREEN-808-28.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-28.wav",
+          "bytes": 1012042
+        },
+        {
+          "id": "808/GREEN-808-29.wav",
+          "name": "GREEN 808 (29)",
+          "file": "GREEN-808-29.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-29.wav",
+          "bytes": 1012042
+        },
+        {
+          "id": "808/GREEN-808-3.wav",
+          "name": "GREEN 808 (3)",
+          "file": "GREEN-808-3.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-3.wav",
+          "bytes": 991014
+        },
+        {
+          "id": "808/GREEN-808-30.wav",
+          "name": "GREEN 808 (30)",
+          "file": "GREEN-808-30.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-30.wav",
+          "bytes": 545018
+        },
+        {
+          "id": "808/GREEN-808-31.wav",
+          "name": "GREEN 808 (31)",
+          "file": "GREEN-808-31.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-31.wav",
+          "bytes": 1696338
+        },
+        {
+          "id": "808/GREEN-808-32.wav",
+          "name": "GREEN 808 (32)",
+          "file": "GREEN-808-32.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-32.wav",
+          "bytes": 1152154
+        },
+        {
+          "id": "808/GREEN-808-4.wav",
+          "name": "GREEN 808 (4)",
+          "file": "GREEN-808-4.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-4.wav",
+          "bytes": 1052726
+        },
+        {
+          "id": "808/GREEN-808-5.wav",
+          "name": "GREEN 808 (5)",
+          "file": "GREEN-808-5.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-5.wav",
+          "bytes": 1124726
+        },
+        {
+          "id": "808/GREEN-808-6.wav",
+          "name": "GREEN 808 (6)",
+          "file": "GREEN-808-6.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-6.wav",
+          "bytes": 711582
+        },
+        {
+          "id": "808/GREEN-808-7.wav",
+          "name": "GREEN 808 (7)",
+          "file": "GREEN-808-7.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-7.wav",
+          "bytes": 1197042
+        },
+        {
+          "id": "808/GREEN-808-8.wav",
+          "name": "GREEN 808 (8)",
+          "file": "GREEN-808-8.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-8.wav",
+          "bytes": 2394686
+        },
+        {
+          "id": "808/GREEN-808-9.wav",
+          "name": "GREEN 808 (9)",
+          "file": "GREEN-808-9.wav",
+          "url": "/drumkits/greentrip/808/GREEN-808-9.wav",
+          "bytes": 1303534
+        }
+      ]
+    },
+    {
+      "id": "clap",
+      "name": "Clap",
+      "samples": [
+        {
+          "id": "clap/GREEN-Clap-1.wav",
+          "name": "GREEN Clap (1)",
+          "file": "GREEN-Clap-1.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-1.wav",
+          "bytes": 48466
+        },
+        {
+          "id": "clap/GREEN-Clap-10.wav",
+          "name": "GREEN Clap (10)",
+          "file": "GREEN-Clap-10.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-10.wav",
+          "bytes": 269678
+        },
+        {
+          "id": "clap/GREEN-Clap-11.wav",
+          "name": "GREEN Clap (11)",
+          "file": "GREEN-Clap-11.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-11.wav",
+          "bytes": 65194
+        },
+        {
+          "id": "clap/GREEN-Clap-12.wav",
+          "name": "GREEN Clap (12)",
+          "file": "GREEN-Clap-12.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-12.wav",
+          "bytes": 35222
+        },
+        {
+          "id": "clap/GREEN-Clap-13.wav",
+          "name": "GREEN Clap (13)",
+          "file": "GREEN-Clap-13.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-13.wav",
+          "bytes": 37450
+        },
+        {
+          "id": "clap/GREEN-Clap-14.wav",
+          "name": "GREEN Clap (14)",
+          "file": "GREEN-Clap-14.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-14.wav",
+          "bytes": 53298
+        },
+        {
+          "id": "clap/GREEN-Clap-15.wav",
+          "name": "GREEN Clap (15)",
+          "file": "GREEN-Clap-15.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-15.wav",
+          "bytes": 48150
+        },
+        {
+          "id": "clap/GREEN-Clap-2.wav",
+          "name": "GREEN Clap (2)",
+          "file": "GREEN-Clap-2.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-2.wav",
+          "bytes": 80162
+        },
+        {
+          "id": "clap/GREEN-Clap-3.wav",
+          "name": "GREEN Clap (3)",
+          "file": "GREEN-Clap-3.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-3.wav",
+          "bytes": 46306
+        },
+        {
+          "id": "clap/GREEN-Clap-4.wav",
+          "name": "GREEN Clap (4)",
+          "file": "GREEN-Clap-4.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-4.wav",
+          "bytes": 44730
+        },
+        {
+          "id": "clap/GREEN-Clap-5.wav",
+          "name": "GREEN Clap (5)",
+          "file": "GREEN-Clap-5.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-5.wav",
+          "bytes": 43230
+        },
+        {
+          "id": "clap/GREEN-Clap-6.wav",
+          "name": "GREEN Clap (6)",
+          "file": "GREEN-Clap-6.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-6.wav",
+          "bytes": 48150
+        },
+        {
+          "id": "clap/GREEN-Clap-7.wav",
+          "name": "GREEN Clap (7)",
+          "file": "GREEN-Clap-7.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-7.wav",
+          "bytes": 710922
+        },
+        {
+          "id": "clap/GREEN-Clap-8.wav",
+          "name": "GREEN Clap (8)",
+          "file": "GREEN-Clap-8.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-8.wav",
+          "bytes": 40334
+        },
+        {
+          "id": "clap/GREEN-Clap-9.wav",
+          "name": "GREEN Clap (9)",
+          "file": "GREEN-Clap-9.wav",
+          "url": "/drumkits/greentrip/clap/GREEN-Clap-9.wav",
+          "bytes": 41298
+        }
+      ]
+    },
+    {
+      "id": "hihat",
+      "name": "Hi-Hat",
+      "samples": [
+        {
+          "id": "hihat/GREEN-HiHat-1.wav",
+          "name": "GREEN HiHat (1)",
+          "file": "GREEN-HiHat-1.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-1.wav",
+          "bytes": 60158
+        },
+        {
+          "id": "hihat/GREEN-HiHat-10.wav",
+          "name": "GREEN HiHat (10)",
+          "file": "GREEN-HiHat-10.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-10.wav",
+          "bytes": 36750
+        },
+        {
+          "id": "hihat/GREEN-HiHat-11.wav",
+          "name": "GREEN HiHat (11)",
+          "file": "GREEN-HiHat-11.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-11.wav",
+          "bytes": 25486
+        },
+        {
+          "id": "hihat/GREEN-HiHat-12.wav",
+          "name": "GREEN HiHat (12)",
+          "file": "GREEN-HiHat-12.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-12.wav",
+          "bytes": 25674
+        },
+        {
+          "id": "hihat/GREEN-HiHat-13.wav",
+          "name": "GREEN HiHat (13)",
+          "file": "GREEN-HiHat-13.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-13.wav",
+          "bytes": 76838
+        },
+        {
+          "id": "hihat/GREEN-HiHat-14.wav",
+          "name": "GREEN HiHat (14)",
+          "file": "GREEN-HiHat-14.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-14.wav",
+          "bytes": 20166
+        },
+        {
+          "id": "hihat/GREEN-HiHat-15.wav",
+          "name": "GREEN HiHat (15)",
+          "file": "GREEN-HiHat-15.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-15.wav",
+          "bytes": 76838
+        },
+        {
+          "id": "hihat/GREEN-HiHat-16.wav",
+          "name": "GREEN HiHat (16)",
+          "file": "GREEN-HiHat-16.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-16.wav",
+          "bytes": 36750
+        },
+        {
+          "id": "hihat/GREEN-HiHat-17.wav",
+          "name": "GREEN HiHat (17)",
+          "file": "GREEN-HiHat-17.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-17.wav",
+          "bytes": 37902
+        },
+        {
+          "id": "hihat/GREEN-HiHat-18.wav",
+          "name": "GREEN HiHat (18)",
+          "file": "GREEN-HiHat-18.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-18.wav",
+          "bytes": 40870
+        },
+        {
+          "id": "hihat/GREEN-HiHat-19.wav",
+          "name": "GREEN HiHat (19)",
+          "file": "GREEN-HiHat-19.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-19.wav",
+          "bytes": 31482
+        },
+        {
+          "id": "hihat/GREEN-HiHat-2.wav",
+          "name": "GREEN HiHat (2)",
+          "file": "GREEN-HiHat-2.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-2.wav",
+          "bytes": 48742
+        },
+        {
+          "id": "hihat/GREEN-HiHat-20.wav",
+          "name": "GREEN HiHat (20)",
+          "file": "GREEN-HiHat-20.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-20.wav",
+          "bytes": 21758
+        },
+        {
+          "id": "hihat/GREEN-HiHat-21.wav",
+          "name": "GREEN HiHat (21)",
+          "file": "GREEN-HiHat-21.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-21.wav",
+          "bytes": 50982
+        },
+        {
+          "id": "hihat/GREEN-HiHat-22.wav",
+          "name": "GREEN HiHat (22)",
+          "file": "GREEN-HiHat-22.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-22.wav",
+          "bytes": 57294
+        },
+        {
+          "id": "hihat/GREEN-HiHat-23.wav",
+          "name": "GREEN HiHat (23)",
+          "file": "GREEN-HiHat-23.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-23.wav",
+          "bytes": 155830
+        },
+        {
+          "id": "hihat/GREEN-HiHat-24.wav",
+          "name": "GREEN HiHat (24)",
+          "file": "GREEN-HiHat-24.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-24.wav",
+          "bytes": 78078
+        },
+        {
+          "id": "hihat/GREEN-HiHat-25.wav",
+          "name": "GREEN HiHat (25)",
+          "file": "GREEN-HiHat-25.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-25.wav",
+          "bytes": 41298
+        },
+        {
+          "id": "hihat/GREEN-HiHat-26.wav",
+          "name": "GREEN HiHat (26)",
+          "file": "GREEN-HiHat-26.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-26.wav",
+          "bytes": 31390
+        },
+        {
+          "id": "hihat/GREEN-HiHat-27.wav",
+          "name": "GREEN HiHat (27)",
+          "file": "GREEN-HiHat-27.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-27.wav",
+          "bytes": 45346
+        },
+        {
+          "id": "hihat/GREEN-HiHat-3.wav",
+          "name": "GREEN HiHat (3)",
+          "file": "GREEN-HiHat-3.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-3.wav",
+          "bytes": 76838
+        },
+        {
+          "id": "hihat/GREEN-HiHat-4.wav",
+          "name": "GREEN HiHat (4)",
+          "file": "GREEN-HiHat-4.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-4.wav",
+          "bytes": 135430
+        },
+        {
+          "id": "hihat/GREEN-HiHat-5.wav",
+          "name": "GREEN HiHat (5)",
+          "file": "GREEN-HiHat-5.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-5.wav",
+          "bytes": 269022
+        },
+        {
+          "id": "hihat/GREEN-HiHat-6.wav",
+          "name": "GREEN HiHat (6)",
+          "file": "GREEN-HiHat-6.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-6.wav",
+          "bytes": 20166
+        },
+        {
+          "id": "hihat/GREEN-HiHat-7.wav",
+          "name": "GREEN HiHat (7)",
+          "file": "GREEN-HiHat-7.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-7.wav",
+          "bytes": 30350
+        },
+        {
+          "id": "hihat/GREEN-HiHat-8.wav",
+          "name": "GREEN HiHat (8)",
+          "file": "GREEN-HiHat-8.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-8.wav",
+          "bytes": 36750
+        },
+        {
+          "id": "hihat/GREEN-HiHat-9.wav",
+          "name": "GREEN HiHat (9)",
+          "file": "GREEN-HiHat-9.wav",
+          "url": "/drumkits/greentrip/hihat/GREEN-HiHat-9.wav",
+          "bytes": 40870
+        }
+      ]
+    },
+    {
+      "id": "ohat",
+      "name": "Open Hat",
+      "samples": [
+        {
+          "id": "ohat/GREEN-Ohat-1.wav",
+          "name": "GREEN Ohat (1)",
+          "file": "GREEN-Ohat-1.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-1.wav",
+          "bytes": 596722
+        },
+        {
+          "id": "ohat/GREEN-Ohat-10.wav",
+          "name": "GREEN Ohat (10)",
+          "file": "GREEN-Ohat-10.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-10.wav",
+          "bytes": 384546
+        },
+        {
+          "id": "ohat/GREEN-Ohat-11.wav",
+          "name": "GREEN Ohat (11)",
+          "file": "GREEN-Ohat-11.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-11.wav",
+          "bytes": 1280154
+        },
+        {
+          "id": "ohat/GREEN-Ohat-12.wav",
+          "name": "GREEN Ohat (12)",
+          "file": "GREEN-Ohat-12.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-12.wav",
+          "bytes": 199366
+        },
+        {
+          "id": "ohat/GREEN-Ohat-13.wav",
+          "name": "GREEN Ohat (13)",
+          "file": "GREEN-Ohat-13.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-13.wav",
+          "bytes": 533722
+        },
+        {
+          "id": "ohat/GREEN-Ohat-14.wav",
+          "name": "GREEN Ohat (14)",
+          "file": "GREEN-Ohat-14.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-14.wav",
+          "bytes": 325266
+        },
+        {
+          "id": "ohat/GREEN-Ohat-15.wav",
+          "name": "GREEN Ohat (15)",
+          "file": "GREEN-Ohat-15.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-15.wav",
+          "bytes": 856226
+        },
+        {
+          "id": "ohat/GREEN-Ohat-16.wav",
+          "name": "GREEN Ohat (16)",
+          "file": "GREEN-Ohat-16.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-16.wav",
+          "bytes": 533722
+        },
+        {
+          "id": "ohat/GREEN-Ohat-17.wav",
+          "name": "GREEN Ohat (17)",
+          "file": "GREEN-Ohat-17.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-17.wav",
+          "bytes": 533722
+        },
+        {
+          "id": "ohat/GREEN-Ohat-18.wav",
+          "name": "GREEN Ohat (18)",
+          "file": "GREEN-Ohat-18.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-18.wav",
+          "bytes": 206582
+        },
+        {
+          "id": "ohat/GREEN-Ohat-19.wav",
+          "name": "GREEN Ohat (19)",
+          "file": "GREEN-Ohat-19.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-19.wav",
+          "bytes": 157934
+        },
+        {
+          "id": "ohat/GREEN-Ohat-2.wav",
+          "name": "GREEN Ohat (2)",
+          "file": "GREEN-Ohat-2.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-2.wav",
+          "bytes": 384154
+        },
+        {
+          "id": "ohat/GREEN-Ohat-20.wav",
+          "name": "GREEN Ohat (20)",
+          "file": "GREEN-Ohat-20.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-20.wav",
+          "bytes": 325266
+        },
+        {
+          "id": "ohat/GREEN-Ohat-21.wav",
+          "name": "GREEN Ohat (21)",
+          "file": "GREEN-Ohat-21.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-21.wav",
+          "bytes": 164790
+        },
+        {
+          "id": "ohat/GREEN-Ohat-22.wav",
+          "name": "GREEN Ohat (22)",
+          "file": "GREEN-Ohat-22.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-22.wav",
+          "bytes": 338326
+        },
+        {
+          "id": "ohat/GREEN-Ohat-23.wav",
+          "name": "GREEN Ohat (23)",
+          "file": "GREEN-Ohat-23.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-23.wav",
+          "bytes": 205870
+        },
+        {
+          "id": "ohat/GREEN-Ohat-24.wav",
+          "name": "GREEN Ohat (24)",
+          "file": "GREEN-Ohat-24.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-24.wav",
+          "bytes": 322438
+        },
+        {
+          "id": "ohat/GREEN-Ohat-3.wav",
+          "name": "GREEN Ohat (3)",
+          "file": "GREEN-Ohat-3.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-3.wav",
+          "bytes": 168158
+        },
+        {
+          "id": "ohat/GREEN-Ohat-4.wav",
+          "name": "GREEN Ohat (4)",
+          "file": "GREEN-Ohat-4.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-4.wav",
+          "bytes": 85874
+        },
+        {
+          "id": "ohat/GREEN-Ohat-5.wav",
+          "name": "GREEN Ohat (5)",
+          "file": "GREEN-Ohat-5.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-5.wav",
+          "bytes": 612154
+        },
+        {
+          "id": "ohat/GREEN-Ohat-6.wav",
+          "name": "GREEN Ohat (6)",
+          "file": "GREEN-Ohat-6.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-6.wav",
+          "bytes": 149766
+        },
+        {
+          "id": "ohat/GREEN-Ohat-7.wav",
+          "name": "GREEN Ohat (7)",
+          "file": "GREEN-Ohat-7.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-7.wav",
+          "bytes": 370442
+        },
+        {
+          "id": "ohat/GREEN-Ohat-8.wav",
+          "name": "GREEN Ohat (8)",
+          "file": "GREEN-Ohat-8.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-8.wav",
+          "bytes": 220394
+        },
+        {
+          "id": "ohat/GREEN-Ohat-9.wav",
+          "name": "GREEN Ohat (9)",
+          "file": "GREEN-Ohat-9.wav",
+          "url": "/drumkits/greentrip/ohat/GREEN-Ohat-9.wav",
+          "bytes": 135686
+        }
+      ]
+    },
+    {
+      "id": "perc",
+      "name": "Perc",
+      "samples": [
+        {
+          "id": "perc/GREEN-Perc-1.wav",
+          "name": "GREEN Perc (1)",
+          "file": "GREEN-Perc-1.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-1.wav",
+          "bytes": 1194154
+        },
+        {
+          "id": "perc/GREEN-Perc-2.wav",
+          "name": "GREEN Perc (2)",
+          "file": "GREEN-Perc-2.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-2.wav",
+          "bytes": 68726
+        },
+        {
+          "id": "perc/GREEN-Perc-3.wav",
+          "name": "GREEN Perc (3)",
+          "file": "GREEN-Perc-3.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-3.wav",
+          "bytes": 140730
+        },
+        {
+          "id": "perc/GREEN-Perc-4.wav",
+          "name": "GREEN Perc (4)",
+          "file": "GREEN-Perc-4.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-4.wav",
+          "bytes": 164726
+        },
+        {
+          "id": "perc/GREEN-Perc-5.wav",
+          "name": "GREEN Perc (5)",
+          "file": "GREEN-Perc-5.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-5.wav",
+          "bytes": 897818
+        },
+        {
+          "id": "perc/GREEN-Perc-6.wav",
+          "name": "GREEN Perc (6)",
+          "file": "GREEN-Perc-6.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-6.wav",
+          "bytes": 17302
+        },
+        {
+          "id": "perc/GREEN-Perc-7.wav",
+          "name": "GREEN Perc (7)",
+          "file": "GREEN-Perc-7.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-7.wav",
+          "bytes": 32730
+        },
+        {
+          "id": "perc/GREEN-Perc-8.wav",
+          "name": "GREEN Perc (8)",
+          "file": "GREEN-Perc-8.wav",
+          "url": "/drumkits/greentrip/perc/GREEN-Perc-8.wav",
+          "bytes": 168158
+        }
+      ]
+    },
+    {
+      "id": "snare",
+      "name": "Snare",
+      "samples": [
+        {
+          "id": "snare/GREEN-Snare-1.wav",
+          "name": "GREEN Snare (1)",
+          "file": "GREEN-Snare-1.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-1.wav",
+          "bytes": 29298
+        },
+        {
+          "id": "snare/GREEN-Snare-10.wav",
+          "name": "GREEN Snare (10)",
+          "file": "GREEN-Snare-10.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-10.wav",
+          "bytes": 40678
+        },
+        {
+          "id": "snare/GREEN-Snare-11.wav",
+          "name": "GREEN Snare (11)",
+          "file": "GREEN-Snare-11.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-11.wav",
+          "bytes": 22778
+        },
+        {
+          "id": "snare/GREEN-Snare-12.wav",
+          "name": "GREEN Snare (12)",
+          "file": "GREEN-Snare-12.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-12.wav",
+          "bytes": 319078
+        },
+        {
+          "id": "snare/GREEN-Snare-13.wav",
+          "name": "GREEN Snare (13)",
+          "file": "GREEN-Snare-13.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-13.wav",
+          "bytes": 44622
+        },
+        {
+          "id": "snare/GREEN-Snare-14.wav",
+          "name": "GREEN Snare (14)",
+          "file": "GREEN-Snare-14.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-14.wav",
+          "bytes": 38622
+        },
+        {
+          "id": "snare/GREEN-Snare-15.wav",
+          "name": "GREEN Snare (15)",
+          "file": "GREEN-Snare-15.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-15.wav",
+          "bytes": 319078
+        },
+        {
+          "id": "snare/GREEN-Snare-16.wav",
+          "name": "GREEN Snare (16)",
+          "file": "GREEN-Snare-16.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-16.wav",
+          "bytes": 319078
+        },
+        {
+          "id": "snare/GREEN-Snare-17.wav",
+          "name": "GREEN Snare (17)",
+          "file": "GREEN-Snare-17.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-17.wav",
+          "bytes": 94302
+        },
+        {
+          "id": "snare/GREEN-Snare-18.wav",
+          "name": "GREEN Snare (18)",
+          "file": "GREEN-Snare-18.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-18.wav",
+          "bytes": 41078
+        },
+        {
+          "id": "snare/GREEN-Snare-19.wav",
+          "name": "GREEN Snare (19)",
+          "file": "GREEN-Snare-19.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-19.wav",
+          "bytes": 37510
+        },
+        {
+          "id": "snare/GREEN-Snare-2.wav",
+          "name": "GREEN Snare (2)",
+          "file": "GREEN-Snare-2.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-2.wav",
+          "bytes": 127014
+        },
+        {
+          "id": "snare/GREEN-Snare-20.wav",
+          "name": "GREEN Snare (20)",
+          "file": "GREEN-Snare-20.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-20.wav",
+          "bytes": 53334
+        },
+        {
+          "id": "snare/GREEN-Snare-21.wav",
+          "name": "GREEN Snare (21)",
+          "file": "GREEN-Snare-21.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-21.wav",
+          "bytes": 25870
+        },
+        {
+          "id": "snare/GREEN-Snare-22.wav",
+          "name": "GREEN Snare (22)",
+          "file": "GREEN-Snare-22.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-22.wav",
+          "bytes": 36154
+        },
+        {
+          "id": "snare/GREEN-Snare-23.wav",
+          "name": "GREEN Snare (23)",
+          "file": "GREEN-Snare-23.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-23.wav",
+          "bytes": 37870
+        },
+        {
+          "id": "snare/GREEN-Snare-24.wav",
+          "name": "GREEN Snare (24)",
+          "file": "GREEN-Snare-24.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-24.wav",
+          "bytes": 127014
+        },
+        {
+          "id": "snare/GREEN-Snare-25.wav",
+          "name": "GREEN Snare (25)",
+          "file": "GREEN-Snare-25.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-25.wav",
+          "bytes": 91010
+        },
+        {
+          "id": "snare/GREEN-Snare-3.wav",
+          "name": "GREEN Snare (3)",
+          "file": "GREEN-Snare-3.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-3.wav",
+          "bytes": 84158
+        },
+        {
+          "id": "snare/GREEN-Snare-4.wav",
+          "name": "GREEN Snare (4)",
+          "file": "GREEN-Snare-4.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-4.wav",
+          "bytes": 37870
+        },
+        {
+          "id": "snare/GREEN-Snare-5.wav",
+          "name": "GREEN Snare (5)",
+          "file": "GREEN-Snare-5.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-5.wav",
+          "bytes": 37642
+        },
+        {
+          "id": "snare/GREEN-Snare-6.wav",
+          "name": "GREEN Snare (6)",
+          "file": "GREEN-Snare-6.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-6.wav",
+          "bytes": 21334
+        },
+        {
+          "id": "snare/GREEN-Snare-7.wav",
+          "name": "GREEN Snare (7)",
+          "file": "GREEN-Snare-7.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-7.wav",
+          "bytes": 28410
+        },
+        {
+          "id": "snare/GREEN-Snare-8.wav",
+          "name": "GREEN Snare (8)",
+          "file": "GREEN-Snare-8.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-8.wav",
+          "bytes": 22778
+        },
+        {
+          "id": "snare/GREEN-Snare-9.wav",
+          "name": "GREEN Snare (9)",
+          "file": "GREEN-Snare-9.wav",
+          "url": "/drumkits/greentrip/snare/GREEN-Snare-9.wav",
+          "bytes": 40678
+        }
+      ]
+    },
+    {
+      "id": "sfx",
+      "name": "SFX",
+      "samples": [
+        {
+          "id": "sfx/GREEN-Sfx-1.wav",
+          "name": "GREEN Sfx (1)",
+          "file": "GREEN-Sfx-1.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-1.wav",
+          "bytes": 1503678
+        },
+        {
+          "id": "sfx/GREEN-Sfx-10.wav",
+          "name": "GREEN Sfx (10)",
+          "file": "GREEN-Sfx-10.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-10.wav",
+          "bytes": 1237202
+        },
+        {
+          "id": "sfx/GREEN-Sfx-11.wav",
+          "name": "GREEN Sfx (11)",
+          "file": "GREEN-Sfx-11.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-11.wav",
+          "bytes": 576154
+        },
+        {
+          "id": "sfx/GREEN-Sfx-12.wav",
+          "name": "GREEN Sfx (12)",
+          "file": "GREEN-Sfx-12.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-12.wav",
+          "bytes": 631326
+        },
+        {
+          "id": "sfx/GREEN-Sfx-2.wav",
+          "name": "GREEN Sfx (2)",
+          "file": "GREEN-Sfx-2.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-2.wav",
+          "bytes": 2570978
+        },
+        {
+          "id": "sfx/GREEN-Sfx-3.wav",
+          "name": "GREEN Sfx (3)",
+          "file": "GREEN-Sfx-3.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-3.wav",
+          "bytes": 3544774
+        },
+        {
+          "id": "sfx/GREEN-Sfx-4.wav",
+          "name": "GREEN Sfx (4)",
+          "file": "GREEN-Sfx-4.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-4.wav",
+          "bytes": 921754
+        },
+        {
+          "id": "sfx/GREEN-Sfx-5.wav",
+          "name": "GREEN Sfx (5)",
+          "file": "GREEN-Sfx-5.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-5.wav",
+          "bytes": 493870
+        },
+        {
+          "id": "sfx/GREEN-Sfx-6.wav",
+          "name": "GREEN Sfx (6)",
+          "file": "GREEN-Sfx-6.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-6.wav",
+          "bytes": 751186
+        },
+        {
+          "id": "sfx/GREEN-Sfx-7.wav",
+          "name": "GREEN Sfx (7)",
+          "file": "GREEN-Sfx-7.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-7.wav",
+          "bytes": 574294
+        },
+        {
+          "id": "sfx/GREEN-Sfx-8.wav",
+          "name": "GREEN Sfx (8)",
+          "file": "GREEN-Sfx-8.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-8.wav",
+          "bytes": 2139586
+        },
+        {
+          "id": "sfx/GREEN-Sfx-9.wav",
+          "name": "GREEN Sfx (9)",
+          "file": "GREEN-Sfx-9.wav",
+          "url": "/drumkits/greentrip/sfx/GREEN-Sfx-9.wav",
+          "bytes": 658442
+        }
+      ]
+    },
+    {
+      "id": "vox",
+      "name": "Vox",
+      "samples": [
+        {
+          "id": "vox/GREEN-Vox-1.wav",
+          "name": "GREEN Vox (1)",
+          "file": "GREEN-Vox-1.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-1.wav",
+          "bytes": 190666
+        },
+        {
+          "id": "vox/GREEN-Vox-10.wav",
+          "name": "GREEN Vox (10)",
+          "file": "GREEN-Vox-10.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-10.wav",
+          "bytes": 709022
+        },
+        {
+          "id": "vox/GREEN-Vox-11.wav",
+          "name": "GREEN Vox (11)",
+          "file": "GREEN-Vox-11.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-11.wav",
+          "bytes": 195534
+        },
+        {
+          "id": "vox/GREEN-Vox-12.wav",
+          "name": "GREEN Vox (12)",
+          "file": "GREEN-Vox-12.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-12.wav",
+          "bytes": 132102
+        },
+        {
+          "id": "vox/GREEN-Vox-13.wav",
+          "name": "GREEN Vox (13)",
+          "file": "GREEN-Vox-13.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-13.wav",
+          "bytes": 251112
+        },
+        {
+          "id": "vox/GREEN-Vox-14.wav",
+          "name": "GREEN Vox (14)",
+          "file": "GREEN-Vox-14.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-14.wav",
+          "bytes": 184822
+        },
+        {
+          "id": "vox/GREEN-Vox-15.wav",
+          "name": "GREEN Vox (15)",
+          "file": "GREEN-Vox-15.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-15.wav",
+          "bytes": 710870
+        },
+        {
+          "id": "vox/GREEN-Vox-2.wav",
+          "name": "GREEN Vox (2)",
+          "file": "GREEN-Vox-2.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-2.wav",
+          "bytes": 272828
+        },
+        {
+          "id": "vox/GREEN-Vox-3.wav",
+          "name": "GREEN Vox (3)",
+          "file": "GREEN-Vox-3.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-3.wav",
+          "bytes": 173294
+        },
+        {
+          "id": "vox/GREEN-Vox-4.wav",
+          "name": "GREEN Vox (4)",
+          "file": "GREEN-Vox-4.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-4.wav",
+          "bytes": 303314
+        },
+        {
+          "id": "vox/GREEN-Vox-5.wav",
+          "name": "GREEN Vox (5)",
+          "file": "GREEN-Vox-5.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-5.wav",
+          "bytes": 348802
+        },
+        {
+          "id": "vox/GREEN-Vox-6.wav",
+          "name": "GREEN Vox (6)",
+          "file": "GREEN-Vox-6.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-6.wav",
+          "bytes": 709022
+        },
+        {
+          "id": "vox/GREEN-Vox-7.wav",
+          "name": "GREEN Vox (7)",
+          "file": "GREEN-Vox-7.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-7.wav",
+          "bytes": 709022
+        },
+        {
+          "id": "vox/GREEN-Vox-8.wav",
+          "name": "GREEN Vox (8)",
+          "file": "GREEN-Vox-8.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-8.wav",
+          "bytes": 709022
+        },
+        {
+          "id": "vox/GREEN-Vox-9.wav",
+          "name": "GREEN Vox (9)",
+          "file": "GREEN-Vox-9.wav",
+          "url": "/drumkits/greentrip/vox/GREEN-Vox-9.wav",
+          "bytes": 101006
+        }
+      ]
+    }
+  ]
+}

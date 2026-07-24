@@ -23,3 +23,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Drum kit audio (deployed via rsync, not GitHub)
+public/drumkits/**/*.wav
+public/drumkits/**/*.mp3
+public/drumkits/**/*.ogg
+public/drumkits/**/*.flac

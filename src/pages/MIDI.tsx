@@ -3,9 +3,10 @@ import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
   Download, Upload, Repeat, Sliders, Activity, Volume2,
   MoreVertical, X, Check, Save, Headphones, Waves, Settings,
-  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff, Pencil
+  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff, Pencil, Library
 } from 'lucide-react';
 import DesktopOnlyGate from '../components/DesktopOnlyGate';
+import DrumLibraryModal from '../components/DrumLibraryModal';
 import { getAuthUserId } from '../lib/authToken';
 import { midiProjectsApi, type MidiProjectSummary } from '../api/midiProjects';
 import {
@@ -1386,6 +1387,7 @@ function MIDISequencer() {
   const [isDragging, setIsDragging] = useState(false);
   const [quantizeGrid, setQuantizeGrid] = useState(0.5); // 8 cells per bar (1/8 note)
   const [eqPanelOpen, setEqPanelOpen] = useState(false);
+  const [drumLibraryOpen, setDrumLibraryOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [vocalPanelClipId, setVocalPanelClipId] = useState<string | null>(null);
   const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
@@ -3875,6 +3877,15 @@ function MIDISequencer() {
                 </label>
                 <button
                   type="button"
+                  onClick={() => setDrumLibraryOpen(true)}
+                  title="Выбрать из библиотеки GREENTRIP"
+                  className="st-chip ghost"
+                  style={{ width: 34, height: 34, padding: 0, placeContent: 'center' }}
+                >
+                  <Library size={14} />
+                </button>
+                <button
+                  type="button"
                   onClick={() => setEqPanelOpen(open => !open)}
                   title="Обработка активного трека (эквалайзер)"
                   className={`st-chip ${eqPanelOpen || project.tracks.find(t => t.id === project.activeTrackId)?.eq?.enabled ? 'on' : ''}`}
@@ -5055,6 +5066,14 @@ function MIDISequencer() {
           </div>
         </div>
       </div>
+
+      <DrumLibraryModal
+        open={drumLibraryOpen}
+        onClose={() => setDrumLibraryOpen(false)}
+        onPick={async (_sample, file) => {
+          await importAudioFile(file);
+        }}
+      />
     </div>
   );
 }
