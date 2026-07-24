@@ -213,6 +213,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           align-items: center;
           flex-shrink: 0;
         }
+        .sl-nav-desktop { display: none; }
         .sl-btn {
           min-height: 40px;
           height: auto;
@@ -381,9 +382,10 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         .sl-step p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
         .sl-faq details {
-          border-bottom: 1px solid var(--line);
+          border-top: 1px solid var(--line);
           padding: 14px 0;
         }
+        .sl-faq details:first-of-type { border-top: none; margin-top: 8px; }
         .sl-faq summary {
           cursor: pointer;
           font-weight: 600;
@@ -462,6 +464,8 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
             padding: 16px 24px;
           }
           .sl-logo { font-size: 24px; }
+          .sl-nav-mobile { display: none; }
+          .sl-nav-desktop { display: inline-flex; }
           .sl-btn { padding: 10px 18px; font-size: 14px; }
           .sl-hero { padding: 40px 0 48px; gap: 28px; }
           .sl-hero h1 { font-size: clamp(44px, 7vw, 64px); }
@@ -525,8 +529,9 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         <nav className="sl-nav" aria-label="Главная навигация">
           <Link to="/" className="sl-logo">SoundLab</Link>
           <div className="sl-nav-actions">
-            <Link to="/login" className="sl-btn sl-btn-nav-ghost">Войти</Link>
-            <Link to="/register" className="sl-btn sl-btn-primary">Регистрация</Link>
+            <Link to="/login" className="sl-btn sl-btn-primary sl-nav-mobile">Войти</Link>
+            <Link to="/login" className="sl-btn sl-btn-nav-ghost sl-nav-desktop">Войти</Link>
+            <Link to="/register" className="sl-btn sl-btn-primary sl-nav-desktop">Регистрация</Link>
           </div>
         </nav>
 
