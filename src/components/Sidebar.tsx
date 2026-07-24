@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
+import { resolveMediaUrl } from '../lib/mediaUrl';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
 
@@ -288,6 +289,13 @@ ${FONT_IMPORT}
   color: var(--text-primary);
   font-family: 'Syne', sans-serif;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.sb-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .sb-user-info { flex: 1; min-width: 0; }
 .sb-username {
@@ -567,6 +575,7 @@ export default function Sidebar() {
   const refreshUnread = useChatUnreadStore((s) => s.refresh);
   const isAdmin = user?.role === 'ADMIN';
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const avatarUrl = resolveMediaUrl(user?.avatar);
 
   useEffect(() => {
     if (!token) return;
@@ -714,7 +723,13 @@ export default function Sidebar() {
       {user && (
         <div className="sb-footer">
           <NavLink to="/profile" className="sb-user">
-            <div className="sb-avatar">{user.username[0].toUpperCase()}</div>
+            <div className="sb-avatar">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={user.username} />
+              ) : (
+                user.username[0].toUpperCase()
+              )}
+            </div>
             <div className="sb-user-info">
               <div className="sb-username">@{user.username}</div>
               <div className="sb-plan">{user.plan === 'PRO' ? 'Pro' : user.plan === 'PLATINUM' ? 'Platinum' : 'Free'} · {user.tokenBalance ?? 0} ток.</div>
