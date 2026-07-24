@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import '../styles/daw.css';
 import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
@@ -82,7 +82,7 @@ interface TrackEq {
   high: number;
 }
 
-/** Full vocal/audio insert FX вЂ” see ../lib/vocalFx */
+/** Full vocal/audio insert FX — see ../lib/vocalFx */
 
 interface Track {
   id: string;
@@ -103,10 +103,10 @@ interface Track {
 }
 
 const EQ_PRESETS: { id: string; name: string; low: number; mid: number; high: number }[] = [
-  { id: 'flat', name: 'Р¤Р»СЌС‚', low: 0, mid: 0, high: 0 },
-  { id: 'bass', name: 'РњРѕС‰РЅС‹Р№ Р±Р°СЃ', low: 9, mid: -2, high: 1 },
-  { id: 'bright', name: 'РЇСЂРєРёР№ РІРµСЂС…', low: -1, mid: 1, high: 8 },
-  { id: 'vocal', name: 'Р’РѕРєР°Р»', low: -3, mid: 5, high: 2 },
+  { id: 'flat', name: 'Флэт', low: 0, mid: 0, high: 0 },
+  { id: 'bass', name: 'Мощный бас', low: 9, mid: -2, high: 1 },
+  { id: 'bright', name: 'Яркий верх', low: -1, mid: 1, high: 8 },
+  { id: 'vocal', name: 'Вокал', low: -3, mid: 5, high: 2 },
   { id: 'lofi', name: 'Lo-Fi', low: 4, mid: -6, high: -8 },
 ];
 
@@ -125,7 +125,7 @@ function normalizeTrackEq(eq: Partial<TrackEq> | undefined): TrackEq {
 const PROJECT_STORAGE_PREFIX = 'aura_pro_sequencer_v2';
 const LEGACY_PROJECT_STORAGE_KEY = 'aura_pro_sequencer_v2';
 const MAX_SAMPLE_BYTES = 6 * 1024 * 1024;
-/** MP3 encoder/decoder delay вЂ” silent gap at the start (~20ms / 0.02s) */
+/** MP3 encoder/decoder delay — silent gap at the start (~20ms / 0.02s) */
 const MP3_START_TRIM_SEC = 0.02;
 
 function looksLikeMp3(fileOrBytes: File | ArrayBuffer | string): boolean {
@@ -211,7 +211,7 @@ function readSavedProject(): string | null {
       localStorage.setItem(key, legacy);
       localStorage.removeItem(LEGACY_PROJECT_STORAGE_KEY);
     } catch {
-      // storage full вЂ” still return the legacy data for this session
+      // storage full — still return the legacy data for this session
     }
     return legacy;
   }
@@ -240,7 +240,7 @@ function openSampleDb(): Promise<IDBDatabase> {
       reject(req.error);
     };
     req.onblocked = () => {
-      console.warn('IndexedDB open blocked вЂ” close other tabs with MIDI editor');
+      console.warn('IndexedDB open blocked — close other tabs with MIDI editor');
     };
   });
   return sampleDbPromise;
@@ -336,7 +336,7 @@ type PlaylistDragState = {
   }>;
 };
 
-// ================= РЎРўРР›Р =================
+// ================= СТИЛИ =================
 const STUDIO_CSS = `
 
 .midi-studio {
@@ -669,7 +669,7 @@ const STUDIO_CSS = `
 }
 `;
 
-// ================= РљРћРќРЎРўРђРќРўР« =================
+// ================= КОНСТАНТЫ =================
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const NOTE_HEIGHT = 16;
 const DEFAULT_PIXELS_PER_SECOND = 200;
@@ -764,7 +764,7 @@ function quantizeMinBeat() {
   return 0.5;
 }
 
-/** Fine trim step = 1/10 of current quantize cell (Alt / вЊҐ Option) */
+/** Fine trim step = 1/10 of current quantize cell (Alt / ⌥ Option) */
 const FINE_GRID_DIVISOR = 10;
 
 function snapBeats(value: number, grid: number, fine = false): number {
@@ -887,7 +887,7 @@ class AudioEngine {
     };
   }
 
-  /** Hard-stop everything currently sounding (play в†’ stop). */
+  /** Hard-stop everything currently sounding (play → stop). */
   stopAll() {
     const now = this.ctx.currentTime;
     for (const source of this.activeSources) {
@@ -947,7 +947,7 @@ class AudioEngine {
     const id = persistedId || crypto.randomUUID();
     this.samples.set(id, audioBuffer);
     await saveSampleToDb(id, forStore);
-    // Verify write вЂ” if this fails, sample won't survive refresh
+    // Verify write — if this fails, sample won't survive refresh
     const ok = await sampleExistsInDb(id);
     if (!ok) {
       throw new Error('Sample failed to persist to IndexedDB');
@@ -1373,7 +1373,7 @@ function projectForStorage(project: MIDIProject): Record<string, unknown> {
   return JSON.parse(JSON.stringify({ ...project, isPlaying: false })) as Record<string, unknown>;
 }
 
-// ================= Р“Р›РђР’РќР«Р™ РљРћРњРџРћРќР•РќРў =================
+// ================= ГЛАВНЫЙ КОМПОНЕНТ =================
 function MIDISequencer() {
   const navigate = useNavigate();
   const { billing } = useBilling();
@@ -1388,7 +1388,7 @@ function MIDISequencer() {
   const [libraryError, setLibraryError] = useState('');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [playheadTime, setPlayheadTime] = useState(0);
-  const [zoom, setZoom] = useState(48); // px per beat вЂ” 5 bars в‰€ fits on screen, zoom to enlarge
+  const [zoom, setZoom] = useState(48); // px per beat — 5 bars в‰€ fits on screen, zoom to enlarge
   const [editorView, setEditorView] = useState<'piano' | 'playlist'>('piano');
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
@@ -1583,7 +1583,7 @@ function MIDISequencer() {
       setProjects(list);
     } catch (error) {
       console.error('Failed to load MIDI projects:', error);
-      setLibraryError('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РїСЂРѕРµРєС‚С‹. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ.');
+      setLibraryError('Не удалось загрузить проекты. Проверьте соединение и повторите.');
     } finally {
       setProjectsLoading(false);
     }
@@ -1603,7 +1603,7 @@ function MIDISequencer() {
     const current = projectToSave || latestProjectRef.current;
     if (!current) return false;
     setSaveStatus('saving');
-    const normalized = { ...current, name: current.name.trim() || 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ' };
+    const normalized = { ...current, name: current.name.trim() || 'Без названия' };
     const payload = projectForStorage(normalized);
     const serializedPayload = JSON.stringify(payload);
     try {
@@ -1692,7 +1692,7 @@ function MIDISequencer() {
         }
         const buf = await eng.ensureSample(id);
         if (!buf) {
-          // Do NOT strip the sample id вЂ” keep it so a later retry / re-upload can fix it
+          // Do NOT strip the sample id — keep it so a later retry / re-upload can fix it
           console.warn('Sample not restored yet (will retry on play):', id);
         }
       }
@@ -1723,7 +1723,7 @@ function MIDISequencer() {
     return () => document.removeEventListener('visibilitychange', saveWhenHidden);
   }, [saveProjectNow]);
 
-  // Р“Р›РћР‘РђР›Р¬РќР«Р• РћР‘Р РђР‘РћРўР§РРљР Р”Р›РЇ РџР•Р Р•РўРђРЎРљРР’РђРќРРЇ
+  // ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ДЛЯ ПЕРЕТАСКИВАНИЯ
   useEffect(() => {
     if (!isDragging) return;
 
@@ -1732,7 +1732,7 @@ function MIDISequencer() {
       if (!dragging) return;
       if (!project) return;
 
-      const fine = e.altKey; // Alt on Win/Linux, вЊҐ Option on Mac
+      const fine = e.altKey; // Alt on Win/Linux, ⌥ Option on Mac
       const deltaX = e.clientX - dragging.startX;
       const deltaY = e.clientY - dragging.startY;
       const beatDelta = deltaX / zoom;
@@ -1794,7 +1794,7 @@ function MIDISequencer() {
     const handleMouseMove = (e: MouseEvent) => {
       const dragging = playlistDragRef.current;
       if (!dragging) return;
-      const fine = e.altKey; // Alt on Win/Linux, вЊҐ Option on Mac
+      const fine = e.altKey; // Alt on Win/Linux, ⌥ Option on Mac
       setProject(prev => {
         if (!prev) return prev;
         const deltaX = e.clientX - dragging.startX;
@@ -1898,7 +1898,7 @@ function MIDISequencer() {
   };
 
   const createNewProject = async () => {
-    const name = newProjectName.trim() || `РќРѕРІС‹Р№ РїСЂРѕРµРєС‚ ${projects.length + 1}`;
+    const name = newProjectName.trim() || `Новый проект ${projects.length + 1}`;
     setProjectActionLoading(true);
     setLibraryError('');
     try {
@@ -1911,7 +1911,7 @@ function MIDISequencer() {
       setSaveStatus('saved');
     } catch (error) {
       console.error('Failed to create MIDI project:', error);
-      setLibraryError('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РїСЂРѕРµРєС‚.');
+      setLibraryError('Не удалось создать проект.');
     } finally {
       setProjectActionLoading(false);
     }
@@ -1933,14 +1933,14 @@ function MIDISequencer() {
       setSaveStatus(localDraft ? 'saving' : 'saved');
     } catch (error) {
       console.error('Failed to open MIDI project:', error);
-      setLibraryError('РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РїСЂРѕРµРєС‚.');
+      setLibraryError('Не удалось открыть проект.');
     } finally {
       setProjectActionLoading(false);
     }
   };
 
   const deleteProject = async (item: MidiProjectSummary) => {
-    if (!window.confirm(`РЈРґР°Р»РёС‚СЊ РїСЂРѕРµРєС‚ В«${item.name}В»? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ.`)) return;
+    if (!window.confirm(`Удалить проект «${item.name}»? Это действие нельзя отменить.`)) return;
     setProjectActionLoading(true);
     try {
       await midiProjectsApi.remove(item.id);
@@ -1952,7 +1952,7 @@ function MIDISequencer() {
       }
     } catch (error) {
       console.error('Failed to delete MIDI project:', error);
-      setLibraryError('РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РїСЂРѕРµРєС‚.');
+      setLibraryError('Не удалось удалить проект.');
     } finally {
       setProjectActionLoading(false);
     }
@@ -1972,7 +1972,7 @@ function MIDISequencer() {
   const saveRenameProject = async (item: MidiProjectSummary) => {
     const nextName = renameDraft.trim().slice(0, 100);
     if (!nextName) {
-      setLibraryError('РќР°Р·РІР°РЅРёРµ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј.');
+      setLibraryError('Название не может быть пустым.');
       return;
     }
     if (nextName === item.name) {
@@ -1991,7 +1991,7 @@ function MIDISequencer() {
       cancelRenameProject();
     } catch (error) {
       console.error('Failed to rename MIDI project:', error);
-      setLibraryError('РќРµ СѓРґР°Р»РѕСЃСЊ РїРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ РїСЂРѕРµРєС‚.');
+      setLibraryError('Не удалось переименовать проект.');
     } finally {
       setProjectActionLoading(false);
     }
@@ -2090,7 +2090,7 @@ function MIDISequencer() {
         if (soloExists && !track.solo) return;
 
         const scheduleNoteAt = (note: Note, absoluteStart: number) => {
-          // Notes past the loop seam belong to the NEXT cycle вЂ” otherwise first wrap skips
+          // Notes past the loop seam belong to the NEXT cycle — otherwise first wrap skips
           // them because they were already marked during the opening of this cycle.
           const crossesLoop = wrappedWindow && absoluteStart < windowStart;
           const noteCycle = crossesLoop ? cycle + 1 : cycle;
@@ -2135,7 +2135,7 @@ function MIDISequencer() {
         }
       });
 
-      // Audio loop clips (dropped mp3/wav) вЂ” song mode only
+      // Audio loop clips (dropped mp3/wav) — song mode only
       if (snapshot.transportMode === 'song') {
         snapshot.arrangement.forEach(clip => {
           if (clip.type !== 'audio' || !clip.sampleId) return;
@@ -2159,7 +2159,7 @@ function MIDISequencer() {
             }
           };
 
-          // 1) Clip start enters lookahead вЂ” play from clip beginning
+          // 1) Clip start enters lookahead — play from clip beginning
           const crossesLoop = wrappedWindow && clipStart < windowStart;
           const clipCycle = crossesLoop ? cycle + 1 : cycle;
           const startKey = `clip-${clip.id}-c${clipCycle}-start`;
@@ -2179,7 +2179,7 @@ function MIDISequencer() {
             return;
           }
 
-          // 2) After scrub/seek: playhead is inside the clip вЂ” start mid-sample
+          // 2) After scrub/seek: playhead is inside the clip — start mid-sample
           const midKey = `clip-${clip.id}-c${cycle}-mid`;
           const midStartKey = `clip-${clip.id}-c${cycle}-start`;
           if (
@@ -2255,7 +2255,7 @@ function MIDISequencer() {
   }, [getEngine]);
 
   const bounceProjectToWav = useCallback(async (fileName: string): Promise<File> => {
-    if (!project) throw new Error('РќРµС‚ Р°РєС‚РёРІРЅРѕРіРѕ РїСЂРѕРµРєС‚Р°');
+    if (!project) throw new Error('Нет активного проекта');
     const eng = await ensureAudio();
     await Promise.all([
       ...project.tracks
@@ -2268,12 +2268,12 @@ function MIDISequencer() {
 
     const timelineBeats = getTimelineLength(project);
     if (timelineBeats <= 0.25) {
-      throw new Error('Р”РѕР±Р°РІСЊС‚Рµ РЅРѕС‚С‹ РёР»Рё РєР»РёРїС‹, РїСЂРµР¶РґРµ С‡РµРј РїСѓР±Р»РёРєРѕРІР°С‚СЊ');
+      throw new Error('Добавьте ноты или клипы, прежде чем публиковать');
     }
 
     const mime = pickRecorderMime();
     if (!mime || typeof MediaRecorder === 'undefined') {
-      throw new Error('Р‘СЂР°СѓР·РµСЂ РЅРµ СѓРјРµРµС‚ РїРёСЃР°С‚СЊ Р°СѓРґРёРѕ. РџРѕРїСЂРѕР±СѓР№С‚Рµ Chrome / Edge.');
+      throw new Error('Браузер не умеет писать аудио. Попробуйте Chrome / Edge.');
     }
 
     const dest = eng.ctx.createMediaStreamDestination();
@@ -2296,12 +2296,12 @@ function MIDISequencer() {
       const timeoutMs = Math.min(12 * 60 * 1000, Math.ceil((timelineBeats / (project.bpm / 60)) * 1000) + 8000);
       const failTimer = window.setTimeout(() => {
         try { recorder.stop(); } catch { /* */ }
-        reject(new Error('Р РµРЅРґРµСЂ СЃР»РёС€РєРѕРј РґРѕР»РіРёР№ вЂ” СЃРѕРєСЂР°С‚РёС‚Рµ Р°СЂР°РЅР¶РёСЂРѕРІРєСѓ'));
+        reject(new Error('Рендер слишком долгий — сократите аранжировку'));
       }, timeoutMs);
 
       recorder.onerror = () => {
         window.clearTimeout(failTimer);
-        reject(new Error('РћС€РёР±РєР° Р·Р°РїРёСЃРё Р°СѓРґРёРѕ'));
+        reject(new Error('Ошибка записи аудио'));
       };
       recorder.onstop = () => {
         window.clearTimeout(failTimer);
@@ -2314,7 +2314,7 @@ function MIDISequencer() {
           try {
             if (recorder.state === 'recording') recorder.stop();
           } catch {
-            reject(new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РѕСЃС‚Р°РЅРѕРІРёС‚СЊ Р·Р°РїРёСЃСЊ'));
+            reject(new Error('Не удалось остановить запись'));
           }
         },
       };
@@ -2332,7 +2332,7 @@ function MIDISequencer() {
       } catch (e) {
         bounceModeRef.current = null;
         window.clearTimeout(failTimer);
-        reject(e instanceof Error ? e : new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РЅР°С‡Р°С‚СЊ СЂРµРЅРґРµСЂ'));
+        reject(e instanceof Error ? e : new Error('Не удалось начать рендер'));
       }
     });
 
@@ -2349,7 +2349,7 @@ function MIDISequencer() {
     }
 
     if (recorded.size < 1000) {
-      throw new Error('РџСѓСЃС‚РѕР№ СЂРµРЅРґРµСЂ вЂ” РїСЂРѕРІРµСЂСЊС‚Рµ, С‡С‚Рѕ РІ РїСЂРѕРµРєС‚Рµ РµСЃС‚СЊ Р·РІСѓРє');
+      throw new Error('Пустой рендер — проверьте, что в проекте есть звук');
     }
 
     return mediaRecorderBlobToWavFile(recorded, eng.ctx, fileName);
@@ -2359,22 +2359,22 @@ function MIDISequencer() {
     if (!project || publishBusy) return;
     setPublishBusy(true);
     setPublishError('');
-    setPublishProgress('Р РµРЅРґРµСЂ Р±РёС‚Р°вЂ¦ СЌС‚Рѕ Р·Р°Р№РјС‘С‚ РґР»РёРЅСѓ С‚СЂРµРєР°');
+    setPublishProgress('Рендер бита… это займёт длину трека');
     try {
       stopPlayback();
       const audioFile = await bounceProjectToWav(opts.title);
-      setPublishProgress('Р—Р°РіСЂСѓР·РєР° РЅР° СЃРµСЂРІРµСЂвЂ¦');
+      setPublishProgress('Загрузка на сервер…');
       const files: File[] = [];
       if (opts.cover) files.push(opts.cover);
       files.push(audioFile);
       const content = `${opts.title}\n#${BEAT_POST_TAG}`;
       await postsApi.createPost(content, files);
-      setPublishProgress('Р“РѕС‚РѕРІРѕ');
+      setPublishProgress('Готово');
       setPublishOpen(false);
       navigate('/projects');
     } catch (e: unknown) {
       console.error(e);
-      setPublishError(e instanceof Error ? e.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСѓР±Р»РёРєРѕРІР°С‚СЊ');
+      setPublishError(e instanceof Error ? e.message : 'Не удалось опубликовать');
     } finally {
       setPublishBusy(false);
       setPublishProgress('');
@@ -2398,7 +2398,7 @@ function MIDISequencer() {
     await loadProjectLibrary();
   }, [project, stopPlayback, saveProjectNow, loadProjectLibrary]);
 
-  // РљР›РРљ РџРћ Р“Р РР”РЈ - Р”РћР‘РђР’Р›Р•РќРР•/РЈР”РђР›Р•РќРР• РќРћРў
+  // КЛИК ПО ГРИДУ - ДОБАВЛЕНИЕ/УДАЛЕНИЕ НОТ
   const handleNoteContextDelete = useCallback((noteId: string) => {
     commitProject(prev => ({
       ...prev,
@@ -2713,7 +2713,7 @@ function MIDISequencer() {
       const activeTrack = prev.tracks.find(t => t.id === prev.activeTrackId);
       if (!activeTrack) return prev;
 
-      // РџСЂРѕРІРµСЂСЏРµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ РЅРѕС‚Сѓ
+      // Проверяем существующую ноту
       const existingNote = activeTrack.notes.find(n => 
         n.patternId === activePattern.id &&
         n.pitch === pitch && 
@@ -2752,7 +2752,7 @@ function MIDISequencer() {
           if (buf) {
             eng.playSampleBuffer(buf, 0, (trackSnap.volume || 0.9) * 0.9, noteSeconds, pitchSnap, trackSnap.eq);
           }
-          // No synth fallback вЂ” missing sample stays silent until restored/re-uploaded
+          // No synth fallback — missing sample stays silent until restored/re-uploaded
         } else {
           eng.playNote(trackSnap, pitchSnap, 0, noteSeconds);
         }
@@ -2769,7 +2769,7 @@ function MIDISequencer() {
     });
   }, [project, isDragging, zoom, ensureAudio, quantizeGrid, snapToGrid, getActivePattern, commitProject]);
 
-  // РќРђР§РђР›Рћ РџР•Р Р•РўРђРЎРљРР’РђРќРРЇ РќРћРўР«
+  // НАЧАЛО ПЕРЕТАСКИВАНИЯ НОТЫ
   const handleNoteMouseDown = useCallback((note: Note, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -2789,7 +2789,7 @@ function MIDISequencer() {
     setSelectedNotes(prev => e.shiftKey ? (prev.includes(note.id) ? prev : [...prev, note.id]) : [note.id]);
   }, [project, pushHistory]);
 
-  // РќРђР§РђР›Рћ Р РђРЎРЁРР Р•РќРРЇ РќРћРўР«
+  // НАЧАЛО РАСШИРЕНИЯ НОТЫ
   const handleResizeMouseDown = useCallback((note: Note, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -2878,7 +2878,7 @@ function MIDISequencer() {
       const buffer = eng.samples.get(sid);
       if (buffer) eng.playSampleBuffer(buffer, 0, 0.9);
 
-      // Keep other one-shots audible вЂ” do not force Solo on the new track
+      // Keep other one-shots audible — do not force Solo on the new track
       commitProject(prev => ({
         ...prev,
         tracks: [...prev.tracks, newTrack],
@@ -2895,8 +2895,8 @@ function MIDISequencer() {
       console.error('Failed to import audio sample', e);
       window.alert(
         e instanceof Error && e.message === 'SAMPLE_TOO_LARGE'
-          ? 'Р¤Р°Р№Р» СЃР»РёС€РєРѕРј Р±РѕР»СЊС€РѕР№. РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·РјРµСЂ СЃСЌРјРїР»Р° вЂ” 6 РњР‘.'
-          : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃСЌРјРїР» РЅР° СЃРµСЂРІРµСЂ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РґСЂСѓРіРѕР№ С„Р°Р№Р».',
+          ? 'Файл слишком большой. Максимальный размер сэмпла — 6 МБ.'
+          : 'Не удалось загрузить сэмпл на сервер. Попробуйте другой файл.',
       );
     }
   }, [project, uploadAndLoadSample, commitProject, ensureAudio]);
@@ -3070,10 +3070,10 @@ function MIDISequencer() {
       }
     }
     if (tooLarge.length > 0) {
-      window.alert(`Р¤Р°Р№Р»С‹ Р±РѕР»СЊС€Рµ 6 РњР‘ РЅРµ РґРѕР±Р°РІР»РµРЅС‹:\n${tooLarge.join('\n')}`);
+      window.alert(`Файлы больше 6 МБ не добавлены:\n${tooLarge.join('\n')}`);
     }
     if (failed.length > 0) {
-      window.alert(`РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РЅР° СЃРµСЂРІРµСЂ:\n${failed.join('\n')}`);
+      window.alert(`Не удалось загрузить на сервер:\n${failed.join('\n')}`);
     }
     if (newClips.length === 0) return;
     commitProject(prev => ({
@@ -3163,7 +3163,7 @@ function MIDISequencer() {
   }, [stopMicLevelMeter, disconnectMicMonitor]);
 
   const openMicStream = useCallback(async (deviceId?: string) => {
-    // Disable browser "enhancements" вЂ” they add 80вЂ“200ms latency and throw vocals off the grid.
+    // Disable browser "enhancements" — they add 80вЂ“200ms latency and throw vocals off the grid.
     const constraints: MediaStreamConstraints = {
       audio: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
@@ -3174,7 +3174,7 @@ function MIDISequencer() {
       },
     };
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    // Labels appear only after permission вЂ” refresh list
+    // Labels appear only after permission — refresh list
     await refreshMicDevices();
     const eng = await ensureAudio();
     await eng.resume();
@@ -3191,7 +3191,7 @@ function MIDISequencer() {
     const wasRecording = isRecording;
     const wasArmed = micArmed || Boolean(recordStreamRef.current);
     if (wasRecording) {
-      window.alert('РЎРЅР°С‡Р°Р»Р° РѕСЃС‚Р°РЅРѕРІРёС‚Рµ Р·Р°РїРёСЃСЊ, РїРѕС‚РѕРј СЃРјРµРЅРёС‚Рµ РјРёРєСЂРѕС„РѕРЅ.');
+      window.alert('Сначала остановите запись, потом смените микрофон.');
       return;
     }
     if (wasArmed) {
@@ -3200,7 +3200,7 @@ function MIDISequencer() {
         await openMicStream(deviceId || undefined);
       } catch (error) {
         console.error(error);
-        window.alert('РќРµ СѓРґР°Р»РѕСЃСЊ РїРµСЂРµРєР»СЋС‡РёС‚СЊ РјРёРєСЂРѕС„РѕРЅ.');
+        window.alert('Не удалось переключить микрофон.');
       }
     }
   }, [isRecording, micArmed, closeMicStream, openMicStream]);
@@ -3227,7 +3227,7 @@ function MIDISequencer() {
       await openMicStream(selectedMicId || undefined);
     } catch (error) {
       console.error('Microphone access denied:', error);
-      window.alert('РќРµС‚ РґРѕСЃС‚СѓРїР° Рє РјРёРєСЂРѕС„РѕРЅСѓ. Р Р°Р·СЂРµС€РёС‚Рµ РґРѕСЃС‚СѓРї РІ РЅР°СЃС‚СЂРѕР№РєР°С… Р±СЂР°СѓР·РµСЂР°.');
+      window.alert('Нет доступа к микрофону. Разрешите доступ в настройках браузера.');
     }
   }, [openMicStream, selectedMicId, closeMicStream]);
 
@@ -3258,7 +3258,7 @@ function MIDISequencer() {
       stream = await openMicStream(selectedMicId || undefined);
     } catch (error) {
       console.error('Microphone access denied:', error);
-      window.alert('РќРµС‚ РґРѕСЃС‚СѓРїР° Рє РјРёРєСЂРѕС„РѕРЅСѓ. Р Р°Р·СЂРµС€РёС‚Рµ РґРѕСЃС‚СѓРї РІ РЅР°СЃС‚СЂРѕР№РєР°С… Р±СЂР°СѓР·РµСЂР°.');
+      window.alert('Нет доступа к микрофону. Разрешите доступ в настройках браузера.');
       return;
     }
 
@@ -3305,11 +3305,11 @@ function MIDISequencer() {
         stopPlayback();
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
         if (blob.size === 0) {
-          window.alert('РџСѓСЃС‚Р°СЏ Р·Р°РїРёСЃСЊ вЂ” РїСЂРѕРІРµСЂСЊС‚Рµ РјРёРєСЂРѕС„РѕРЅ Рё СѓСЂРѕРІРµРЅСЊ.');
+          window.alert('Пустая запись — проверьте микрофон и уровень.');
           return;
         }
         if (blob.size > MAX_SAMPLE_BYTES) {
-          window.alert('Р—Р°РїРёСЃСЊ РїРѕР»СѓС‡РёР»Р°СЃСЊ Р±РѕР»СЊС€Рµ 6 РњР‘ вЂ” СЃРѕРєСЂР°С‚РёС‚Рµ РґСѓР±Р»СЊ.');
+          window.alert('Запись получилась больше 6 МБ — сократите дубль.');
           return;
         }
         const extension = (recorder.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
@@ -3341,7 +3341,7 @@ function MIDISequencer() {
             lengthBeats,
             type: 'audio',
             sampleId,
-            name: `Р’РѕРєР°Р» ${takeNumber}`,
+            name: `Вокал ${takeNumber}`,
             sampleSeconds: trimmedDuration,
             isVocal: true,
             gain: 1,
@@ -3361,7 +3361,7 @@ function MIDISequencer() {
           setVocalPanelClipId(clip.id);
         } catch (error) {
           console.error('Failed to save vocal recording:', error);
-          window.alert('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ Р·Р°РїРёСЃСЊ.');
+          window.alert('Не удалось сохранить запись.');
         }
       })();
     };
@@ -3446,7 +3446,7 @@ function MIDISequencer() {
         }
       } catch (err) {
         console.error('Failed to import project:', err);
-        setLibraryError('РќРµ СѓРґР°Р»РѕСЃСЊ РёРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ РїСЂРѕРµРєС‚.');
+        setLibraryError('Не удалось импортировать проект.');
       } finally {
         setProjectActionLoading(false);
         e.target.value = '';
@@ -3649,22 +3649,22 @@ function MIDISequencer() {
             <p className="midi-lib-brand">SoundLab</p>
             <h1 className="midi-lib-title">Projects</h1>
             <p className="midi-lib-lead">
-              Р‘РёР±Р»РёРѕС‚РµРєР° Р±РёС‚РѕРІ РІ Р°РєРєР°СѓРЅС‚Рµ. РћС‚РєСЂРѕР№С‚Рµ РїСЂРѕРµРєС‚ РёР»Рё СЃРѕР·РґР°Р№С‚Рµ РЅРѕРІС‹Р№ вЂ” Р°РІС‚РѕСЃРѕС…СЂР°РЅРµРЅРёРµ РІСЃРµРіРґР° РІРєР»СЋС‡РµРЅРѕ.
+              Библиотека битов в аккаунте. Откройте проект или создайте новый — автосохранение всегда включено.
             </p>
 
             <div className="midi-lib-stats">
               <div className="midi-lib-stat">
-                <p className="midi-lib-stat-label">Р’СЃРµРіРѕ</p>
-                <p className="midi-lib-stat-value">{projectsLoading ? 'вЂ”' : projects.length}</p>
+                <p className="midi-lib-stat-label">Всего</p>
+                <p className="midi-lib-stat-value">{projectsLoading ? '—' : projects.length}</p>
               </div>
               <div className="midi-lib-stat">
-                <p className="midi-lib-stat-label">Р›РёРјРёС‚ СЃРµРјРїР»Р°</p>
+                <p className="midi-lib-stat-label">Лимит семпла</p>
                 <p className="midi-lib-stat-value" style={{ fontSize: 22 }}>6 MB</p>
               </div>
             </div>
 
             <div className="midi-lib-create">
-              <p className="midi-lib-create-label">РќРѕРІС‹Р№ РїСЂРѕРµРєС‚</p>
+              <p className="midi-lib-create-label">Новый проект</p>
               <input
                 className="midi-lib-input"
                 value={newProjectName}
@@ -3673,7 +3673,7 @@ function MIDISequencer() {
                   if (event.key === 'Enter' && !projectActionLoading) void createNewProject();
                 }}
                 maxLength={100}
-                placeholder="РќР°Р·РІР°РЅРёРµ"
+                placeholder="Название"
               />
               <div className="midi-lib-actions">
                 <button
@@ -3683,11 +3683,11 @@ function MIDISequencer() {
                   disabled={projectActionLoading}
                 >
                   <Plus size={15} />
-                  РЎРѕР·РґР°С‚СЊ
+                  Создать
                 </button>
                 <label className="midi-lib-btn" style={{ margin: 0 }}>
                   <Upload size={15} />
-                  РРјРїРѕСЂС‚
+                  Импорт
                   <input type="file" accept=".json" onChange={importProject} style={{ display: 'none' }} />
                 </label>
               </div>
@@ -3697,15 +3697,15 @@ function MIDISequencer() {
           <section className="midi-lib-main">
             <div className="midi-lib-main-head">
               <div>
-                <h2 className="midi-lib-main-title">Р’Р°С€Рё РїСЂРѕРµРєС‚С‹</h2>
-                <p className="midi-lib-main-sub">РќР°Р¶РјРёС‚Рµ В«РћС‚РєСЂС‹С‚СЊВ» РёР»Рё РїРµСЂРµРёРјРµРЅСѓР№С‚Рµ С‡РµСЂРµР· РєР°СЂР°РЅРґР°С€</p>
+                <h2 className="midi-lib-main-title">Ваши проекты</h2>
+                <p className="midi-lib-main-sub">Нажмите «Открыть» или переименуйте через карандаш</p>
               </div>
               <button
                 type="button"
                 className="midi-lib-btn midi-lib-btn-icon"
                 onClick={() => void loadProjectLibrary()}
                 disabled={projectsLoading}
-                title="РћР±РЅРѕРІРёС‚СЊ"
+                title="Обновить"
               >
                 <RefreshCw size={16} />
               </button>
@@ -3714,12 +3714,12 @@ function MIDISequencer() {
             {libraryError && <div className="midi-lib-error">{libraryError}</div>}
 
             {projectsLoading ? (
-              <div className="midi-lib-loading">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>
+              <div className="midi-lib-loading">Загрузка…</div>
             ) : projects.length === 0 ? (
               <div className="midi-lib-empty">
                 <FolderOpen size={30} strokeWidth={1.5} />
-                <h2>РџРѕРєР° РїСѓСЃС‚Рѕ</h2>
-                <p>РЎРѕР·РґР°Р№С‚Рµ РїРµСЂРІС‹Р№ РїСЂРѕРµРєС‚ СЃР»РµРІР° вЂ” РѕРЅ РїРѕСЏРІРёС‚СЃСЏ РІ СЌС‚РѕР№ СЃРµС‚РєРµ.</p>
+                <h2>Пока пусто</h2>
+                <p>Создайте первый проект слева — он появится в этой сетке.</p>
               </div>
             ) : (
               <div className="midi-lib-grid">
@@ -3736,7 +3736,7 @@ function MIDISequencer() {
                             <button
                               type="button"
                               className="midi-lib-icon-btn"
-                              title="РџРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ"
+                              title="Переименовать"
                               onClick={() => beginRenameProject(item)}
                             >
                               <Pencil size={14} />
@@ -3745,7 +3745,7 @@ function MIDISequencer() {
                           <button
                             type="button"
                             className="midi-lib-icon-btn danger"
-                            title="РЈРґР°Р»РёС‚СЊ"
+                            title="Удалить"
                             onClick={() => void deleteProject(item)}
                           >
                             <Trash2 size={14} />
@@ -3774,7 +3774,7 @@ function MIDISequencer() {
                               disabled={projectActionLoading}
                               onClick={() => void saveRenameProject(item)}
                             >
-                              РЎРѕС…СЂР°РЅРёС‚СЊ
+                              Сохранить
                             </button>
                             <button
                               type="button"
@@ -3782,14 +3782,14 @@ function MIDISequencer() {
                               style={{ height: 34 }}
                               onClick={cancelRenameProject}
                             >
-                              РћС‚РјРµРЅР°
+                              Отмена
                             </button>
                           </div>
                         </div>
                       ) : (
                         <div>
                           <h3 className="midi-lib-card-name" title={item.name}>{item.name}</h3>
-                          <p className="midi-lib-card-meta">РР·РјРµРЅС‘РЅ {formatUpdated(item.updatedAt)}</p>
+                          <p className="midi-lib-card-meta">Изменён {formatUpdated(item.updatedAt)}</p>
                         </div>
                       )}
 
@@ -3800,7 +3800,7 @@ function MIDISequencer() {
                           disabled={projectActionLoading}
                           onClick={() => void openProject(item.id)}
                         >
-                          РћС‚РєСЂС‹С‚СЊ
+                          Открыть
                         </button>
                       )}
                     </article>
@@ -3809,7 +3809,7 @@ function MIDISequencer() {
               </div>
             )}
 
-            <p className="midi-lib-foot">РђРІС‚РѕСЃРѕС…СЂР°РЅРµРЅРёРµ В· РџСЂРѕРµРєС‚С‹ РїСЂРёРІСЏР·Р°РЅС‹ Рє Р°РєРєР°СѓРЅС‚Сѓ</p>
+            <p className="midi-lib-foot">Автосохранение · Проекты привязаны к аккаунту</p>
           </section>
         </div>
       </div>
@@ -3835,9 +3835,9 @@ function MIDISequencer() {
               value={project.name}
               onChange={event => setProject({ ...project, name: event.target.value.slice(0, 100) })}
               onBlur={() => {
-                if (!project.name.trim()) setProject({ ...project, name: 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ' });
+                if (!project.name.trim()) setProject({ ...project, name: 'Без названия' });
               }}
-              title="РќР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°"
+              title="Название проекта"
             />
           </div>
 
@@ -3860,7 +3860,7 @@ function MIDISequencer() {
               <button
                 type="button"
                 className={`st-chip ${project.metronomeEnabled ? 'on' : ''}`}
-                title={project.metronomeEnabled ? 'Р’С‹РєР»СЋС‡РёС‚СЊ РјРµС‚СЂРѕРЅРѕРј' : 'Р’РєР»СЋС‡РёС‚СЊ РјРµС‚СЂРѕРЅРѕРј'}
+                title={project.metronomeEnabled ? 'Выключить метроном' : 'Включить метроном'}
                 onClick={() => commitProject(prev => ({ ...prev, metronomeEnabled: !prev.metronomeEnabled }))}
               >
                 <Activity size={12} />
@@ -3884,7 +3884,7 @@ function MIDISequencer() {
                     <option key={pattern.id} value={pattern.id}>{pattern.name}</option>
                   ))}
                 </select>
-                <button type="button" className="st-chip ghost" onClick={createPattern} title="РќРѕРІС‹Р№ РїР°С‚С‚РµСЂРЅ">+</button>
+                <button type="button" className="st-chip ghost" onClick={createPattern} title="Новый паттерн">+</button>
               </div>
             </div>
 
@@ -3912,7 +3912,7 @@ function MIDISequencer() {
                 {Array.from(new Set([...PATTERN_LENGTH_OPTIONS, activePattern.length]))
                   .sort((a, b) => a - b)
                   .map(len => (
-                    <option key={len} value={len}>{len} С‚Р°РєС‚Р° (1вЂ“{len + 1})</option>
+                    <option key={len} value={len}>{len} такта (1вЂ“{len + 1})</option>
                   ))}
               </select>
             </div>
@@ -3923,14 +3923,14 @@ function MIDISequencer() {
                 className="st-select"
                 value={quantizeGrid}
                 onChange={e => setQuantizeGrid(parseFloat(e.target.value))}
-                title="Р—Р°Р¶РјРё вЊҐ Option (Mac) / Alt (Win) РїСЂРё РѕР±СЂРµР·РєРµ вЂ” С€Р°Рі 1/10 РєР»РµС‚РєРё"
+                title="Зажми ⌥ Option (Mac) / Alt (Win) при обрезке — шаг 1/10 клетки"
               >
-                <option value={0.5}>1/8 (8 РІ С‚Р°РєС‚Рµ)</option>
-                <option value={1}>1/4 (4 РІ С‚Р°РєС‚Рµ)</option>
+                <option value={0.5}>1/8 (8 в такте)</option>
+                <option value={1}>1/4 (4 в такте)</option>
                 <option value={0.25}>1/16</option>
                 <option value={0.125}>1/32</option>
               </select>
-              <span className="st-hint">вЊҐ/Alt = С‚РѕС‡РЅРѕ</span>
+              <span className="st-hint">⌥/Alt = точно</span>
             </div>
 
             <button type="button" className="st-chip" onClick={duplicatePatternNotes} title="Duplicate all notes to next pattern block">
@@ -3973,13 +3973,13 @@ function MIDISequencer() {
               setPublishOpen(true);
             }}
             disabled={publishBusy}
-            title="Р РµРЅРґРµСЂ Рё РїСѓР±Р»РёРєР°С†РёСЏ РЅР° Projects"
+            title="Рендер и публикация на Projects"
           >
-            <Share2 size={13} /> РћРїСѓР±Р»РёРєРѕРІР°С‚СЊ
+            <Share2 size={13} /> Опубликовать
           </button>
           <span
             className="st-save-dot"
-            title={saveStatus === 'error' ? 'РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ' : saveStatus === 'saving' ? 'РЎРѕС…СЂР°РЅРµРЅРёРµвЂ¦' : 'РЎРѕС…СЂР°РЅРµРЅРѕ'}
+            title={saveStatus === 'error' ? 'Ошибка сохранения' : saveStatus === 'saving' ? 'Сохранение…' : 'Сохранено'}
             style={{
               background: saveStatus === 'error' ? '#ff453a' : saveStatus === 'saving' ? '#ffd60a' : '#30d158',
             }}
@@ -3997,14 +3997,14 @@ function MIDISequencer() {
             <button
               type="button"
               className={`click ${project.metronomeEnabled ? 'on' : ''}`}
-              title={project.metronomeEnabled ? 'Р’С‹РєР»СЋС‡РёС‚СЊ РјРµС‚СЂРѕРЅРѕРј' : 'Р’РєР»СЋС‡РёС‚СЊ РјРµС‚СЂРѕРЅРѕРј'}
+              title={project.metronomeEnabled ? 'Выключить метроном' : 'Включить метроном'}
               onClick={() => commitProject(prev => ({ ...prev, metronomeEnabled: !prev.metronomeEnabled }))}
             >
               <Activity size={14} />
               {project.metronomeEnabled ? 'Click' : 'Mute'}
             </button>
           </div>
-          <button type="button" className="st-chip ghost" onClick={() => void returnToProjects()} title="Р’РµСЂРЅСѓС‚СЊСЃСЏ Рє РїСЂРѕРµРєС‚Р°Рј">
+          <button type="button" className="st-chip ghost" onClick={() => void returnToProjects()} title="Вернуться к проектам">
             <ArrowLeft size={14} /> Projects
           </button>
         </div>
@@ -4073,7 +4073,7 @@ function MIDISequencer() {
                 <button
                   type="button"
                   onClick={() => setDrumLibraryOpen(true)}
-                  title="Р’С‹Р±СЂР°С‚СЊ РёР· Р±РёР±Р»РёРѕС‚РµРєРё GREENTRIP"
+                  title="Выбрать из библиотеки GREENTRIP"
                   className="st-chip ghost"
                   style={{ width: 34, height: 34, padding: 0, placeContent: 'center' }}
                 >
@@ -4082,7 +4082,7 @@ function MIDISequencer() {
                 <button
                   type="button"
                   onClick={() => setEqPanelOpen(open => !open)}
-                  title="РћР±СЂР°Р±РѕС‚РєР° Р°РєС‚РёРІРЅРѕРіРѕ С‚СЂРµРєР° (СЌРєРІР°Р»Р°Р№Р·РµСЂ)"
+                  title="Обработка активного трека (эквалайзер)"
                   className={`st-chip ${eqPanelOpen || project.tracks.find(t => t.id === project.activeTrackId)?.eq?.enabled ? 'on' : ''}`}
                 >
                   <Sliders size={13} /> FX
@@ -4118,7 +4118,7 @@ function MIDISequencer() {
                     </button>
                   </div>
 
-                  <div className="st-label" style={{ marginBottom: 6 }}>РџСЂРµСЃРµС‚С‹</div>
+                  <div className="st-label" style={{ marginBottom: 6 }}>Пресеты</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                     {EQ_PRESETS.map(preset => (
                       <button
@@ -4153,7 +4153,7 @@ function MIDISequencer() {
                     </div>
                   ))}
                   <div style={{ fontSize: 11, color: '#636366', lineHeight: 1.4 }}>
-                    Р”РµР№СЃС‚РІСѓРµС‚ РЅР° РІС‹Р±СЂР°РЅРЅС‹Р№ С‚СЂРµРє РїСЂРё РїСЂРѕРёРіСЂС‹РІР°РЅРёРё РЅРѕС‚ Рё СЃСЌРјРїР»РѕРІ.
+                    Действует на выбранный трек при проигрывании нот и сэмплов.
                   </div>
                 </div>
               );
@@ -4258,7 +4258,7 @@ function MIDISequencer() {
                 max={320}
                 value={zoom}
                 onChange={e => setZoom(Number(e.target.value))}
-                title="РњР°СЃС€С‚Р°Р±"
+                title="Масштаб"
                 style={{ width: 100, accentColor: '#F5F5F7' }}
               />
               <button type="button" onClick={() => {
@@ -4299,7 +4299,7 @@ function MIDISequencer() {
               </div>
               <div
                 style={{ position: 'relative', width: patternBeatLength * zoom, height: 28, cursor: 'ew-resize' }}
-                title="РџРµСЂРµС‚Р°С‰РёС‚Рµ, С‡С‚РѕР±С‹ Р·Р°РґР°С‚СЊ СЃС‚Р°СЂС‚"
+                title="Перетащите, чтобы задать старт"
                 onMouseDown={(e) => {
                   const el = e.currentTarget;
                   beginPlayheadScrub(e, 'pattern', (clientX) => {
@@ -4308,7 +4308,7 @@ function MIDISequencer() {
                   });
                 }}
               >
-                {/* Fencepost markers: 4 bars в†’ points 1,2,3,4,5 (5 = end / loop) */}
+                {/* Fencepost markers: 4 bars → points 1,2,3,4,5 (5 = end / loop) */}
                 {Array.from({ length: activePattern.length + 1 }).map((_, point) => {
                   const left = point * BEATS_PER_BAR * zoom;
                   const isEnd = point === activePattern.length;
@@ -4405,7 +4405,7 @@ function MIDISequencer() {
                 })}
               </div>
 
-              {/* Grid: fixed width only вЂ” do NOT flex-grow (that left empty space without lines) */}
+              {/* Grid: fixed width only — do NOT flex-grow (that left empty space without lines) */}
               <div style={{ 
                 position: 'relative',
                 flexShrink: 0,
@@ -4515,7 +4515,7 @@ function MIDISequencer() {
                   })
                 ))}
 
-                {/* Playhead вЂ” drag to set start */}
+                {/* Playhead — drag to set start */}
                 <div
                   onMouseDown={(e) => {
                     const grid = e.currentTarget.parentElement;
@@ -4525,7 +4525,7 @@ function MIDISequencer() {
                       return (clientX - rect.left) / zoom;
                     });
                   }}
-                  title="РџРµСЂРµС‚Р°С‰РёС‚Рµ, С‡С‚РѕР±С‹ Р·Р°РґР°С‚СЊ СЃС‚Р°СЂС‚"
+                  title="Перетащите, чтобы задать старт"
                   style={{ 
                     position: 'absolute', top: 0, bottom: 0, width: 12, 
                     marginLeft: -5,
@@ -4573,17 +4573,17 @@ function MIDISequencer() {
                   <select
                     value={selectedMicId}
                     onChange={e => { void selectMicrophone(e.target.value); }}
-                    title="Р’С‹Р±РѕСЂ РјРёРєСЂРѕС„РѕРЅР°"
+                    title="Выбор микрофона"
                     style={{
                       maxWidth: 160, fontSize: 9, color: '#ccc',
                       background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)',
                       borderRadius: 4, padding: '3px 4px', outline: 'none',
                     }}
                   >
-                    <option value="">РњРёРєСЂРѕС„РѕРЅ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ</option>
+                    <option value="">Микрофон по умолчанию</option>
                     {micDevices.map(device => (
                       <option key={device.deviceId} value={device.deviceId}>
-                        {device.label || `РњРёРєСЂРѕС„РѕРЅ ${device.deviceId.slice(0, 6)}`}
+                        {device.label || `Микрофон ${device.deviceId.slice(0, 6)}`}
                       </option>
                     ))}
                   </select>
@@ -4591,7 +4591,7 @@ function MIDISequencer() {
                     type="button"
                     onClick={() => { void armMicrophone(); }}
                     disabled={isRecording}
-                    title={micArmed ? 'Р—Р°РєСЂС‹С‚СЊ РјРёРєСЂРѕС„РѕРЅ' : 'РћС‚РєСЂС‹С‚СЊ РјРёРєСЂРѕС„РѕРЅ (РїСЂРѕРІРµСЂРєР° СѓСЂРѕРІРЅСЏ)'}
+                    title={micArmed ? 'Закрыть микрофон' : 'Открыть микрофон (проверка уровня)'}
                     style={{
                       fontSize: 9, fontWeight: 700, letterSpacing: 0.6, padding: '3px 7px', borderRadius: 4, cursor: isRecording ? 'default' : 'pointer',
                       border: micArmed ? '1px solid rgba(255,138,138,0.5)' : '1px solid rgba(255,255,255,0.12)',
@@ -4605,7 +4605,7 @@ function MIDISequencer() {
                   <button
                     type="button"
                     onClick={() => { void toggleMicMonitor(); }}
-                    title={micMonitorOn ? 'Р’С‹РєР»СЋС‡РёС‚СЊ В«СЃР»С‹С€Р°С‚СЊ СЃРµР±СЏВ»' : 'РЎР»С‹С€Р°С‚СЊ СЃРµР±СЏ (Р»СѓС‡С€Рµ РІ РЅР°СѓС€РЅРёРєР°С…)'}
+                    title={micMonitorOn ? 'Выключить «слышать себя»' : 'Слышать себя (лучше в наушниках)'}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 4,
                       fontSize: 9, fontWeight: 700, letterSpacing: 0.6, padding: '3px 7px', borderRadius: 4, cursor: 'pointer',
@@ -4618,7 +4618,7 @@ function MIDISequencer() {
                     {micMonitorOn ? 'MONITOR' : 'MON'}
                   </button>
                   <div
-                    title="РЈСЂРѕРІРµРЅСЊ РІС…РѕРґР°"
+                    title="Уровень входа"
                     style={{
                       width: 56, height: 8, borderRadius: 3, overflow: 'hidden',
                       background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
@@ -4634,7 +4634,7 @@ function MIDISequencer() {
                   <button
                     type="button"
                     onClick={() => { if (isRecording) { stopVocalRecording(); } else { void startVocalRecording(); } }}
-                    title={isRecording ? 'РћСЃС‚Р°РЅРѕРІРёС‚СЊ Р·Р°РїРёСЃСЊ' : 'Р—Р°РїРёСЃР°С‚СЊ РІРѕРєР°Р» СЃ РїРѕР·РёС†РёРё РїР»РµР№С…РµРґР° (Р±РёС‚ РёРіСЂР°РµС‚ РїРѕРґ РІР°СЃ)'}
+                    title={isRecording ? 'Остановить запись' : 'Записать вокал с позиции плейхеда (бит играет под вас)'}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
                       fontSize: 9, fontWeight: 700, letterSpacing: 1,
@@ -4656,7 +4656,7 @@ function MIDISequencer() {
                 <div style={{ display: 'flex', gap: 4 }}>
                   {[
                     { label: 'Split', title: 'Split at playhead (S)', onClick: splitSelectedClip },
-                    { label: 'Dup', title: 'Duplicate (Ctrl/вЊ+B)', onClick: duplicateSelectedClips },
+                    { label: 'Dup', title: 'Duplicate (Ctrl/⌘+B)', onClick: duplicateSelectedClips },
                     { label: 'Del', title: 'Delete (Del)', onClick: () => handlePlaylistClipDelete(selectedClipIds) },
                   ].map(btn => (
                     <button
@@ -4738,7 +4738,7 @@ function MIDISequencer() {
                   zIndex: 5,
                   cursor: 'ew-resize',
                 }}
-                title="РџРµСЂРµС‚Р°С‰РёС‚Рµ, С‡С‚РѕР±С‹ Р·Р°РґР°С‚СЊ СЃС‚Р°СЂС‚"
+                title="Перетащите, чтобы задать старт"
                 onMouseDown={(e) => {
                   const el = e.currentTarget;
                   beginPlayheadScrub(e, 'song', (clientX) => {
@@ -4915,7 +4915,7 @@ function MIDISequencer() {
                   >
                     <div
                       onMouseDown={(e) => beginPlaylistDrag(clip, e, 'resize-left')}
-                      title="РћР±СЂРµР·Р°С‚СЊ СЃР»РµРІР° В· вЊҐ/Alt вЂ” С€Р°Рі 1/10"
+                      title="Обрезать слева · ⌥/Alt — шаг 1/10"
                       style={{
                         position: 'absolute',
                         left: 0,
@@ -4933,7 +4933,7 @@ function MIDISequencer() {
                     </span>
                     <div
                       onMouseDown={(e) => beginPlaylistDrag(clip, e, 'resize-right')}
-                      title="РћР±СЂРµР·Р°С‚СЊ СЃРїСЂР°РІР° В· вЊҐ/Alt вЂ” С€Р°Рі 1/10"
+                      title="Обрезать справа · ⌥/Alt — шаг 1/10"
                       style={{
                         position: 'absolute',
                         right: 0,
@@ -4956,7 +4956,7 @@ function MIDISequencer() {
                     return (clientX - rect.left - PLAYLIST_LABEL_WIDTH) / zoom;
                   });
                 }}
-                title="РџРµСЂРµС‚Р°С‰РёС‚Рµ, С‡С‚РѕР±С‹ Р·Р°РґР°С‚СЊ СЃС‚Р°СЂС‚"
+                title="Перетащите, чтобы задать старт"
                 style={{
                   position: 'absolute',
                   top: 30,
@@ -5024,9 +5024,9 @@ function MIDISequencer() {
               });
             };
             const fxSliders: { key: keyof Pick<ClipFx, 'compress' | 'drive' | 'reverb'>; label: string }[] = [
-              { key: 'compress', label: 'РљРѕРјРїСЂРµСЃСЃРѕСЂ' },
-              { key: 'drive', label: 'Р”РёСЃС‚РѕСЂС€РЅ' },
-              { key: 'reverb', label: 'Р РµРІРµСЂР±' },
+              { key: 'compress', label: 'Компрессор' },
+              { key: 'drive', label: 'Дисторшн' },
+              { key: 'reverb', label: 'Реверб' },
             ];
             return (
               <div
@@ -5050,7 +5050,7 @@ function MIDISequencer() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ fontSize: 11, letterSpacing: 1.5, color: clip.isVocal ? '#ff8a8a' : '#b7f36b', fontWeight: 700, textTransform: 'uppercase' }}>
-                        {clip.isVocal ? 'РћР±СЂР°Р±РѕС‚РєР° РІРѕРєР°Р»Р°' : 'РћР±СЂР°Р±РѕС‚РєР° Р°СѓРґРёРѕ'}
+                        {clip.isVocal ? 'Обработка вокала' : 'Обработка аудио'}
                       </div>
                       <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>{clip.name || 'Audio clip'}</div>
                     </div>
@@ -5065,7 +5065,7 @@ function MIDISequencer() {
 
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-                      <span>Р“СЂРѕРјРєРѕСЃС‚СЊ</span>
+                      <span>Громкость</span>
                       <span>{Math.round(clipGain * 100)}%</span>
                     </div>
                     <input
@@ -5076,7 +5076,7 @@ function MIDISequencer() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>FX С†РµРїСЊ</span>
+                    <span style={{ fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>FX цепь</span>
                     <button
                       type="button"
                       onClick={() => setFx({ enabled: !clipFx.enabled })}
@@ -5106,7 +5106,7 @@ function MIDISequencer() {
                           key={preset.id}
                           type="button"
                           disabled={!allowed}
-                          title={allowed ? preset.name : 'Р”РѕСЃС‚СѓРїРЅРѕ РЅР° Pro / Platinum'}
+                          title={allowed ? preset.name : 'Доступно на Pro / Platinum'}
                           onClick={() => {
                             if (!allowed) return;
                             patchClip({
@@ -5137,7 +5137,7 @@ function MIDISequencer() {
                   </div>
                   {!vocalPresetsUnlocked && (
                     <div style={{ fontSize: 10, color: '#888', marginTop: 6 }}>
-                      РџСЂРµСЃРµС‚С‹ РІРѕРєР°Р»Р° вЂ” РЅР° <Link to="/pricing" style={{ color: '#e8a87c' }}>Pro / Platinum</Link>
+                      Пресеты вокала — на <Link to="/pricing" style={{ color: '#e8a87c' }}>Pro / Platinum</Link>
                     </div>
                   )}
 
@@ -5180,7 +5180,7 @@ function MIDISequencer() {
                         border: '1px solid rgba(245,245,247,0.4)', background: 'rgba(245,245,247,0.12)', color: '#D1D1D6',
                       }}
                     >
-                      в–¶ РџСЂРѕСЃР»СѓС€Р°С‚СЊ
+                      ▶ Прослушать
                     </button>
                     <button
                       type="button"
@@ -5190,7 +5190,7 @@ function MIDISequencer() {
                         border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#bbb',
                       }}
                     >
-                      Р“РѕС‚РѕРІРѕ
+                      Готово
                     </button>
                   </div>
                 </div>
@@ -5286,7 +5286,7 @@ function MIDISequencer() {
 
 export default function MIDI() {
   return (
-    <DesktopOnlyGate feature="MIDI СЃРµРєРІРµРЅСЃРѕСЂ" hint="Р РµРґР°РєС‚РѕСЂ РЅРѕС‚ СѓРґРѕР±РЅРµРµ РЅР° РєРѕРјРїСЊСЋС‚РµСЂРµ РёР»Рё РїР»Р°РЅС€РµС‚Рµ РІ Р°Р»СЊР±РѕРјРЅРѕР№ РѕСЂРёРµРЅС‚Р°С†РёРё.">
+    <DesktopOnlyGate feature="MIDI секвенсор" hint="Редактор нот удобнее на компьютере или планшете в альбомной ориентации.">
       <MIDISequencer />
     </DesktopOnlyGate>
   );

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { billingApi, type PaymentKind } from '../api/billing';
 import { useBilling } from '../hooks/useBilling';
@@ -112,7 +112,7 @@ export default function Pricing() {
       try {
         await billingApi.syncPayment(paymentId);
         localStorage.removeItem('sl_pending_payment');
-        setMsg('РџР»Р°С‚С‘Р¶ РѕР±СЂР°Р±РѕС‚Р°РЅ. РўР°СЂРёС„ Рё С‚РѕРєРµРЅС‹ РѕР±РЅРѕРІР»РµРЅС‹.');
+        setMsg('Платёж обработан. Тариф и токены обновлены.');
         await refresh();
       } catch {
         /* webhook may still complete */
@@ -128,10 +128,10 @@ export default function Pricing() {
       const returnUrl = `${window.location.origin}/pricing?payment=return`;
       const created = await billingApi.createPayment(kind, returnUrl);
       if (created.paymentId) localStorage.setItem('sl_pending_payment', created.paymentId);
-      if (!created.confirmationUrl) throw new Error('РќРµС‚ СЃСЃС‹Р»РєРё РЅР° РѕРїР»Р°С‚Сѓ');
+      if (!created.confirmationUrl) throw new Error('Нет ссылки на оплату');
       window.location.href = created.confirmationUrl;
     } catch (e: any) {
-      setErr(e?.response?.data?.error || e?.message || 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РїР»Р°С‚С‘Р¶');
+      setErr(e?.response?.data?.error || e?.message || 'Не удалось создать платёж');
       setBusy(null);
     }
   };
@@ -142,122 +142,122 @@ export default function Pricing() {
     <div className="pr">
       <style>{css}</style>
       <div className="pr-wrap">
-        <h1>РўР°СЂРёС„С‹ SoundLab</h1>
+        <h1>Тарифы SoundLab</h1>
         <p className="pr-sub">
-          Free вЂ” СЃС‚Р°СЂС‚. Pro Рё Platinum вЂ” РѕР±Р»Р°РєРѕ, AI-С‚РѕРєРµРЅС‹ Рё РІРѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹.
-          РўРѕРєРµРЅС‹ РјРѕР¶РЅРѕ РґРѕРєСѓРїРёС‚СЊ РІ Р»СЋР±РѕР№ РјРѕРјРµРЅС‚, РЅРµ РґРѕР¶РёРґР°СЏСЃСЊ РЅРѕРІРѕРіРѕ РјРµСЃСЏС†Р°.
+          Free — старт. Pro и Platinum — облако, AI-токены и вокальные пресеты.
+          Токены можно докупить в любой момент, не дожидаясь нового месяца.
         </p>
 
         <div className="pr-status">
           <div>
-            <div className="pr-meta">РўРµРєСѓС‰РёР№ С‚Р°СЂРёС„</div>
+            <div className="pr-meta">Текущий тариф</div>
             <strong>{plan}</strong>
             {billing?.planExpiresAt && (
-              <div className="pr-meta">РґРѕ {new Date(billing.planExpiresAt).toLocaleDateString('ru-RU')}</div>
+              <div className="pr-meta">до {new Date(billing.planExpiresAt).toLocaleDateString('ru-RU')}</div>
             )}
           </div>
           <div className="pr-meta">
-            РўРѕРєРµРЅС‹: {billing?.tokenBalance ?? (user as any)?.tokenBalance ?? 0}
+            Токены: {billing?.tokenBalance ?? (user as any)?.tokenBalance ?? 0}
             {' В· '}
-            Р“РµРЅРµСЂР°С†РёР№: {billing?.generationsAvailable ?? 0}
+            Генераций: {billing?.generationsAvailable ?? 0}
             {' В· '}
-            РџСЂРѕРµРєС‚С‹: {billing?.cloudProjectCount ?? 0}
+            Проекты: {billing?.cloudProjectCount ?? 0}
             {billing?.maxCloudProjects != null ? `/${billing.maxCloudProjects}` : ''}
           </div>
         </div>
 
         {err && <div className="pr-err">{err}</div>}
         {msg && <div className="pr-ok">{msg}</div>}
-        {loading && <div className="pr-meta">РћР±РЅРѕРІР»РµРЅРёРµвЂ¦</div>}
+        {loading && <div className="pr-meta">Обновление…</div>}
 
         <div className="pr-grid">
           <article className={`pr-card${plan === 'FREE' ? ' current' : ''}`}>
             <h2>Free</h2>
-            <div className="pr-price">0 в‚Ѕ <span>/ РІСЃРµРіРґР°</span></div>
+            <div className="pr-price">0 ₽ <span>/ всегда</span></div>
             <ul>
-              <li>5 РїСЂРѕРµРєС‚РѕРІ СЃРµРєРІРµРЅСЃРѕСЂР° РІ РѕР±Р»Р°РєРµ</li>
-              <li>0 AI-РіРµРЅРµСЂР°С†РёР№</li>
-              <li>Р’РѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹ РЅРµРґРѕСЃС‚СѓРїРЅС‹</li>
+              <li>5 проектов секвенсора в облаке</li>
+              <li>0 AI-генераций</li>
+              <li>Вокальные пресеты недоступны</li>
             </ul>
-            <button className="pr-btn" disabled>РўРµРєСѓС‰РёР№ / Р±Р°Р·РѕРІС‹Р№</button>
+            <button className="pr-btn" disabled>Текущий / базовый</button>
           </article>
 
           <article className={`pr-card${plan === 'PRO' ? ' current' : ''}`}>
             <h2>Pro</h2>
-            <div className="pr-price">249 в‚Ѕ <span>/ 30 РґРЅРµР№</span></div>
+            <div className="pr-price">249 ₽ <span>/ 30 дней</span></div>
             <ul>
-              <li>30 РїСЂРѕРµРєС‚РѕРІ РІ РѕР±Р»Р°РєРµ</li>
-              <li>300 С‚РѕРєРµРЅРѕРІ (3 РіРµРЅРµСЂР°С†РёРё)</li>
-              <li>Р’РѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹</li>
+              <li>30 проектов в облаке</li>
+              <li>300 токенов (3 генерации)</li>
+              <li>Вокальные пресеты</li>
             </ul>
             <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay('PLAN_PRO')}>
-              {busy === 'PLAN_PRO' ? 'РџРµСЂРµС…РѕРґвЂ¦' : 'РћС„РѕСЂРјРёС‚СЊ Pro'}
+              {busy === 'PLAN_PRO' ? 'Переход…' : 'Оформить Pro'}
             </button>
           </article>
 
           <article className={`pr-card${plan === 'PLATINUM' ? ' current' : ''}`}>
             <h2>Platinum</h2>
-            <div className="pr-price">499 в‚Ѕ <span>/ 30 РґРЅРµР№</span></div>
+            <div className="pr-price">499 ₽ <span>/ 30 дней</span></div>
             <ul>
-              <li>Р‘РµР·Р»РёРјРёС‚ С„СѓРЅРєС†РёР№</li>
-              <li>Р”Рѕ 20 СЃРѕС…СЂР°РЅРµРЅРёР№ РІ РѕР±Р»Р°РєРѕ РІ РґРµРЅСЊ</li>
-              <li>700 С‚РѕРєРµРЅРѕРІ (7 РіРµРЅРµСЂР°С†РёР№)</li>
-              <li>Р’РѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹</li>
+              <li>Безлимит функций</li>
+              <li>До 20 сохранений в облако в день</li>
+              <li>700 токенов (7 генераций)</li>
+              <li>Вокальные пресеты</li>
             </ul>
             <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay('PLAN_PLATINUM')}>
-              {busy === 'PLAN_PLATINUM' ? 'РџРµСЂРµС…РѕРґвЂ¦' : 'РћС„РѕСЂРјРёС‚СЊ Platinum'}
+              {busy === 'PLAN_PLATINUM' ? 'Переход…' : 'Оформить Platinum'}
             </button>
           </article>
         </div>
 
         <div className="pr-packs-head">
-          <h2 className="pr-packs-title">Р”РѕРї. РїР°РєРµС‚С‹ С‚РѕРєРµРЅРѕРІ</h2>
+          <h2 className="pr-packs-title">Доп. пакеты токенов</h2>
           <p className="pr-packs-hint">
-            100 С‚РѕРєРµРЅРѕРІ = 1 AI-РіРµРЅРµСЂР°С†РёСЏ.{' '}
-            <strong>Р§РµРј Р±РѕР»СЊС€Рµ РїР°РєРµС‚ вЂ” С‚РµРј РґРµС€РµРІР»Рµ РіРµРЅРµСЂР°С†РёСЏ.</strong>
+            100 токенов = 1 AI-генерация.{' '}
+            <strong>Чем больше пакет — тем дешевле генерация.</strong>
           </p>
         </div>
         <div className="pr-packs">
           {packs.map((pack) => (
             <div className={`pr-pack${pack.highlight ? ' highlight' : ''}`} key={pack.kind}>
-              {pack.highlight && <span className="pr-pack-popular">Р’С‹РіРѕРґРЅРµРµ</span>}
+              {pack.highlight && <span className="pr-pack-popular">Выгоднее</span>}
               <div className="pr-pack-top">
-                <strong>{pack.tokens} С‚РѕРєРµРЅРѕРІ</strong>
+                <strong>{pack.tokens} токенов</strong>
                 {pack.badge && <span className="pr-pack-badge">{pack.badge}</span>}
               </div>
               <div className="pr-pack-price-row">
-                <span className="pr-pack-price">{pack.price} в‚Ѕ</span>
-                {pack.saveRub > 0 && <span className="pr-pack-old">{pack.compareAt} в‚Ѕ</span>}
+                <span className="pr-pack-price">{pack.price} ₽</span>
+                {pack.saveRub > 0 && <span className="pr-pack-old">{pack.compareAt} ₽</span>}
               </div>
               <div className="pr-pack-unit">
-                в‰€ {pack.gens} РіРµРЅРµСЂР°С†РёР№ В· {pack.perGen} в‚Ѕ / РіРµРЅРµСЂР°С†РёСЏ
+                в‰€ {pack.gens} генераций · {pack.perGen} ₽ / генерация
               </div>
               {pack.saveRub > 0 ? (
                 <div className="pr-pack-save">
-                  Р­РєРѕРЅРѕРјРёСЏ {pack.saveRub} в‚Ѕ (в€’{pack.savePercent}%) vs РјР°Р»РµРЅСЊРєРёР№ РїР°РєРµС‚
+                  Экономия {pack.saveRub} ₽ (в€’{pack.savePercent}%) vs маленький пакет
                 </div>
               ) : (
-                <div className="pr-pack-unit">Р‘Р°Р·РѕРІР°СЏ С†РµРЅР° Р·Р° РіРµРЅРµСЂР°С†РёСЋ</div>
+                <div className="pr-pack-unit">Базовая цена за генерацию</div>
               )}
               <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay(pack.kind)}>
-                {busy === pack.kind ? 'РџРµСЂРµС…РѕРґвЂ¦' : 'РљСѓРїРёС‚СЊ'}
+                {busy === pack.kind ? 'Переход…' : 'Купить'}
               </button>
             </div>
           ))}
         </div>
 
         <p className="pr-sub" style={{ marginTop: 28 }}>
-          РћРїР»Р°С‚Р° С‡РµСЂРµР· Р®Kassa. РџРѕСЃР»Рµ РѕРїР»Р°С‚С‹ РІРµСЂРЅС‘С‚РµСЃСЊ РЅР° СЌС‚Сѓ СЃС‚СЂР°РЅРёС†Сѓ.
+          Оплата через ЮKassa. После оплаты вернётесь на эту страницу.
           {' '}
-          <Link to="/offer">РћС„РµСЂС‚Р°</Link>
+          <Link to="/offer">Оферта</Link>
           {' В· '}
-          <Link to="/privacy">РљРѕРЅС„РёРґРµРЅС†РёР°Р»СЊРЅРѕСЃС‚СЊ</Link>
+          <Link to="/privacy">Конфиденциальность</Link>
           {' В· '}
-          <Link to="/refunds">Р’РѕР·РІСЂР°С‚С‹</Link>
+          <Link to="/refunds">Возвраты</Link>
           {' В· '}
-          <Link to="/delivery">РџРѕР»СѓС‡РµРЅРёРµ СѓСЃР»СѓРіРё</Link>
+          <Link to="/delivery">Получение услуги</Link>
           {' В· '}
-          <Link to="/contacts">РљРѕРЅС‚Р°РєС‚С‹</Link>
+          <Link to="/contacts">Контакты</Link>
         </p>
       </div>
     </div>

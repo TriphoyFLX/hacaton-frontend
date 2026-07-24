@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Heart,
@@ -37,12 +37,12 @@ function pickAudio(post: Post) {
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'С‚РѕР»СЊРєРѕ С‡С‚Рѕ';
-  if (mins < 60) return `${mins} РјРёРЅ`;
+  if (mins < 1) return 'только что';
+  if (mins < 60) return `${mins} мин`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} С‡`;
+  if (hours < 24) return `${hours} ч`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} Рґ`;
+  if (days < 7) return `${days} д`;
   return new Date(dateStr).toLocaleDateString('ru-RU');
 }
 
@@ -63,7 +63,7 @@ export default function Projects() {
       const data = await postsApi.getPosts('latest', BEAT_POST_TAG, { limit: 60, offset: 0 });
       setPosts(data.items.filter((p) => pickAudio(p)));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р±РёС‚С‹');
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить биты');
     } finally {
       setLoading(false);
     }
@@ -133,12 +133,12 @@ export default function Projects() {
   };
 
   const deletePost = async (post: Post) => {
-    if (!confirm('РЈРґР°Р»РёС‚СЊ СЌС‚РѕС‚ Р±РёС‚?')) return;
+    if (!confirm('Удалить этот бит?')) return;
     try {
       await postsApi.deletePost(post.id);
       setPosts((list) => list.filter((p) => p.id !== post.id));
     } catch {
-      alert('РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ');
+      alert('Не удалось удалить');
     }
   };
 
@@ -151,30 +151,30 @@ export default function Projects() {
           <div>
             <h1 style={styles.h1}>Projects</h1>
             <p style={styles.sub}>
-              РћРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹Рµ Р±РёС‚С‹ РёР· MIDI В· Р»Р°Р№РєРё Рё РєРѕРјРјРµРЅС‚Р°СЂРёРё
+              Опубликованные биты из MIDI · лайки и комментарии
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" onClick={() => void load()} style={styles.chip}>
-              <RefreshCw size={14} /> РћР±РЅРѕРІРёС‚СЊ
+              <RefreshCw size={14} /> Обновить
             </button>
             <Link to="/midi" style={{ ...styles.chip, ...styles.chipPrimary, textDecoration: 'none' }}>
-              <Music2 size={14} /> РћС‚РєСЂС‹С‚СЊ MIDI
+              <Music2 size={14} /> Открыть MIDI
             </Link>
           </div>
         </header>
 
         {error && <div style={styles.err}>{error}</div>}
-        {loading && <div style={styles.muted}>Р—Р°РіСЂСѓР·РєР°вЂ¦</div>}
+        {loading && <div style={styles.muted}>Загрузка…</div>}
         {empty && (
           <div style={styles.empty}>
             <Music2 size={28} style={{ opacity: 0.5 }} />
-            <p style={{ margin: '12px 0 4px', fontSize: 18, fontWeight: 600 }}>РџРѕРєР° РЅРµС‚ Р±РёС‚РѕРІ</p>
+            <p style={{ margin: '12px 0 4px', fontSize: 18, fontWeight: 600 }}>Пока нет битов</p>
             <p style={{ margin: 0, color: '#9a948c', fontSize: 14 }}>
-              РЎРѕР±РµСЂРёС‚Рµ С‚СЂРµРє РІ MIDI Рё РЅР°Р¶РјРёС‚Рµ В«РћРїСѓР±Р»РёРєРѕРІР°С‚СЊВ»
+              Соберите трек в MIDI и нажмите «Опубликовать»
             </p>
             <Link to="/midi" style={{ ...styles.chip, ...styles.chipPrimary, marginTop: 16, textDecoration: 'none' }}>
-              РЎРѕР·РґР°С‚СЊ Р±РёС‚
+              Создать бит
             </Link>
           </div>
         )}
@@ -211,7 +211,7 @@ export default function Projects() {
                       </div>
                     </div>
                     {mine && (
-                      <button type="button" onClick={() => void deletePost(post)} style={styles.iconBtn} title="РЈРґР°Р»РёС‚СЊ">
+                      <button type="button" onClick={() => void deletePost(post)} style={styles.iconBtn} title="Удалить">
                         <Trash2 size={14} />
                       </button>
                     )}
@@ -240,7 +240,7 @@ export default function Projects() {
                       <MessageCircle size={15} />
                       {post.commentsCount}
                     </button>
-                    <span style={{ ...styles.actionBtn, cursor: 'default' }}>{post.views} РїСЂРѕСЃРј.</span>
+                    <span style={{ ...styles.actionBtn, cursor: 'default' }}>{post.views} просм.</span>
                   </div>
 
                   {open && (
@@ -260,7 +260,7 @@ export default function Projects() {
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') void sendComment(post.id);
                           }}
-                          placeholder="РљРѕРјРјРµРЅС‚Р°СЂРёР№вЂ¦"
+                          placeholder="Комментарий…"
                           style={styles.commentInput}
                           maxLength={500}
                         />

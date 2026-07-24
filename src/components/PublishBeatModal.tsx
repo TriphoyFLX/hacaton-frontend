@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Loader2, Upload, X } from 'lucide-react';
 import { postsApi } from '../api/posts';
 import { BEAT_POST_TAG } from '../lib/audioExport';
@@ -59,7 +59,7 @@ export default function PublishBeatModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="РћРїСѓР±Р»РёРєРѕРІР°С‚СЊ Р±РёС‚"
+      aria-label="Опубликовать бит"
       onClick={() => !busy && onClose()}
       style={{
         position: 'fixed',
@@ -93,9 +93,9 @@ export default function PublishBeatModal({
           }}
         >
           <div>
-            <div style={{ fontWeight: 650, letterSpacing: '-0.03em' }}>РћРїСѓР±Р»РёРєРѕРІР°С‚СЊ Р±РёС‚</div>
+            <div style={{ fontWeight: 650, letterSpacing: '-0.03em' }}>Опубликовать бит</div>
             <div style={{ fontSize: 12, color: '#9a948c', marginTop: 2 }}>
-              Р РµРЅРґРµСЂ РІ Р°СѓРґРёРѕ в†’ Projects В· #{BEAT_POST_TAG}
+              Рендер в аудио → Projects В· #{BEAT_POST_TAG}
             </div>
           </div>
           <button
@@ -111,7 +111,7 @@ export default function PublishBeatModal({
 
         <div style={{ padding: 16, display: 'grid', gap: 14 }}>
           <label style={{ display: 'grid', gap: 6, fontSize: 12, color: '#9a948c' }}>
-            РќР°Р·РІР°РЅРёРµ
+            Название
             <input
               value={title}
               disabled={busy}
@@ -131,7 +131,7 @@ export default function PublishBeatModal({
           </label>
 
           <div>
-            <div style={{ fontSize: 12, color: '#9a948c', marginBottom: 6 }}>РћР±Р»РѕР¶РєР° (РЅРµРѕР±СЏР·Р°С‚РµР»СЊРЅРѕ)</div>
+            <div style={{ fontSize: 12, color: '#9a948c', marginBottom: 6 }}>Обложка (необязательно)</div>
             <input
               ref={coverInputRef}
               type="file"
@@ -163,7 +163,7 @@ export default function PublishBeatModal({
                 />
               ) : (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                  <ImagePlus size={16} /> Р”РѕР±Р°РІРёС‚СЊ РѕР±Р»РѕР¶РєСѓ
+                  <ImagePlus size={16} /> Добавить обложку
                 </span>
               )}
             </button>
@@ -175,7 +175,7 @@ export default function PublishBeatModal({
                 className="st-chip ghost"
                 style={{ marginTop: 8 }}
               >
-                РЈР±СЂР°С‚СЊ РѕР±Р»РѕР¶РєСѓ
+                Убрать обложку
               </button>
             )}
           </div>
@@ -195,7 +195,7 @@ export default function PublishBeatModal({
             className="st-chip on"
             style={{ height: 42, justifyContent: 'center', opacity: busy || !title.trim() ? 0.55 : 1 }}
           >
-            <Upload size={14} /> {busy ? 'РџСѓР±Р»РёРєР°С†РёСЏвЂ¦' : 'Р РµРЅРґРµСЂ Рё РѕРїСѓР±Р»РёРєРѕРІР°С‚СЊ'}
+            <Upload size={14} /> {busy ? 'Публикация…' : 'Рендер и опубликовать'}
           </button>
         </div>
       </div>

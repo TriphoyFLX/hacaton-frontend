@@ -1,4 +1,4 @@
-﻿import type { CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 
 export type BattleRatingInfo = {
   battleElo?: number;
@@ -16,12 +16,12 @@ export type BattleRatingInfo = {
 };
 
 const RANKS = [
-  { label: 'РќРѕРІРёС‡РѕРє', min: 0 },
-  { label: 'Р›СЋР±РёС‚РµР»СЊ', min: 900 },
-  { label: 'Р‘РѕРµС†', min: 1100 },
-  { label: 'РџСЂРѕС„Рё', min: 1300 },
-  { label: 'Р­Р»РёС‚Р°', min: 1500 },
-  { label: 'Р›РµРіРµРЅРґР°', min: 1700 },
+  { label: 'Новичок', min: 0 },
+  { label: 'Любитель', min: 900 },
+  { label: 'Боец', min: 1100 },
+  { label: 'Профи', min: 1300 },
+  { label: 'Элита', min: 1500 },
+  { label: 'Легенда', min: 1700 },
 ];
 
 const css = `
@@ -118,7 +118,7 @@ export default function BattleRatingCard({
   const losses = rating.battleLosses ?? 0;
   const draws = rating.battleDraws ?? 0;
   const scale = Math.min(100, Math.max(0, (rating.scaleProgress ?? elo / 2000) * 100));
-  const rankLabel = rating.rankLabel || 'Р›СЋР±РёС‚РµР»СЊ';
+  const rankLabel = rating.rankLabel || 'Любитель';
   const next = rating.nextRankLabel;
   const toNext = rating.nextRankMin != null ? Math.max(0, rating.nextRankMin - elo) : null;
 
@@ -127,7 +127,7 @@ export default function BattleRatingCard({
       <style>{css}</style>
       <div className="brc-top">
         <div>
-          <div className="brc-kicker">Rap Battle СЂРµР№С‚РёРЅРі</div>
+          <div className="brc-kicker">Rap Battle рейтинг</div>
           <div className="brc-rank">{rankLabel}</div>
         </div>
         <div>
@@ -149,7 +149,7 @@ export default function BattleRatingCard({
       )}
       {next && toNext != null && (
         <div className="brc-next">
-          Р”Рѕ СЂР°РЅРіР° <strong>{next}</strong> вЂ” РµС‰С‘ {toNext} Elo
+          До ранга <strong>{next}</strong> — ещё {toNext} Elo
         </div>
       )}
     </div>
