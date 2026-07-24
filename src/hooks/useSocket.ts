@@ -145,6 +145,7 @@ interface UseSocketReturn {
     clientMessageId: string;
     soundTokId?: string;
     replyToId?: string;
+    imageUrl?: string;
   }) => Promise<SocketMessageResponse>;
   markAsRead: (messageIds: string[], chatId: string) => void;
   sendTyping: (chatId: string, isTyping: boolean) => void;
