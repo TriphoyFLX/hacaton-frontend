@@ -6,11 +6,17 @@ export interface Comment {
   authorId: string;
   soundTokId: string;
   createdAt: string;
+  likes?: number;
+  dislikes?: number;
+  isLiked?: boolean;
+  isDisliked?: boolean;
+  isHidden?: boolean;
   author: {
     id: string;
     username: string;
     displayName?: string | null;
     avatar?: string | null;
+    role?: string;
   };
 }
 
@@ -86,6 +92,22 @@ export const soundTokApi = {
 
   createComment: async (soundTokId: string, text: string): Promise<CreateCommentResponse> => {
     const response = await api.post(`/soundtok/${soundTokId}/comments`, { text });
+    return response.data;
+  },
+
+  likeComment: async (
+    soundTokId: string,
+    commentId: string,
+  ): Promise<{ id: string; likes: number; dislikes: number; isLiked: boolean; isDisliked: boolean; isHidden: boolean; text: string }> => {
+    const response = await api.post(`/soundtok/${soundTokId}/comments/${commentId}/like`);
+    return response.data;
+  },
+
+  dislikeComment: async (
+    soundTokId: string,
+    commentId: string,
+  ): Promise<{ id: string; likes: number; dislikes: number; isLiked: boolean; isDisliked: boolean; isHidden: boolean; text: string }> => {
+    const response = await api.post(`/soundtok/${soundTokId}/comments/${commentId}/dislike`);
     return response.data;
   },
 };

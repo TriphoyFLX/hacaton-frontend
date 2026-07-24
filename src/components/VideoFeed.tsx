@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check } from 'lucide-react';
+import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown } from 'lucide-react';
 import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
 import { followsApi } from '../api/follows';
 import { API_ORIGIN } from '../api/client';
@@ -524,6 +524,42 @@ const css = `
   word-break: break-word;
 }
 
+.vf-comment-text.hidden {
+  color: rgba(255,255,255,0.4);
+  font-style: italic;
+}
+
+.vf-comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.vf-comment-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+}
+
+.vf-comment-vote:hover {
+  color: rgba(255,255,255,0.8);
+}
+
+.vf-comment-vote.liked {
+  color: #fe2c55;
+}
+
+.vf-comment-vote.disliked {
+  color: #8b9cff;
+}
+
 .vf-empty-comments {
   text-align: center;
   padding: 48px 20px;
@@ -679,6 +715,7 @@ export default function VideoFeed({
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [votingCommentId, setVotingCommentId] = useState<string | null>(null);
   const [localCounts, setLocalCounts] = useState<Record<string, number>>({});
 
   const [isPaused, setIsPaused] = useState(false);
@@ -1010,6 +1047,60 @@ export default function VideoFeed({
     }
   };
 
+  const applyCommentVote = (
+    commentId: string,
+    result: {
+      likes: number;
+      dislikes: number;
+      isLiked: boolean;
+      isDisliked: boolean;
+      isHidden: boolean;
+      text: string;
+    },
+  ) => {
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? {
+              ...c,
+              likes: result.likes,
+              dislikes: result.dislikes,
+              isLiked: result.isLiked,
+              isDisliked: result.isDisliked,
+              isHidden: result.isHidden,
+              text: result.text,
+            }
+          : c,
+      ),
+    );
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    if (!currentSoundTokId || votingCommentId) return;
+    setVotingCommentId(commentId);
+    try {
+      const result = await soundTokApi.likeComment(currentSoundTokId, commentId);
+      applyCommentVote(commentId, result);
+    } catch (error) {
+      console.error('Failed to like comment:', error);
+    } finally {
+      setVotingCommentId(null);
+    }
+  };
+
+  const handleDislikeComment = async (commentId: string) => {
+    if (!currentSoundTokId || votingCommentId) return;
+    setVotingCommentId(commentId);
+    try {
+      const result = await soundTokApi.dislikeComment(currentSoundTokId, commentId);
+      applyCommentVote(commentId, result);
+    } catch (error) {
+      console.error('Failed to dislike comment:', error);
+    } finally {
+      setVotingCommentId(null);
+    }
+  };
+
   const sheetCommentCount = currentSoundTokId
     ? localCounts[currentSoundTokId] ??
       soundToks.find((t) => t.id === currentSoundTokId)?.commentsCount ??
@@ -1286,7 +1377,30 @@ export default function VideoFeed({
                         </span>
                         <span className="vf-comment-time">{formatRelativeTime(comment.createdAt)}</span>
                       </div>
-                      <div className="vf-comment-text">{comment.text}</div>
+                      <div className={`vf-comment-text${comment.isHidden ? ' hidden' : ''}`}>
+                        {comment.text}
+                      </div>
+                      <div className="vf-comment-actions">
+                        <button
+                          type="button"
+                          className={`vf-comment-vote${comment.isLiked ? ' liked' : ''}`}
+                          title="Нравится"
+                          disabled={votingCommentId === comment.id}
+                          onClick={() => void handleLikeComment(comment.id)}
+                        >
+                          <Heart size={14} fill={comment.isLiked ? 'currentColor' : 'none'} />
+                          <span>{formatCount(comment.likes ?? 0)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`vf-comment-vote${comment.isDisliked ? ' disliked' : ''}`}
+                          title={comment.isDisliked ? 'Показать комментарий' : 'Не нравится'}
+                          disabled={votingCommentId === comment.id}
+                          onClick={() => void handleDislikeComment(comment.id)}
+                        >
+                          <ThumbsDown size={14} fill={comment.isDisliked ? 'currentColor' : 'none'} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))

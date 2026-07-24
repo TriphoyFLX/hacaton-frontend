@@ -7,7 +7,7 @@ import { followsApi } from '../api/follows';
 import { useAuthStore } from '../store/authStore';
 import {
   Image, Video, Music, Heart, MessageCircle, Share2,
-  MoreHorizontal, Send, Eye, ChevronDown, X, Trash2
+  MoreHorizontal, Send, Eye, ChevronDown, X, Trash2, ThumbsDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminBadge from '../components/AdminBadge';
@@ -826,6 +826,22 @@ ${FONT_IMPORT}
   justify-content: center;
 }
 .post-comment-delete:hover { color: #f5a9a3; background: rgba(192, 57, 43, 0.12); }
+.post-comment-text.hidden { color: var(--text-muted); font-style: italic; }
+.post-comment-votes { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.post-comment-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  font: 11px 'DM Mono', monospace;
+}
+.post-comment-vote:hover { color: var(--text-secondary); }
+.post-comment-vote.liked { color: #fe2c55; }
+.post-comment-vote.disliked { color: #8b9cff; }
 .post-share-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.68); }
 .post-share-dialog { width: min(420px, 100%); max-height: 75vh; overflow: auto; padding: 18px; border: 1px solid var(--border-mid); border-radius: 13px; background: var(--bg-surface); }
 .post-share-dialog h3 { margin: 0 0 5px; font-size: 18px; }.post-share-dialog p { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; }
@@ -1059,6 +1075,7 @@ function PostCard({
   const [shareStatus, setShareStatus] = useState('');
   const [isFollowUpdating, setIsFollowUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [votingCommentId, setVotingCommentId] = useState<string | null>(null);
   const isOwnPost = Boolean(currentUserId && currentUserId === post.authorId);
 
   useEffect(() => {
@@ -1182,6 +1199,59 @@ function PostCard({
       setCommentsCount(result.commentsCount);
     } catch (error: any) {
       setCommentError(error?.response?.data?.error || 'Не удалось удалить комментарий');
+    }
+  };
+  const applyCommentVote = (
+    commentId: string,
+    result: {
+      likes: number;
+      dislikes: number;
+      isLiked: boolean;
+      isDisliked: boolean;
+      isHidden: boolean;
+      text: string;
+    },
+  ) => {
+    setComments((current) =>
+      current.map((comment) =>
+        comment.id === commentId
+          ? {
+              ...comment,
+              likes: result.likes,
+              dislikes: result.dislikes,
+              isLiked: result.isLiked,
+              isDisliked: result.isDisliked,
+              isHidden: result.isHidden,
+              text: result.text,
+            }
+          : comment,
+      ),
+    );
+  };
+  const likeComment = async (commentId: string) => {
+    if (votingCommentId) return;
+    setVotingCommentId(commentId);
+    setCommentError('');
+    try {
+      const result = await postsApi.likeComment(post.id, commentId);
+      applyCommentVote(commentId, result);
+    } catch (error: any) {
+      setCommentError(error?.response?.data?.error || 'Не удалось поставить лайк');
+    } finally {
+      setVotingCommentId(null);
+    }
+  };
+  const dislikeComment = async (commentId: string) => {
+    if (votingCommentId) return;
+    setVotingCommentId(commentId);
+    setCommentError('');
+    try {
+      const result = await postsApi.dislikeComment(post.id, commentId);
+      applyCommentVote(commentId, result);
+    } catch (error: any) {
+      setCommentError(error?.response?.data?.error || 'Не удалось поставить дизлайк');
+    } finally {
+      setVotingCommentId(null);
     }
   };
   const deletePost = async () => {
@@ -1368,7 +1438,33 @@ function PostCard({
           {comments.length ? comments.map((comment) => (
             <div className="post-comment" key={comment.id}>
               <div className="post-comment-main">
-                <b>@{comment.author.username}</b>{comment.text}
+                <div>
+                  <b>@{comment.author.username}</b>
+                  <span className={comment.isHidden ? 'post-comment-text hidden' : undefined}>
+                    {comment.text}
+                  </span>
+                </div>
+                <div className="post-comment-votes">
+                  <button
+                    type="button"
+                    className={`post-comment-vote${comment.isLiked ? ' liked' : ''}`}
+                    title="Нравится"
+                    disabled={votingCommentId === comment.id}
+                    onClick={() => void likeComment(comment.id)}
+                  >
+                    <Heart size={12} fill={comment.isLiked ? 'currentColor' : 'none'} />
+                    <span>{formatCount(comment.likes ?? 0)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`post-comment-vote${comment.isDisliked ? ' disliked' : ''}`}
+                    title={comment.isDisliked ? 'Показать комментарий' : 'Не нравится'}
+                    disabled={votingCommentId === comment.id}
+                    onClick={() => void dislikeComment(comment.id)}
+                  >
+                    <ThumbsDown size={12} fill={comment.isDisliked ? 'currentColor' : 'none'} />
+                  </button>
+                </div>
               </div>
               {currentUserId === comment.authorId && (
                 <button

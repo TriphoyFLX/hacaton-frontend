@@ -33,6 +33,11 @@ export interface PostComment {
   authorId: string;
   postId: string;
   createdAt: string;
+  likes?: number;
+  dislikes?: number;
+  isLiked?: boolean;
+  isDisliked?: boolean;
+  isHidden?: boolean;
   author: {
     id: string;
     username: string;
@@ -91,6 +96,16 @@ export const postsApi = {
     commentId: string
   ): Promise<{ success: boolean; id: string; commentsCount: number }> =>
     (await api.delete(`/posts/${postId}/comments/${commentId}`)).data,
+  likeComment: async (
+    postId: string,
+    commentId: string,
+  ): Promise<{ id: string; likes: number; dislikes: number; isLiked: boolean; isDisliked: boolean; isHidden: boolean; text: string }> =>
+    (await api.post(`/posts/${postId}/comments/${commentId}/like`)).data,
+  dislikeComment: async (
+    postId: string,
+    commentId: string,
+  ): Promise<{ id: string; likes: number; dislikes: number; isLiked: boolean; isDisliked: boolean; isHidden: boolean; text: string }> =>
+    (await api.post(`/posts/${postId}/comments/${commentId}/dislike`)).data,
 };
 
 export default api;
