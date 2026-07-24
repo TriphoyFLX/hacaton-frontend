@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { getApiErrorMessage } from '../lib/apiErrors';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
 import OAuthButtons from './OAuthButtons';
 import EmailVerifyStep from './EmailVerifyStep';
@@ -460,8 +461,8 @@ export default function Register() {
         return;
       }
       navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Ошибка регистрации');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Не удалось зарегистрироваться. Попробуйте ещё раз'));
     } finally {
       setLoading(false);
     }

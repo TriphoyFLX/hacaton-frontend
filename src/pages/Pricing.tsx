@@ -12,10 +12,10 @@ const TOKEN_PACK_UI: Array<{
   badge: string | null;
   highlight?: boolean;
 }> = [
-  { kind: 'TOKENS_400', tokens: 400, gens: 4, price: 199, badge: null },
-  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 359, badge: 'в€’10%' },
-  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 499, badge: 'в€’16%', highlight: true },
-  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 899, badge: 'в€’25%' },
+  { kind: 'TOKENS_400', tokens: 400, gens: 4, price: 299, badge: null },
+  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 549, badge: '−8%' },
+  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 799, badge: '−11%', highlight: true },
+  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 1399, badge: '−22%' },
 ];
 
 const css = `
