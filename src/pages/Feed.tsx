@@ -789,11 +789,34 @@ ${FONT_IMPORT}
   color: var(--text-secondary);
 }
 .post-comments-panel { margin: 0 18px 16px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: rgba(0,0,0,.16); }
-.post-comment-list { display: grid; gap: 10px; max-height: 260px; overflow-y: auto; margin-bottom: 12px; }
-.post-comment b { color: var(--text-primary); margin-right: 6px; }
+.post-comment-list { display: grid; gap: 10px; max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
 .post-comment-form { display: flex; gap: 8px; }
 .post-comment-form input { flex: 1; min-width: 0; border: 1px solid var(--border-mid); border-radius: 7px; padding: 8px 10px; color: var(--text-primary); background: var(--bg); font: 12px 'Syne', sans-serif; }
 .post-comment-form button { border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer; background: var(--text-primary); color: var(--bg); font-weight: 700; }
+.post-comment-reply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.post-comment-reply-bar strong { color: var(--text-primary); font-weight: 600; }
+.post-comment-reply-cancel {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+}
+.post-comment-reply-cancel:hover { color: var(--text-primary); }
 .post-action-error { margin-top: 8px; color: var(--red); font: 10px 'DM Mono', monospace; }
 .post-copy-status { font: 10px 'DM Mono', monospace; color: #86b892; margin-left: 5px; }
 .post-more-wrap { position: relative; }
@@ -811,7 +834,22 @@ ${FONT_IMPORT}
   color: var(--text-secondary);
   line-height: 1.45;
 }
+.post-comment.reply {
+  margin-left: 28px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
 .post-comment-main { min-width: 0; flex: 1; }
+.post-comment-author {
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: 700 12px 'Syne', sans-serif;
+  padding: 0;
+  margin-right: 6px;
+  cursor: pointer;
+}
+.post-comment-author:hover { text-decoration: underline; }
 .post-comment-delete {
   flex-shrink: 0;
   width: 28px;
@@ -827,7 +865,7 @@ ${FONT_IMPORT}
 }
 .post-comment-delete:hover { color: #f5a9a3; background: rgba(192, 57, 43, 0.12); }
 .post-comment-text.hidden { color: var(--text-muted); font-style: italic; }
-.post-comment-votes { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.post-comment-votes { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
 .post-comment-vote {
   display: inline-flex;
   align-items: center;
@@ -842,6 +880,16 @@ ${FONT_IMPORT}
 .post-comment-vote:hover { color: var(--text-secondary); }
 .post-comment-vote.liked { color: #fe2c55; }
 .post-comment-vote.disliked { color: #8b9cff; }
+.post-comment-reply-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  font: 11px 'Syne', sans-serif;
+  font-weight: 600;
+}
+.post-comment-reply-btn:hover { color: var(--text-primary); }
 .post-share-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.68); }
 .post-share-dialog { width: min(420px, 100%); max-height: 75vh; overflow: auto; padding: 18px; border: 1px solid var(--border-mid); border-radius: 13px; background: var(--bg-surface); }
 .post-share-dialog h3 { margin: 0 0 5px; font-size: 18px; }.post-share-dialog p { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; }
@@ -1076,6 +1124,8 @@ function PostCard({
   const [isFollowUpdating, setIsFollowUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [votingCommentId, setVotingCommentId] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
   const isOwnPost = Boolean(currentUserId && currentUserId === post.authorId);
 
   useEffect(() => {
@@ -1200,20 +1250,34 @@ function PostCard({
     if (!text) return;
     setCommentError('');
     try {
-      const result = await postsApi.createComment(post.id, text);
+      const result = await postsApi.createComment(post.id, text, replyTo?.id);
       setComments((current) => [...current, result.comment]);
       setCommentsCount(result.commentsCount);
       setCommentText('');
+      setReplyTo(null);
     } catch (error: any) {
       setCommentError(error?.response?.data?.error || 'Не удалось отправить комментарий');
     }
   };
+  const startReply = (comment: PostComment) => {
+    const rootId = comment.parentId || comment.id;
+    setReplyTo({ id: rootId, username: comment.author.username });
+    setCommentText((prev) => {
+      const mention = `@${comment.author.username} `;
+      return prev.startsWith(mention) ? prev : mention;
+    });
+    requestAnimationFrame(() => commentInputRef.current?.focus());
+  };
   const deleteComment = async (commentId: string) => {
+    if (!window.confirm('Удалить этот комментарий?')) return;
     setCommentError('');
     try {
       const result = await postsApi.deleteComment(post.id, commentId);
-      setComments((current) => current.filter((comment) => comment.id !== commentId));
+      setComments((current) =>
+        current.filter((comment) => comment.id !== commentId && comment.parentId !== commentId),
+      );
       setCommentsCount(result.commentsCount);
+      setReplyTo((current) => (current?.id === commentId ? null : current));
     } catch (error: any) {
       setCommentError(error?.response?.data?.error || 'Не удалось удалить комментарий');
     }
@@ -1452,52 +1516,99 @@ function PostCard({
       {actionError && <div className="post-action-error" role="alert">{actionError}</div>}
       {commentsOpen && <div className="post-comments-panel">
         <div className="post-comment-list">
-          {comments.length ? comments.map((comment) => (
-            <div className="post-comment" key={comment.id}>
-              <div className="post-comment-main">
-                <div>
-                  <b>@{comment.author.username}</b>
-                  <span className={comment.isHidden ? 'post-comment-text hidden' : undefined}>
-                    {comment.text}
-                  </span>
+          {comments.length ? (
+            (() => {
+              const roots = comments.filter((c) => !c.parentId);
+              const repliesOf = (rootId: string) =>
+                comments.filter((c) => c.parentId === rootId);
+              const renderRow = (comment: PostComment, isReply = false) => (
+                <div className={`post-comment${isReply ? ' reply' : ''}`} key={comment.id}>
+                  <div className="post-comment-main">
+                    <div>
+                      <button
+                        type="button"
+                        className="post-comment-author"
+                        onClick={() => navigate(`/profile/${comment.author.username}`)}
+                      >
+                        @{comment.author.username}
+                      </button>
+                      <span className={comment.isHidden ? 'post-comment-text hidden' : undefined}>
+                        {comment.text}
+                      </span>
+                    </div>
+                    <div className="post-comment-votes">
+                      <button
+                        type="button"
+                        className={`post-comment-vote${comment.isLiked ? ' liked' : ''}`}
+                        title="Нравится"
+                        disabled={votingCommentId === comment.id}
+                        onClick={() => void likeComment(comment.id)}
+                      >
+                        <Heart size={12} fill={comment.isLiked ? 'currentColor' : 'none'} />
+                        <span>{formatCount(comment.likes ?? 0)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`post-comment-vote${comment.isDisliked ? ' disliked' : ''}`}
+                        title={comment.isDisliked ? 'Показать комментарий' : 'Не нравится'}
+                        disabled={votingCommentId === comment.id}
+                        onClick={() => void dislikeComment(comment.id)}
+                      >
+                        <ThumbsDown size={12} fill={comment.isDisliked ? 'currentColor' : 'none'} />
+                      </button>
+                      <button
+                        type="button"
+                        className="post-comment-reply-btn"
+                        onClick={() => startReply(comment)}
+                      >
+                        Ответить
+                      </button>
+                    </div>
+                  </div>
+                  {currentUserId === comment.authorId && (
+                    <button
+                      type="button"
+                      className="post-comment-delete"
+                      title="Удалить комментарий"
+                      onClick={() => void deleteComment(comment.id)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
-                <div className="post-comment-votes">
-                  <button
-                    type="button"
-                    className={`post-comment-vote${comment.isLiked ? ' liked' : ''}`}
-                    title="Нравится"
-                    disabled={votingCommentId === comment.id}
-                    onClick={() => void likeComment(comment.id)}
-                  >
-                    <Heart size={12} fill={comment.isLiked ? 'currentColor' : 'none'} />
-                    <span>{formatCount(comment.likes ?? 0)}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`post-comment-vote${comment.isDisliked ? ' disliked' : ''}`}
-                    title={comment.isDisliked ? 'Показать комментарий' : 'Не нравится'}
-                    disabled={votingCommentId === comment.id}
-                    onClick={() => void dislikeComment(comment.id)}
-                  >
-                    <ThumbsDown size={12} fill={comment.isDisliked ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-              </div>
-              {currentUserId === comment.authorId && (
-                <button
-                  type="button"
-                  className="post-comment-delete"
-                  title="Удалить комментарий"
-                  onClick={() => void deleteComment(comment.id)}
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          )) : <div className="post-comment">Комментариев пока нет.</div>}
+              );
+              return roots.flatMap((root) => [
+                renderRow(root, false),
+                ...repliesOf(root.id).map((reply) => renderRow(reply, true)),
+              ]);
+            })()
+          ) : (
+            <div className="post-comment">Комментариев пока нет.</div>
+          )}
         </div>
+        {replyTo && (
+          <div className="post-comment-reply-bar">
+            <span>
+              Ответ для <strong>@{replyTo.username}</strong>
+            </span>
+            <button
+              type="button"
+              className="post-comment-reply-cancel"
+              aria-label="Отменить ответ"
+              onClick={() => setReplyTo(null)}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <form className="post-comment-form" onSubmit={submitComment}>
-          <input value={commentText} onChange={(event) => setCommentText(event.target.value)} maxLength={1000} placeholder="Написать комментарий…" />
+          <input
+            ref={commentInputRef}
+            value={commentText}
+            onChange={(event) => setCommentText(event.target.value)}
+            maxLength={1000}
+            placeholder={replyTo ? `Ответ @${replyTo.username}…` : 'Написать комментарий…'}
+          />
           <button type="submit">Отправить</button>
         </form>
         {commentError && <div className="post-comment">{commentError}</div>}

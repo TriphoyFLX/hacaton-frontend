@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy } from 'lucide-react';
+import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy, X } from 'lucide-react';
 import { chatsApi, Chat, Message, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
 import { blocksApi, BlockStatus } from '../api/blocks';
 import { usersApi } from '../api/users';
@@ -506,77 +506,18 @@ ${FONT_IMPORT}
   opacity: 0.72;
   font-style: italic;
 }
+.message-bubble.editing {
+  box-shadow: 0 0 0 1.5px rgba(240, 237, 232, 0.45);
+}
 .message-deleted-text {
   font-size: 13px;
   color: inherit;
   opacity: 0.75;
 }
 .message-edited-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  opacity: 0.7;
+  font-size: 11px;
+  opacity: 0.62;
   margin-right: 6px;
-}
-.message-edit-box {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 180px;
-}
-.message-edit-input {
-  width: 100%;
-  min-height: 64px;
-  resize: vertical;
-  border: 1px solid var(--border-mid);
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.18);
-  color: inherit;
-  font-family: 'Syne', sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
-  padding: 8px 10px;
-  outline: none;
-}
-.message-bubble.own .message-edit-input {
-  background: rgba(11, 11, 11, 0.12);
-  border-color: rgba(11, 11, 11, 0.2);
-}
-.message-edit-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-}
-.message-edit-btn {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-.message-bubble.own .message-edit-btn {
-  background: rgba(11, 11, 11, 0.12);
-  border-color: rgba(11, 11, 11, 0.2);
-  color: inherit;
-}
-.message-edit-btn.primary {
-  background: var(--text-primary);
-  color: var(--bg);
-  border-color: var(--text-primary);
-}
-.message-bubble.own .message-edit-btn.primary {
-  background: rgba(11, 11, 11, 0.85);
-  color: #f0ede8;
-  border-color: transparent;
-}
-.message-edit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .message-actions {
   display: flex;
@@ -1063,6 +1004,68 @@ ${FONT_IMPORT}
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
+.edit-compose-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-elevated);
+  border-left: 3px solid var(--accent);
+}
+.edit-compose-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: rgba(240, 237, 232, 0.08);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.edit-compose-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.edit-compose-body {
+  min-width: 0;
+  flex: 1;
+}
+.edit-compose-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.edit-compose-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.edit-compose-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.edit-compose-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+.edit-compose-close svg {
+  width: 16px;
+  height: 16px;
+}
 .input-form {
   display: flex;
   gap: 8px;
@@ -1079,8 +1082,14 @@ ${FONT_IMPORT}
   outline: none;
   transition: border-color 0.15s;
 }
+.message-input.editing {
+  border-color: rgba(240, 237, 232, 0.35);
+}
 .message-input:focus {
   border-color: var(--border-hover);
+}
+.message-input.editing:focus {
+  border-color: rgba(240, 237, 232, 0.55);
 }
 .message-input::placeholder {
   color: var(--text-muted);
@@ -1206,8 +1215,8 @@ export default function ChatPage() {
   const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  const [composerStash, setComposerStash] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     messageId: string;
@@ -1346,26 +1355,53 @@ export default function ChatPage() {
     if (!('content' in message) || message.status === 'PENDING') return;
     if ('deletedAt' in message && message.deletedAt) return;
     setReactionPickerId(null);
+    setContextMenu(null);
+    if (!editingId) {
+      setComposerStash(newMessage);
+    }
     setEditingId(message.id);
-    setEditDraft(message.content || '');
+    setNewMessage(message.content || '');
+    clearMentionSuggestions();
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+      document
+        .querySelector(`[data-message-id="${message.id}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   };
 
   const cancelEditMessage = () => {
     setEditingId(null);
-    setEditDraft('');
     setEditSaving(false);
+    setNewMessage(composerStash);
+    setComposerStash('');
+    clearMentionSuggestions();
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const saveEditMessage = async () => {
     if (!chatId || !editingId || editSaving) return;
-    const content = editDraft.trim();
+    const target = messages.find((m) => m.id === editingId);
+    const hasSharedTok = Boolean(target && 'soundTok' in target && target.soundTok);
+    const content = newMessage.trim();
+    if (!content && !hasSharedTok) return;
+
     setEditSaving(true);
     try {
       const updated = await chatsApi.editMessage(chatId, editingId, content);
-      setMessages(prev =>
-        prev.map(m => (m.id === editingId ? { ...m, ...updated } as Message : m))
+      setMessages((prev) =>
+        prev.map((m) => (m.id === editingId ? ({ ...m, ...updated } as Message) : m))
       );
-      cancelEditMessage();
+      setEditingId(null);
+      setEditSaving(false);
+      setNewMessage(composerStash);
+      setComposerStash('');
+      clearMentionSuggestions();
+      requestAnimationFrame(() => inputRef.current?.focus());
     } catch {
       setSendError('Не удалось изменить сообщение');
       setEditSaving(false);
@@ -1441,6 +1477,23 @@ export default function ChatPage() {
     if (!contextMenu) return null;
     return messages.find((m) => m.id === contextMenu.messageId) || null;
   }, [contextMenu, messages]);
+
+  const editingMessage = useMemo(() => {
+    if (!editingId) return null;
+    return messages.find((m) => m.id === editingId) || null;
+  }, [editingId, messages]);
+
+  const editingPreview = useMemo(() => {
+    if (!editingMessage) return '';
+    const text = (editingMessage.content || '').trim();
+    if (text) return text;
+    if ('soundTok' in editingMessage && editingMessage.soundTok) return 'Вложение SoundTok';
+    return 'Сообщение';
+  }, [editingMessage]);
+
+  const editingAllowsEmpty = Boolean(
+    editingMessage && 'soundTok' in editingMessage && editingMessage.soundTok,
+  );
 
   const handleToggleReaction = async (messageId: string, emoji: string) => {
     if (!chatId) return;
@@ -1738,6 +1791,10 @@ export default function ChatPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingId) {
+      await saveEditMessage();
+      return;
+    }
     if (!newMessage.trim() || !chatId || !canSendMessages || sending || isMessagingBlocked) return;
 
     const content = newMessage.trim();
@@ -1899,6 +1956,8 @@ export default function ChatPage() {
     setNewMessage(value);
     updateMentionSuggestions(value, cursor);
 
+    if (editingId) return;
+
     sendChatTyping(true);
 
     if (typingTimeoutRef.current) {
@@ -1936,9 +1995,15 @@ export default function ChatPage() {
       }
     }
 
+    if (e.key === 'Escape' && editingId) {
+      e.preventDefault();
+      cancelEditMessage();
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage(e);
+      void handleSendMessage(e);
     }
   };
 
@@ -2107,13 +2172,16 @@ export default function ChatPage() {
                 const reactionSummary = getReactionSummary(message);
                 const pickerOpen = reactionPickerId === message.id;
 
+                const isEditing = editingId === message.id;
+
                 return (
                   <div
                     key={message.id}
+                    data-message-id={message.id}
                     className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''} ${pickerOpen ? 'picker-open' : ''}`}
                   >
                     <div
-                      className={`message-bubble ${isOwn ? 'own' : 'other'} ${isDeleted ? 'deleted' : ''}`}
+                      className={`message-bubble ${isOwn ? 'own' : 'other'} ${isDeleted ? 'deleted' : ''} ${isEditing ? 'editing' : ''}`}
                       onContextMenu={(event) => openMessageContextMenu(event, message, isOwn)}
                     >
                       {pickerOpen && (
@@ -2141,34 +2209,6 @@ export default function ChatPage() {
                       )}
                       {isDeleted ? (
                         <p className="message-deleted-text">Сообщение удалено</p>
-                      ) : editingId === message.id ? (
-                        <div className="message-edit-box">
-                          <textarea
-                            className="message-edit-input"
-                            value={editDraft}
-                            onChange={(e) => setEditDraft(e.target.value)}
-                            maxLength={4000}
-                            autoFocus
-                          />
-                          <div className="message-edit-actions">
-                            <button
-                              type="button"
-                              className="message-edit-btn"
-                              onClick={cancelEditMessage}
-                              disabled={editSaving}
-                            >
-                              Отмена
-                            </button>
-                            <button
-                              type="button"
-                              className="message-edit-btn primary"
-                              onClick={() => void saveEditMessage()}
-                              disabled={editSaving || (!editDraft.trim() && !sharedTok)}
-                            >
-                              {editSaving ? 'Сохранение…' : 'Сохранить'}
-                            </button>
-                          </div>
-                        </div>
                       ) : (
                         <>
                           {sharedTok && (
@@ -2237,7 +2277,7 @@ export default function ChatPage() {
                           )}
                         </>
                       )}
-                      {reactionSummary.length > 0 && !isDeleted && editingId !== message.id && (
+                      {reactionSummary.length > 0 && !isDeleted && (
                         <div className="message-reactions">
                           {reactionSummary.map((reaction) => (
                             <button
@@ -2255,13 +2295,13 @@ export default function ChatPage() {
                       )}
                       <div className="message-meta">
                         {'editedAt' in message && message.editedAt && !isDeleted && (
-                          <span className="message-edited-label">изм.</span>
+                          <span className="message-edited-label">изменено</span>
                         )}
                         <span className="message-time">{formatTime(message.createdAt)}</span>
                         {!isDeleted && <span className="message-status">{renderStatus(message)}</span>}
                       </div>
                     </div>
-                    {!isPending && !isDeleted && editingId !== message.id && (
+                    {!isPending && !isDeleted && (
                       <div className="message-actions">
                         <button
                           type="button"
@@ -2330,6 +2370,26 @@ export default function ChatPage() {
 
           {/* Input */}
           <div className="chat-input-area">
+            {editingId && editingMessage && (
+              <div className="edit-compose-bar" role="status">
+                <div className="edit-compose-icon" aria-hidden>
+                  <Pencil />
+                </div>
+                <div className="edit-compose-body">
+                  <div className="edit-compose-title">Редактирование</div>
+                  <div className="edit-compose-preview">{editingPreview}</div>
+                </div>
+                <button
+                  type="button"
+                  className="edit-compose-close"
+                  aria-label="Отменить редактирование"
+                  onClick={cancelEditMessage}
+                  disabled={editSaving}
+                >
+                  <X />
+                </button>
+              </div>
+            )}
             {mentionSuggestions.length > 0 && (
               <div className="mention-suggest" role="listbox">
                 {mentionSuggestions.map((suggestion, index) => (
@@ -2376,18 +2436,36 @@ export default function ChatPage() {
                 onBlur={() => {
                   setTimeout(() => clearMentionSuggestions(), 150);
                 }}
-                placeholder={isMessagingBlocked ? 'Сообщения недоступны' : 'Введите сообщение... @user'}
-                className="message-input"
-                disabled={sending || isMessagingBlocked || !canSendMessages}
+                placeholder={
+                  isMessagingBlocked && !editingId
+                    ? 'Сообщения недоступны'
+                    : editingId
+                      ? 'Измените сообщение…'
+                      : 'Введите сообщение... @user'
+                }
+                className={`message-input${editingId ? ' editing' : ''}`}
+                disabled={
+                  editingId
+                    ? editSaving
+                    : sending || isMessagingBlocked || !canSendMessages
+                }
                 maxLength={4000}
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim() || sending || isMessagingBlocked || !canSendMessages}
+                disabled={
+                  editingId
+                    ? editSaving || (!newMessage.trim() && !editingAllowsEmpty)
+                    : !newMessage.trim() || sending || isMessagingBlocked || !canSendMessages
+                }
                 className="send-btn"
+                title={editingId ? 'Сохранить' : 'Отправить'}
+                aria-label={editingId ? 'Сохранить изменения' : 'Отправить сообщение'}
               >
-                {sending ? (
+                {editSaving || sending ? (
                   <Loader2 size={18} className="loader" />
+                ) : editingId ? (
+                  <Check size={18} />
                 ) : (
                   <Send size={18} />
                 )}

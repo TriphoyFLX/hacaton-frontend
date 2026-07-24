@@ -32,6 +32,7 @@ export interface PostComment {
   text: string;
   authorId: string;
   postId: string;
+  parentId?: string | null;
   createdAt: string;
   likes?: number;
   dislikes?: number;
@@ -87,8 +88,12 @@ export const postsApi = {
   unlikePost: async (id: string) => (await api.delete(`/posts/${id}/like`)).data,
   recordView: async (id: string): Promise<{ id: string; views: number }> => (await api.post(`/posts/${id}/view`)).data,
   getComments: async (id: string): Promise<PostComment[]> => (await api.get(`/posts/${id}/comments`)).data,
-  createComment: async (id: string, text: string): Promise<{ comment: PostComment; commentsCount: number }> =>
-    (await api.post(`/posts/${id}/comments`, { text })).data,
+  createComment: async (
+    id: string,
+    text: string,
+    parentId?: string | null,
+  ): Promise<{ comment: PostComment; commentsCount: number }> =>
+    (await api.post(`/posts/${id}/comments`, { text, ...(parentId ? { parentId } : {}) })).data,
   deletePost: async (id: string): Promise<{ success: boolean; id: string }> =>
     (await api.delete(`/posts/${id}`)).data,
   deleteComment: async (

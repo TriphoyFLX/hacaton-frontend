@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown } from 'lucide-react';
+import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2 } from 'lucide-react';
 import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
 import { followsApi } from '../api/follows';
 import { API_ORIGIN } from '../api/client';
@@ -368,6 +368,10 @@ const css = `
   color: #fe2c55;
 }
 
+.vf-action-btn.danger:hover {
+  color: #f5a9a3;
+}
+
 .vf-action-count {
   font-size: 12px;
   font-weight: 600;
@@ -478,6 +482,12 @@ const css = `
   padding: 12px 0;
 }
 
+.vf-comment-item.reply {
+  margin-left: 28px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(255,255,255,0.08);
+}
+
 .vf-comment-avatar {
   width: 36px;
   height: 36px;
@@ -491,6 +501,13 @@ const css = `
   color: #fff;
   flex-shrink: 0;
   overflow: hidden;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.vf-comment-avatar:hover {
+  outline: 1px solid rgba(255,255,255,0.25);
 }
 
 .vf-comment-avatar img {
@@ -512,9 +529,18 @@ const css = `
 }
 
 .vf-comment-user {
+  border: 0;
+  background: transparent;
+  padding: 0;
   font-size: 13px;
   font-weight: 600;
   color: rgba(255,255,255,0.6);
+  cursor: pointer;
+}
+
+.vf-comment-user:hover {
+  color: #fff;
+  text-decoration: underline;
 }
 
 .vf-comment-time {
@@ -537,8 +563,9 @@ const css = `
 .vf-comment-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .vf-comment-vote {
@@ -563,6 +590,70 @@ const css = `
 
 .vf-comment-vote.disliked {
   color: #8b9cff;
+}
+
+.vf-comment-reply {
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vf-comment-reply:hover {
+  color: #fff;
+}
+
+.vf-comment-delete {
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.vf-comment-delete:hover {
+  color: #f5a9a3;
+}
+
+.vf-comment-delete:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vf-reply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px 0;
+  color: rgba(255,255,255,0.55);
+  font-size: 12px;
+  background: #121212;
+}
+
+.vf-reply-bar strong {
+  color: rgba(255,255,255,0.9);
+  font-weight: 600;
+}
+
+.vf-reply-cancel {
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+}
+
+.vf-reply-cancel:hover {
+  color: #fff;
 }
 
 .vf-empty-comments {
@@ -683,19 +774,26 @@ interface VideoFeedProps {
   soundToks: SoundTok[];
   onLike: (id: string) => void;
   onCommentCountChange?: (id: string, count: number) => void;
+  onDeleted?: (id: string) => void;
   initialIndex?: number;
   /** Fired when the user is near the end — used to prefetch the next page. */
   onNearEnd?: () => void;
 }
 
-function CommentAvatar({ author }: { author: Comment['author'] }) {
+function CommentAvatar({
+  author,
+  onOpen,
+}: {
+  author: Comment['author'];
+  onOpen: () => void;
+}) {
   const url = resolveMediaUrl(author.avatar);
   const label = (author.displayName || author.username)[0]?.toUpperCase() ?? '?';
 
   return (
-    <div className="vf-comment-avatar">
+    <button type="button" className="vf-comment-avatar" onClick={onOpen} title={`@${author.username}`}>
       {url ? <img src={url} alt={author.username} /> : label}
-    </div>
+    </button>
   );
 }
 
@@ -703,6 +801,7 @@ export default function VideoFeed({
   soundToks,
   onLike,
   onCommentCountChange,
+  onDeleted,
   initialIndex = 0,
   onNearEnd,
 }: VideoFeedProps) {
@@ -721,6 +820,9 @@ export default function VideoFeed({
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [votingCommentId, setVotingCommentId] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [deletingSoundTokId, setDeletingSoundTokId] = useState<string | null>(null);
   const [localCounts, setLocalCounts] = useState<Record<string, number>>({});
 
   const [isPaused, setIsPaused] = useState(false);
@@ -1044,6 +1146,8 @@ export default function VideoFeed({
     setCurrentSoundTokId(id);
     setCommentsOpen(true);
     setComments([]);
+    setReplyTo(null);
+    setNewComment('');
     setCommentsLoading(true);
     try {
       const data = await soundTokApi.getComments(id);
@@ -1059,6 +1163,21 @@ export default function VideoFeed({
     setCommentsOpen(false);
     setCurrentSoundTokId(null);
     setNewComment('');
+    setReplyTo(null);
+  };
+
+  const startReply = (comment: Comment) => {
+    const rootId = comment.parentId || comment.id;
+    setReplyTo({ id: rootId, username: comment.author.username });
+    setNewComment((prev) => {
+      const mention = `@${comment.author.username} `;
+      return prev.startsWith(mention) ? prev : mention;
+    });
+    requestAnimationFrame(() => commentInputRef.current?.focus());
+  };
+
+  const openCommentProfile = (username: string) => {
+    navigate(`/profile/${username}`);
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
@@ -1067,16 +1186,26 @@ export default function VideoFeed({
 
     setSubmittingComment(true);
     const text = newComment.trim();
+    const parentId = replyTo?.id;
+    const parentUsername = replyTo?.username;
     setNewComment('');
+    setReplyTo(null);
 
     try {
-      const { comment, commentsCount } = await soundTokApi.createComment(currentSoundTokId, text);
+      const { comment, commentsCount } = await soundTokApi.createComment(
+        currentSoundTokId,
+        text,
+        parentId,
+      );
       setComments((prev) => [comment, ...prev]);
       setLocalCounts((prev) => ({ ...prev, [currentSoundTokId]: commentsCount }));
       onCommentCountChange?.(currentSoundTokId, commentsCount);
     } catch (error) {
       console.error('Failed to create comment:', error);
       setNewComment(text);
+      if (parentId && parentUsername) {
+        setReplyTo({ id: parentId, username: parentUsername });
+      }
     } finally {
       setSubmittingComment(false);
     }
@@ -1133,6 +1262,40 @@ export default function VideoFeed({
       console.error('Failed to dislike comment:', error);
     } finally {
       setVotingCommentId(null);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!currentSoundTokId || deletingCommentId) return;
+    if (!window.confirm('Удалить этот комментарий?')) return;
+    setDeletingCommentId(commentId);
+    try {
+      const result = await soundTokApi.deleteComment(currentSoundTokId, commentId);
+      setComments((prev) =>
+        prev.filter((c) => c.id !== commentId && c.parentId !== commentId),
+      );
+      setLocalCounts((prev) => ({ ...prev, [currentSoundTokId]: result.commentsCount }));
+      onCommentCountChange?.(currentSoundTokId, result.commentsCount);
+      setReplyTo((current) => (current?.id === commentId ? null : current));
+    } catch (error) {
+      console.error('Failed to delete comment:', error);
+    } finally {
+      setDeletingCommentId(null);
+    }
+  };
+
+  const handleDeleteSoundTok = async (id: string) => {
+    if (deletingSoundTokId) return;
+    if (!window.confirm('Удалить это видео из SoundTok?')) return;
+    setDeletingSoundTokId(id);
+    try {
+      await soundTokApi.deleteSoundTok(id);
+      if (currentSoundTokId === id) closeComments();
+      onDeleted?.(id);
+    } catch (error) {
+      console.error('Failed to delete SoundTok:', error);
+    } finally {
+      setDeletingSoundTokId(null);
     }
   };
 
@@ -1358,6 +1521,27 @@ export default function VideoFeed({
                       <span className="vf-action-count vf-share-label">Поделиться</span>
                     </div>
 
+                    {isOwnVideo(soundTok.authorId) && (
+                      <div className="vf-action-group">
+                        <button
+                          type="button"
+                          className="vf-action-btn danger"
+                          disabled={deletingSoundTokId === soundTok.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteSoundTok(soundTok.id);
+                          }}
+                          aria-label="Удалить видео"
+                          title="Удалить"
+                        >
+                          <Trash2 size={24} strokeWidth={1.8} />
+                        </button>
+                        <span className="vf-action-count vf-share-label">
+                          {deletingSoundTokId === soundTok.id ? '…' : 'Удалить'}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="vf-music-disc" aria-hidden>
                       {authorAvatar ? (
                         <img src={authorAvatar} alt="" />
@@ -1402,45 +1586,110 @@ export default function VideoFeed({
                   Будьте первым!
                 </div>
               ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="vf-comment-item">
-                    <CommentAvatar author={comment.author} />
-                    <div className="vf-comment-body">
-                      <div className="vf-comment-meta">
-                        <span className="vf-comment-user">
-                          {comment.author.displayName || comment.author.username}
-                        </span>
-                        <span className="vf-comment-time">{formatRelativeTime(comment.createdAt)}</span>
-                      </div>
-                      <div className={`vf-comment-text${comment.isHidden ? ' hidden' : ''}`}>
-                        {comment.text}
-                      </div>
-                      <div className="vf-comment-actions">
-                        <button
-                          type="button"
-                          className={`vf-comment-vote${comment.isLiked ? ' liked' : ''}`}
-                          title="Нравится"
-                          disabled={votingCommentId === comment.id}
-                          onClick={() => void handleLikeComment(comment.id)}
-                        >
-                          <Heart size={14} fill={comment.isLiked ? 'currentColor' : 'none'} />
-                          <span>{formatCount(comment.likes ?? 0)}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`vf-comment-vote${comment.isDisliked ? ' disliked' : ''}`}
-                          title={comment.isDisliked ? 'Показать комментарий' : 'Не нравится'}
-                          disabled={votingCommentId === comment.id}
-                          onClick={() => void handleDislikeComment(comment.id)}
-                        >
-                          <ThumbsDown size={14} fill={comment.isDisliked ? 'currentColor' : 'none'} />
-                        </button>
+                (() => {
+                  const roots = comments.filter((c) => !c.parentId);
+                  const repliesOf = (rootId: string) =>
+                    comments
+                      .filter((c) => c.parentId === rootId)
+                      .slice()
+                      .sort(
+                        (a, b) =>
+                          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+                      );
+                  const renderComment = (comment: Comment, isReply = false) => (
+                    <div
+                      key={comment.id}
+                      className={`vf-comment-item${isReply ? ' reply' : ''}`}
+                    >
+                      <CommentAvatar
+                        author={comment.author}
+                        onOpen={() => openCommentProfile(comment.author.username)}
+                      />
+                      <div className="vf-comment-body">
+                        <div className="vf-comment-meta">
+                          <button
+                            type="button"
+                            className="vf-comment-user"
+                            onClick={() => openCommentProfile(comment.author.username)}
+                          >
+                            {comment.author.displayName || comment.author.username}
+                          </button>
+                          <span className="vf-comment-time">
+                            {formatRelativeTime(comment.createdAt)}
+                          </span>
+                        </div>
+                        <div className={`vf-comment-text${comment.isHidden ? ' hidden' : ''}`}>
+                          {comment.text}
+                        </div>
+                        <div className="vf-comment-actions">
+                          <button
+                            type="button"
+                            className={`vf-comment-vote${comment.isLiked ? ' liked' : ''}`}
+                            title="Нравится"
+                            disabled={votingCommentId === comment.id}
+                            onClick={() => void handleLikeComment(comment.id)}
+                          >
+                            <Heart size={14} fill={comment.isLiked ? 'currentColor' : 'none'} />
+                            <span>{formatCount(comment.likes ?? 0)}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`vf-comment-vote${comment.isDisliked ? ' disliked' : ''}`}
+                            title={comment.isDisliked ? 'Показать комментарий' : 'Не нравится'}
+                            disabled={votingCommentId === comment.id}
+                            onClick={() => void handleDislikeComment(comment.id)}
+                          >
+                            <ThumbsDown
+                              size={14}
+                              fill={comment.isDisliked ? 'currentColor' : 'none'}
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            className="vf-comment-reply"
+                            onClick={() => startReply(comment)}
+                          >
+                            Ответить
+                          </button>
+                          {currentUser?.id === comment.authorId && (
+                            <button
+                              type="button"
+                              className="vf-comment-delete"
+                              title="Удалить комментарий"
+                              disabled={deletingCommentId === comment.id}
+                              onClick={() => void handleDeleteComment(comment.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+
+                  return roots.flatMap((root) => [
+                    renderComment(root, false),
+                    ...repliesOf(root.id).map((reply) => renderComment(reply, true)),
+                  ]);
+                })()
               )}
             </div>
+
+            {replyTo && (
+              <div className="vf-reply-bar">
+                <span>
+                  Ответ для <strong>@{replyTo.username}</strong>
+                </span>
+                <button
+                  type="button"
+                  className="vf-reply-cancel"
+                  aria-label="Отменить ответ"
+                  onClick={() => setReplyTo(null)}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
 
             <form className="vf-sheet-input" onSubmit={handleSubmitComment}>
               <input
@@ -1448,7 +1697,9 @@ export default function VideoFeed({
                 type="text"
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Добавить комментарий..."
+                placeholder={
+                  replyTo ? `Ответ @${replyTo.username}…` : 'Добавить комментарий...'
+                }
                 maxLength={500}
                 disabled={submittingComment}
               />

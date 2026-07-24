@@ -5,6 +5,7 @@ export interface Comment {
   text: string;
   authorId: string;
   soundTokId: string;
+  parentId?: string | null;
   createdAt: string;
   likes?: number;
   dislikes?: number;
@@ -85,13 +86,33 @@ export const soundTokApi = {
     return response.data;
   },
 
+  deleteSoundTok: async (id: string): Promise<{ success: boolean; id: string }> => {
+    const response = await api.delete(`/soundtok/${id}`);
+    return response.data;
+  },
+
   getComments: async (soundTokId: string): Promise<Comment[]> => {
     const response = await api.get(`/soundtok/${soundTokId}/comments`);
     return response.data;
   },
 
-  createComment: async (soundTokId: string, text: string): Promise<CreateCommentResponse> => {
-    const response = await api.post(`/soundtok/${soundTokId}/comments`, { text });
+  createComment: async (
+    soundTokId: string,
+    text: string,
+    parentId?: string | null,
+  ): Promise<CreateCommentResponse> => {
+    const response = await api.post(`/soundtok/${soundTokId}/comments`, {
+      text,
+      ...(parentId ? { parentId } : {}),
+    });
+    return response.data;
+  },
+
+  deleteComment: async (
+    soundTokId: string,
+    commentId: string,
+  ): Promise<{ success: boolean; id: string; commentsCount: number }> => {
+    const response = await api.delete(`/soundtok/${soundTokId}/comments/${commentId}`);
     return response.data;
   },
 

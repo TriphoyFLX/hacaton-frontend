@@ -1032,6 +1032,9 @@ export default function SoundTok() {
                 prev.map((tok) => (tok.id === id ? { ...tok, commentsCount: count } : tok))
               );
             }}
+            onDeleted={(id) => {
+              setSoundToks((prev) => prev.filter((tok) => tok.id !== id));
+            }}
           />
           
           <button
