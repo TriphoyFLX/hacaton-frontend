@@ -43,6 +43,7 @@ export interface SoundTok {
   commentsCount: number;
   views?: number;
   repostsCount?: number;
+  sharesCount?: number;
   createdAt: string;
   updatedAt: string;
   isLiked?: boolean;
@@ -134,6 +135,11 @@ export const soundTokApi = {
 
   unrepostSoundTok: async (id: string) => {
     const response = await api.delete(`/soundtok/${id}/repost`);
+    return response.data;
+  },
+
+  recordShare: async (id: string): Promise<{ id: string; sharesCount: number }> => {
+    const response = await api.post(`/soundtok/${id}/share`);
     return response.data;
   },
 

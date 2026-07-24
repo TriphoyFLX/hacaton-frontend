@@ -120,7 +120,7 @@ const css = `
 }
 
 .vf-share-label {
-  font-size: 11px;
+  /* keep count styling aligned with likes */
 }
 
 .vf-desc-expanded {
@@ -465,21 +465,16 @@ const css = `
   background: transparent;
   border: none;
   padding: 0;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
 }
 
 .vf-action-btn.vf-share-btn:hover {
   background: transparent;
-  transform: scale(1.04);
 }
 
 .vf-share-icon {
   display: block;
-  width: 44px;
-  height: 44px;
-  object-fit: contain;
-  border-radius: 50%;
-  pointer-events: none;
+  color: #fff;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
 }
 
 .vf-action-btn:active {
@@ -1130,9 +1125,6 @@ button.vf-repost-attr:hover {
   .vf-bottom-info {
     padding-left: 12px;
   }
-  .vf-share-label {
-    display: none;
-  }
 }
 `;
 
@@ -1149,16 +1141,18 @@ interface VideoFeedProps {
   onNeedAuth?: () => void;
 }
 
-function ShareCurvedIcon({ size = 44 }: { size?: number }) {
+function ShareCurvedIcon({ size = 28 }: { size?: number }) {
   return (
-    <img
+    <svg
       className="vf-share-icon"
-      src="/icons/share-curved.png"
       width={size}
       height={size}
-      alt=""
-      draggable={false}
-    />
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M13.25 3.85c.2-.45.7-.68 1.18-.52.16.05.3.15.4.28l6.05 7.05c.35.4.32 1.02-.07 1.38l-6.05 5.55c-.4.37-1.02.34-1.39-.07-.2-.22-.28-.52-.23-.8l.45-2.7c-4.35.45-7.55 3.55-7.9 7.95-.04.5-.46.88-.96.88h-.08c-.55-.04-.96-.52-.92-1.07.5-6.05 5.05-10.7 10.85-11.35l-.48-2.68c-.08-.48.15-.96.6-1.15.15-.06.3-.08.45-.05z" />
+    </svg>
   );
 }
 
@@ -1204,6 +1198,7 @@ export default function VideoFeed({
     Math.min(Math.max(initialIndex, 0), Math.max(soundToks.length - 1, 0))
   );
   const [shareTok, setShareTok] = useState<SoundTok | null>(null);
+  const [shareCounts, setShareCounts] = useState<Record<string, number>>({});
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [currentSoundTokId, setCurrentSoundTokId] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -2487,9 +2482,11 @@ export default function VideoFeed({
                         }}
                         aria-label="Поделиться"
                       >
-                        <ShareCurvedIcon size={44} />
+                        <ShareCurvedIcon size={28} />
                       </button>
-                      <span className="vf-action-count vf-share-label">Поделиться</span>
+                      <span className="vf-action-count">
+                        {formatCount(shareCounts[soundTok.id] ?? soundTok.sharesCount ?? 0)}
+                      </span>
                     </div>
 
                     <div className="vf-action-group vf-more-wrap">
@@ -2764,6 +2761,9 @@ export default function VideoFeed({
         open={!!shareTok}
         soundTok={shareTok}
         onClose={() => setShareTok(null)}
+        onShared={(id, sharesCount) => {
+          setShareCounts((prev) => ({ ...prev, [id]: sharesCount }));
+        }}
       />
 
       {repostsSheetId && (

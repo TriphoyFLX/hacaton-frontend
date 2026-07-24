@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Link2, Loader2, Send, Users, X } from 'lucide-react';
 import { chatsApi, Chat } from '../api/chats';
-import { SoundTok } from '../api/soundtok';
+import { SoundTok, soundTokApi } from '../api/soundtok';
 import { useAuthStore } from '../store/authStore';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 
@@ -9,6 +9,7 @@ interface ShareSoundTokModalProps {
   open: boolean;
   soundTok: SoundTok | null;
   onClose: () => void;
+  onShared?: (soundTokId: string, sharesCount: number) => void;
 }
 
 export function getSoundTokShareUrl(soundTokId: string): string {
@@ -295,6 +296,7 @@ export default function ShareSoundTokModal({
   open,
   soundTok,
   onClose,
+  onShared,
 }: ShareSoundTokModalProps) {
   const user = useAuthStore((s) => s.user);
   const [chats, setChats] = useState<Chat[]>([]);
@@ -307,6 +309,16 @@ export default function ShareSoundTokModal({
   const [toast, setToast] = useState<string | null>(null);
 
   const shareUrl = soundTok ? getSoundTokShareUrl(soundTok.id) : '';
+
+  const bumpShareCount = async () => {
+    if (!soundTok) return;
+    try {
+      const result = await soundTokApi.recordShare(soundTok.id);
+      onShared?.(soundTok.id, result.sharesCount);
+    } catch {
+      // sharing UX should not fail if counter update fails
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -348,6 +360,7 @@ export default function ShareSoundTokModal({
       setCopied(true);
       setToast('Ссылка скопирована');
       setTimeout(() => setCopied(false), 2000);
+      void bumpShareCount();
     } catch {
       setToast('Не удалось скопировать ссылку');
     }
@@ -375,6 +388,7 @@ export default function ShareSoundTokModal({
 
       setSentIds((prev) => new Set(prev).add(chat.id));
       setToast(`Отправлено: ${getChatTitle(chat, user?.id)}`);
+      void bumpShareCount();
     } catch {
       setToast('Не удалось отправить');
     } finally {
