@@ -1,10 +1,7 @@
 import { useAuthStore } from '../store/authStore';
-<<<<<<< HEAD
+import { resolveMediaUrl } from '../lib/mediaUrl';
 import PwaInstallButton from './PwaInstallButton';
 import { usePwaInstall } from '../hooks/usePwaInstall';
-=======
-import { resolveMediaUrl } from '../lib/mediaUrl';
->>>>>>> f211425 (Show avatars in dashboard and recent search, add chat edit and copy.)
 
 // ─────────────────────────────────────────────────────────
 // DESIGN SYSTEM — matches Sidebar & Profile exactly
