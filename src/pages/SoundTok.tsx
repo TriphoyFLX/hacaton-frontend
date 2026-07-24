@@ -806,6 +806,7 @@ export default function SoundTok() {
   const PAGE_SIZE = 8;
 
   const sharedVideoId = searchParams.get('v');
+  const openCommentsFromQuery = searchParams.get('c') === '1';
   const hasVideos = soundToks.length > 0;
 
   const orderedSoundToks = useMemo(() => {
@@ -826,7 +827,16 @@ export default function SoundTok() {
   const fetchSoundToks = async () => {
     try {
       const data = await soundTokApi.getSoundToks({ limit: PAGE_SIZE, offset: 0 });
-      setSoundToks(data.items);
+      let items = data.items;
+      if (sharedVideoId && !items.some((tok) => tok.id === sharedVideoId)) {
+        try {
+          const shared = await soundTokApi.getSoundTok(sharedVideoId);
+          items = [shared, ...items];
+        } catch {
+          // shared video may be deleted — keep feed as-is
+        }
+      }
+      setSoundToks(items);
       setHasMore(Boolean(data.hasMore));
     } catch (error) {
       console.error('Failed to fetch SoundToks:', error);
@@ -858,7 +868,8 @@ export default function SoundTok() {
 
   useEffect(() => {
     fetchSoundToks();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once / when deep-link id changes
+  }, [sharedVideoId]);
 
   useEffect(() => {
     if (!hasVideos) return;
@@ -1025,6 +1036,7 @@ export default function SoundTok() {
           <VideoFeed
             soundToks={orderedSoundToks}
             initialIndex={initialIndex}
+            initialOpenComments={openCommentsFromQuery}
             onLike={handleLike}
             onNearEnd={loadMoreSoundToks}
             onCommentCountChange={(id, count) => {

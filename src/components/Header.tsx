@@ -375,6 +375,10 @@ export default function Header() {
 
   const notificationText = (notification: AppNotification) => {
     const name = notification.actor.displayName || `@${notification.actor.username}`;
+    if (notification.entityType === 'soundtok') {
+      if (notification.type === 'LIKE') return `${name} оценил(а) ваше видео`;
+      if (notification.type === 'COMMENT') return `${name} прокомментировал(а) ваше видео`;
+    }
     const actions: Record<AppNotification['type'], string> = {
       LIKE: 'оценил(а) вашу публикацию',
       COMMENT: 'оставил(а) комментарий к публикации',
@@ -391,6 +395,11 @@ export default function Header() {
       setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item));
     }
     setIsNotificationsOpen(false);
+    if (notification.entityType === 'soundtok' && notification.entityId) {
+      const base = `/soundtok?v=${encodeURIComponent(notification.entityId)}`;
+      navigate(notification.type === 'COMMENT' ? `${base}&c=1` : base);
+      return;
+    }
     if (notification.entityType === 'post' && notification.entityId) navigate(`/feed?p=${notification.entityId}`);
     else if (notification.entityType === 'chat' && notification.entityId) navigate(`/chats/${notification.entityId}`);
     else navigate(`/profile/${notification.actor.username}`);

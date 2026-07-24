@@ -83,6 +83,12 @@ ${FONT_IMPORT}
   overflow: hidden;
   box-shadow: 0 18px 40px rgba(0,0,0,0.45);
 }
+.snd-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .snd-cover::after {
   content: '';
   position: absolute;
@@ -90,6 +96,10 @@ ${FONT_IMPORT}
   border-radius: 50%;
   background: #0d0d0d;
   border: 1px solid rgba(255,255,255,0.08);
+  pointer-events: none;
+}
+.snd-cover.has-avatar::after {
+  display: none;
 }
 .snd-cover svg {
   position: relative;
@@ -324,8 +334,12 @@ export default function SoundPage() {
         ) : (
           <>
             <div className="snd-hero">
-              <div className="snd-cover" aria-hidden>
-                <Music2 size={28} />
+              <div className={`snd-cover${resolveMediaUrl(sound.author.avatar) ? ' has-avatar' : ''}`} aria-hidden>
+                {resolveMediaUrl(sound.author.avatar) ? (
+                  <img src={resolveMediaUrl(sound.author.avatar) || ''} alt="" />
+                ) : (
+                  <Music2 size={28} />
+                )}
               </div>
               <div className="snd-meta">
                 <h1>{sound.title}</h1>

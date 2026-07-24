@@ -101,6 +101,11 @@ export const soundTokApi = {
     return data;
   },
 
+  getSoundTok: async (id: string): Promise<SoundTok> => {
+    const response = await api.get(`/soundtok/${id}`);
+    return response.data;
+  },
+
   likeSoundTok: async (id: string) => {
     const response = await api.post(`/soundtok/${id}/like`);
     return response.data;

@@ -84,11 +84,33 @@ ${FONT_IMPORT}
   border: 1px solid rgba(255,255,255,0.1);
   background: rgba(10,10,10,0.55);
   backdrop-filter: blur(10px);
-  padding: 8px 14px;
+  padding: 6px 12px 6px 6px;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sr-sound-chip img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #1a1a1a;
+}
+.sr-sound-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sr-sound-chip-author {
+  display: block;
+  font-size: 10px;
+  color: rgba(240,237,232,0.55);
+  margin-top: 1px;
 }
 
 .sr-bottom {
@@ -275,6 +297,17 @@ export default function SoundRecordPage() {
   const [error, setError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
+  const maxSeconds = Math.max(
+    1,
+    Math.min(
+      MAX_SECONDS,
+      Number.isFinite(Number(sound?.duration)) && Number(sound?.duration) > 0
+        ? Number(sound?.duration)
+        : MAX_SECONDS
+    )
+  );
+  const progress = Math.min(100, (elapsed / maxSeconds) * 100);
+
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -346,6 +379,7 @@ export default function SoundRecordPage() {
     }
     const audio = audioRef.current;
     if (audio) {
+      audio.onended = null;
       audio.pause();
       audio.currentTime = 0;
     }
@@ -389,8 +423,16 @@ export default function SoundRecordPage() {
     startedAtRef.current = Date.now();
     setElapsed(0);
 
+    const limit =
+      Number.isFinite(Number(sound.duration)) && Number(sound.duration) > 0
+        ? Math.min(MAX_SECONDS, Number(sound.duration))
+        : MAX_SECONDS;
+
     const audio = audioRef.current;
     if (audio) {
+      audio.onended = () => {
+        stopRecording();
+      };
       audio.currentTime = 0;
       void audio.play().catch(() => undefined);
     }
@@ -398,7 +440,7 @@ export default function SoundRecordPage() {
     timerRef.current = window.setInterval(() => {
       const sec = (Date.now() - startedAtRef.current) / 1000;
       setElapsed(sec);
-      if (sec >= MAX_SECONDS) {
+      if (sec >= limit) {
         stopRecording();
       }
     }, 100);
@@ -443,8 +485,6 @@ export default function SoundRecordPage() {
     }
   };
 
-  const progress = Math.min(100, (elapsed / MAX_SECONDS) * 100);
-
   return (
     <div className="sr-root">
       <style>{css}</style>
@@ -476,7 +516,17 @@ export default function SoundRecordPage() {
           >
             <ArrowLeft size={18} />
           </button>
-          <div className="sr-sound-chip">{sound?.title || 'Загрузка звука…'}</div>
+          <div className="sr-sound-chip">
+            {resolveMediaUrl(sound?.author?.avatar) ? (
+              <img src={resolveMediaUrl(sound?.author?.avatar) || ''} alt="" />
+            ) : null}
+            <div className="sr-sound-chip-text">
+              {sound?.title || 'Загрузка звука…'}
+              {sound?.author?.username ? (
+                <span className="sr-sound-chip-author">@{sound.author.username}</span>
+              ) : null}
+            </div>
+          </div>
           {!previewUrl && (
             <button
               type="button"
@@ -494,7 +544,8 @@ export default function SoundRecordPage() {
           <div className="sr-bottom">
             <div className={`sr-timer ${recording ? 'live' : ''}`}>
               {recording ? 'REC ' : ''}
-              {Math.min(MAX_SECONDS, Math.floor(elapsed)).toString().padStart(2, '0')}s / {MAX_SECONDS}s
+              {Math.min(maxSeconds, Math.floor(elapsed)).toString().padStart(2, '0')}s /{' '}
+              {Math.ceil(maxSeconds).toString().padStart(2, '0')}s
             </div>
             <div className="sr-progress">
               <span style={{ width: `${progress}%` }} />

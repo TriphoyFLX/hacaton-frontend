@@ -259,6 +259,16 @@ export const chatsApi = {
     return response.data;
   },
 
+  renameGroup: async (chatId: string, name: string): Promise<Chat> => {
+    const response = await api.patch(`/chats/${chatId}`, { name });
+    return response.data;
+  },
+
+  addMembers: async (chatId: string, memberIds: string[]): Promise<Chat> => {
+    const response = await api.post(`/chats/${chatId}/members`, { memberIds });
+    return response.data;
+  },
+
   deleteMessage: async (chatId: string, messageId: string): Promise<Message> => {
     const response = await api.delete(`/chats/${chatId}/messages/${messageId}`);
     return response.data;

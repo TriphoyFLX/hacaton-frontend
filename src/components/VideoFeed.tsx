@@ -224,14 +224,18 @@ const css = `
 }
 .vf-seek-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0;
   border-radius: inherit;
   background: #fff;
   pointer-events: none;
+  transform: scaleX(var(--seek-p, 0));
+  transform-origin: left center;
+  will-change: transform;
 }
 .vf-seek-thumb {
   position: absolute;
   top: 50%;
+  left: calc(var(--seek-p, 0) * 100%);
   width: 12px;
   height: 12px;
   border-radius: 50%;
@@ -239,6 +243,7 @@ const css = `
   transform: translate(-50%, -50%) scale(0);
   box-shadow: 0 1px 4px rgba(0,0,0,0.45);
   pointer-events: none;
+  will-change: left, transform;
   transition: transform 0.12s ease;
 }
 .vf-seek.active .vf-seek-thumb,
@@ -934,6 +939,7 @@ interface VideoFeedProps {
   onCommentCountChange?: (id: string, count: number) => void;
   onDeleted?: (id: string) => void;
   initialIndex?: number;
+  initialOpenComments?: boolean;
   /** Fired when the user is near the end — used to prefetch the next page. */
   onNearEnd?: () => void;
 }
@@ -967,6 +973,7 @@ export default function VideoFeed({
   onCommentCountChange,
   onDeleted,
   initialIndex = 0,
+  initialOpenComments = false,
   onNearEnd,
 }: VideoFeedProps) {
   const navigate = useNavigate();
@@ -1022,10 +1029,8 @@ export default function VideoFeed({
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [seekAria, setSeekAria] = useState({ now: 0, max: 0 });
 
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
@@ -1041,6 +1046,12 @@ export default function VideoFeed({
   const commentInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const seekRef = useRef<HTMLDivElement>(null);
+  const seekTimeRef = useRef<HTMLDivElement>(null);
+  const durationRef = useRef(0);
+  const progressRafRef = useRef<number | null>(null);
+  const lastSeekApplyRef = useRef(0);
+  const pendingSeekRatioRef = useRef<number | null>(null);
+  const openedCommentsFromQueryRef = useRef(false);
 
   const FLING_VELOCITY_THRESHOLD = 0.85;
   const DRAG_THRESHOLD = 110;
@@ -1404,34 +1415,54 @@ export default function VideoFeed({
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  const seekFromClientX = useCallback((clientX: number) => {
+  const applySeekUi = useCallback((ratio: number, time: number, dur: number) => {
+    const clamped = Math.min(1, Math.max(0, ratio));
+    if (seekRef.current) {
+      seekRef.current.style.setProperty('--seek-p', String(clamped));
+    }
+    if (seekTimeRef.current) {
+      seekTimeRef.current.textContent = `${formatSeekTime(time)} / ${formatSeekTime(dur)}`;
+    }
+  }, []);
+
+  const ratioFromClientX = useCallback((clientX: number) => {
     const el = seekRef.current;
-    const video = videoRefs.current[currentIndex];
-    if (!el || !video || !Number.isFinite(video.duration) || video.duration <= 0) return;
+    if (!el) return 0;
     const rect = el.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    const nextTime = ratio * video.duration;
-    video.currentTime = nextTime;
-    setProgress(ratio);
-    setCurrentTime(nextTime);
-    setDuration(video.duration);
-  }, [currentIndex]);
+    if (rect.width <= 0) return 0;
+    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+  }, []);
 
   const handleSeekPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     e.preventDefault();
-    if (!isActiveVideoReady()) return;
+    const video = videoRefs.current[currentIndex];
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
     enableSound();
     isSeekingRef.current = true;
     setIsSeeking(true);
     e.currentTarget.setPointerCapture(e.pointerId);
-    seekFromClientX(e.clientX);
+    const ratio = ratioFromClientX(e.clientX);
+    pendingSeekRatioRef.current = ratio;
+    durationRef.current = video.duration;
+    applySeekUi(ratio, ratio * video.duration, video.duration);
   };
 
   const handleSeekPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isSeekingRef.current) return;
     e.stopPropagation();
-    seekFromClientX(e.clientX);
+    const video = videoRefs.current[currentIndex];
+    const dur = video?.duration || durationRef.current;
+    if (!Number.isFinite(dur) || dur <= 0) return;
+    const ratio = ratioFromClientX(e.clientX);
+    pendingSeekRatioRef.current = ratio;
+    applySeekUi(ratio, ratio * dur, dur);
+
+    const now = performance.now();
+    if (video && now - lastSeekApplyRef.current > 80) {
+      lastSeekApplyRef.current = now;
+      video.currentTime = ratio * dur;
+    }
   };
 
   const handleSeekPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -1442,50 +1473,99 @@ export default function VideoFeed({
     } catch {
       // ignore
     }
+    const video = videoRefs.current[currentIndex];
+    const dur = video?.duration || durationRef.current;
+    const ratio = pendingSeekRatioRef.current ?? ratioFromClientX(e.clientX);
+    if (video && Number.isFinite(dur) && dur > 0) {
+      video.currentTime = ratio * dur;
+      applySeekUi(ratio, ratio * dur, dur);
+      setSeekAria({ now: Math.floor(ratio * dur), max: Math.floor(dur) });
+    }
+    pendingSeekRatioRef.current = null;
     isSeekingRef.current = false;
     setIsSeeking(false);
   };
 
-  function isActiveVideoReady() {
-    const video = videoRefs.current[currentIndex];
-    return Boolean(video && Number.isFinite(video.duration) && video.duration > 0);
-  }
-
-  // Track playback progress for the active video
+  // Smooth seek UI via rAF (no React re-renders per frame)
   useEffect(() => {
-    setProgress(0);
-    setCurrentTime(0);
-    setDuration(0);
+    applySeekUi(0, 0, 0);
+    durationRef.current = 0;
     isSeekingRef.current = false;
     setIsSeeking(false);
+    setSeekAria({ now: 0, max: 0 });
 
     const video = videoRefs.current[currentIndex];
     if (!video) return;
 
-    const onTime = () => {
-      if (isSeekingRef.current) return;
-      const dur = video.duration;
-      if (!Number.isFinite(dur) || dur <= 0) return;
-      setDuration(dur);
-      setCurrentTime(video.currentTime);
-      setProgress(Math.min(1, Math.max(0, video.currentTime / dur)));
-    };
-    const onMeta = () => {
-      if (Number.isFinite(video.duration)) setDuration(video.duration);
+    const stopRaf = () => {
+      if (progressRafRef.current != null) {
+        cancelAnimationFrame(progressRafRef.current);
+        progressRafRef.current = null;
+      }
     };
 
-    video.addEventListener('timeupdate', onTime);
+    const tick = () => {
+      progressRafRef.current = null;
+      if (isSeekingRef.current) {
+        progressRafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      const dur = video.duration;
+      if (Number.isFinite(dur) && dur > 0) {
+        durationRef.current = dur;
+        const t = video.currentTime || 0;
+        applySeekUi(t / dur, t, dur);
+      }
+      if (!video.paused && !video.ended) {
+        progressRafRef.current = requestAnimationFrame(tick);
+      }
+    };
+
+    const startRaf = () => {
+      if (progressRafRef.current != null) return;
+      progressRafRef.current = requestAnimationFrame(tick);
+    };
+
+    const onMeta = () => {
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        durationRef.current = video.duration;
+        setSeekAria((prev) => ({ ...prev, max: Math.floor(video.duration) }));
+        applySeekUi(
+          Math.min(1, Math.max(0, (video.currentTime || 0) / video.duration)),
+          video.currentTime || 0,
+          video.duration
+        );
+      }
+    };
+
     video.addEventListener('loadedmetadata', onMeta);
     video.addEventListener('durationchange', onMeta);
+    video.addEventListener('play', startRaf);
+    video.addEventListener('playing', startRaf);
+    video.addEventListener('pause', stopRaf);
+    video.addEventListener('ended', stopRaf);
     onMeta();
-    onTime();
+    if (!video.paused) startRaf();
 
     return () => {
-      video.removeEventListener('timeupdate', onTime);
+      stopRaf();
       video.removeEventListener('loadedmetadata', onMeta);
       video.removeEventListener('durationchange', onMeta);
+      video.removeEventListener('play', startRaf);
+      video.removeEventListener('playing', startRaf);
+      video.removeEventListener('pause', stopRaf);
+      video.removeEventListener('ended', stopRaf);
     };
-  }, [currentIndex, soundToks]);
+  }, [currentIndex, applySeekUi]);
+
+  useEffect(() => {
+    if (!initialOpenComments || openedCommentsFromQueryRef.current) return;
+    const tok = soundToks[currentIndex];
+    if (!tok) return;
+    openedCommentsFromQueryRef.current = true;
+    void openComments(tok.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once from deep-link
+  }, [initialOpenComments, currentIndex, soundToks]);
 
   const openComments = async (id: string) => {
     setCurrentSoundTokId(id);
@@ -1698,6 +1778,16 @@ export default function VideoFeed({
           const isActive = index === currentIndex;
           const commentCount = getCommentCount(soundTok);
           const authorAvatar = resolveMediaUrl(soundTok.author?.avatar);
+          const soundAuthor = soundTok.sound?.author;
+          const soundAvatar =
+            resolveMediaUrl(soundAuthor?.avatar) ||
+            (soundAuthor && soundAuthor.id === soundTok.authorId ? authorAvatar : null) ||
+            authorAvatar;
+          const soundLabel = soundTok.sound?.title
+            ? soundAuthor?.username && soundAuthor.username !== soundTok.author?.username
+              ? `${soundTok.sound.title} · @${soundAuthor.username}`
+              : soundTok.sound.title
+            : `Оригинальный звук — ${soundTok.author?.username || 'user'}`;
 
           return (
             <div
@@ -1827,15 +1917,16 @@ export default function VideoFeed({
                     role="slider"
                     aria-label="Перемотка видео"
                     aria-valuemin={0}
-                    aria-valuemax={Math.floor(duration) || 0}
-                    aria-valuenow={Math.floor(currentTime) || 0}
+                    aria-valuemax={seekAria.max}
+                    aria-valuenow={seekAria.now}
+                    style={{ ['--seek-p' as string]: 0 }}
                   >
                     <div className="vf-seek-track">
-                      <div className="vf-seek-fill" style={{ width: `${progress * 100}%` }} />
-                      <div className="vf-seek-thumb" style={{ left: `${progress * 100}%` }} />
+                      <div className="vf-seek-fill" />
+                      <div className="vf-seek-thumb" />
                     </div>
-                    <div className="vf-seek-time">
-                      {formatSeekTime(currentTime)} / {formatSeekTime(duration)}
+                    <div className="vf-seek-time" ref={seekTimeRef}>
+                      0:00 / 0:00
                     </div>
                   </div>
 
@@ -1883,10 +1974,7 @@ export default function VideoFeed({
                       onClick={(e) => void openSoundPage(soundTok, e)}
                     >
                       <Music2 size={14} className="vf-music-icon" />
-                      <span>
-                        {soundTok.sound?.title ||
-                          `Оригинальный звук — ${soundTok.author?.username || 'user'}`}
-                      </span>
+                      <span>{soundLabel}</span>
                     </button>
                   </div>
 
@@ -1993,11 +2081,11 @@ export default function VideoFeed({
                       onClick={(e) => void openSoundPage(soundTok, e)}
                       aria-label="Открыть звук"
                     >
-                      {authorAvatar ? (
-                        <img src={authorAvatar} alt="" />
+                      {soundAvatar ? (
+                        <img src={soundAvatar} alt="" />
                       ) : (
                         <span className="vf-music-disc-letter">
-                          {(soundTok.author?.username?.[0] ?? 'S').toUpperCase()}
+                          {(soundAuthor?.username?.[0] || soundTok.author?.username?.[0] || 'S').toUpperCase()}
                         </span>
                       )}
                     </button>

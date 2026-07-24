@@ -1377,6 +1377,118 @@ ${FONT_IMPORT}
   font-weight: 700;
   color: #f0ede8;
 }
+.group-panel-rename {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.group-panel-rename input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #2e2e2e;
+  background: #141414;
+  color: #f0ede8;
+  padding: 0 10px;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+}
+.group-panel-rename button {
+  appearance: none;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #3d3d3d;
+  background: #1a1a1a;
+  color: #f0ede8;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.group-panel-rename button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.group-panel-add {
+  padding: 0 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.group-panel-add-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+}
+.group-panel-add-input {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid #2e2e2e;
+  background: #141414;
+  color: #f0ede8;
+  padding: 0 12px;
+  font-size: 14px;
+}
+.group-panel-add-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.group-panel-chip {
+  appearance: none;
+  border: 1px solid #2e2e2e;
+  background: #1a1a1a;
+  color: #c5c0b8;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.group-panel-add-btn {
+  appearance: none;
+  border: none;
+  background: #f0ede8;
+  color: #0a0a0a;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.group-panel-add-hint {
+  font-size: 12px;
+  color: #6b6b6b;
+}
+.group-panel-add-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow: auto;
+}
+.group-panel-add-result {
+  appearance: none;
+  text-align: left;
+  border: 1px solid #232323;
+  background: #141414;
+  color: #f0ede8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
 .group-panel-count {
   font-family: 'DM Mono', monospace;
   font-size: 11px;
@@ -1773,6 +1885,7 @@ export default function ChatPage() {
   // Track other user's presence and typing
   const [presenceStatus, setPresenceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [typingLabel, setTypingLabel] = useState<string | null>(null);
 
   const isGroupChat = chat?.type === 'GROUP';
   const pinState = useMemo(
@@ -2148,13 +2261,26 @@ export default function ChatPage() {
   };
 
   const handleTyping = (isTyping: boolean, userId: string) => {
-    if (userId !== user?.id) {
-      setOtherUserTyping(isTyping);
-      if (isTyping) {
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setOtherUserTyping(false), 3000);
-      }
+    if (userId === user?.id) return;
+    if (!isTyping) {
+      setTypingLabel(null);
+      setOtherUserTyping(false);
+      return;
     }
+
+    if (isGroupChat && chat) {
+      const member = chat.users.find((u) => u.userId === userId)?.user;
+      const name = member?.displayName || (member ? `@${member.username}` : 'Кто-то');
+      setTypingLabel(`${name} печатает`);
+    } else {
+      setTypingLabel('печатает');
+    }
+    setOtherUserTyping(true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      setOtherUserTyping(false);
+      setTypingLabel(null);
+    }, 3000);
   };
 
   const handleSocketError = (error: { message: string }) => {
@@ -2209,7 +2335,11 @@ export default function ChatPage() {
   };
 
   const getPresenceLabel = () => {
-    if (otherUserTyping) return 'печатает...';
+    if (otherUserTyping) return typingLabel ? `${typingLabel}...` : 'печатает...';
+    if (isGroupChat) {
+      const count = chat?.memberCount || chat?.users?.length || 0;
+      return `${count} участник${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}`;
+    }
     if (presenceStatus === 'unknown') return 'проверка статуса...';
     if (presenceStatus === 'online') return 'В сети';
     return 'Не в сети';
@@ -3127,9 +3257,9 @@ export default function ChatPage() {
               })
             )}
             
-            {otherUserTyping && !isGroupChat && (
+            {otherUserTyping && (
               <div className="typing-indicator">
-                <span className="typing-text">печатает</span>
+                <span className="typing-text">{typingLabel || 'печатает'}</span>
                 <div className="typing-dots">
                   <span className="typing-dot" />
                   <span className="typing-dot" />
