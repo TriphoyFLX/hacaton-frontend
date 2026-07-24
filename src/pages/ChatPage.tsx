@@ -1263,19 +1263,18 @@ export default function ChatPage() {
       };
     });
     setMessages((prev) =>
-      prev.map((m) =>
-        m.sender?.id === data.id
-          ? {
-              ...m,
-              sender: {
-                ...m.sender,
-                username: data.username,
-                displayName: data.displayName ?? m.sender.displayName,
-                avatar: data.avatar ?? m.sender.avatar,
-              },
-            }
-          : m,
-      ),
+      prev.map((m) => {
+        if (!('sender' in m) || !m.sender || m.sender.id !== data.id) return m;
+        return {
+          ...m,
+          sender: {
+            ...m.sender,
+            username: data.username,
+            displayName: data.displayName ?? m.sender.displayName,
+            avatar: data.avatar ?? m.sender.avatar,
+          },
+        };
+      }),
     );
   };
 
