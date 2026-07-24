@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2, MoreVertical, Repeat2, Eye } from 'lucide-react';
-import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
+import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2, MoreVertical, Repeat2 } from 'lucide-react';
+import { SoundTok, SoundTokAuthor, soundTokApi, Comment } from '../api/soundtok';
 import { soundsApi } from '../api/sounds';
 import { followsApi } from '../api/follows';
 import { API_ORIGIN } from '../api/client';
@@ -484,17 +484,136 @@ const css = `
   font-variant-numeric: tabular-nums;
 }
 
-.vf-action-views {
+.vf-repost-attr {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 0 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.92);
+  font: inherit;
+  text-align: left;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.65);
+  pointer-events: auto;
+}
+
+button.vf-repost-attr {
+  cursor: pointer;
+}
+
+button.vf-repost-attr:hover {
+  color: #fff;
+}
+
+.vf-repost-attr-static {
+  cursor: default;
+}
+
+.vf-repost-avatars {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.vf-repost-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,0.55);
+  background: #2a2a2a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
-  margin-top: 2px;
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  margin-left: -6px;
+}
+
+.vf-repost-avatar:first-child {
+  margin-left: 0;
+}
+
+.vf-repost-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vf-repost-attr-text {
+  font-size: 13px;
   font-weight: 600;
-  color: rgba(255,255,255,0.72);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
-  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-repost-attr-user {
+  font-weight: 700;
+}
+
+.vf-repost-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 4px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.vf-repost-list-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.vf-repost-list-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #2a2a2a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.vf-repost-list-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vf-repost-list-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vf-repost-list-name {
+  font-size: 14px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-repost-list-user {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
 }
 
 .vf-more-wrap {
@@ -1063,8 +1182,13 @@ export default function VideoFeed({
   const [deletingSoundTokId, setDeletingSoundTokId] = useState<string | null>(null);
   const [localCounts, setLocalCounts] = useState<Record<string, number>>({});
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const [repostState, setRepostState] = useState<Record<string, { isReposted: boolean; repostsCount: number }>>({});
+  const [repostState, setRepostState] = useState<
+    Record<string, { isReposted: boolean; repostsCount: number; repostPreview?: SoundTokAuthor[] }>
+  >({});
   const [repostingId, setRepostingId] = useState<string | null>(null);
+  const [repostsSheetId, setRepostsSheetId] = useState<string | null>(null);
+  const [repostUsers, setRepostUsers] = useState<Array<{ id: string; createdAt: string; user: SoundTokAuthor }>>([]);
+  const [repostsLoading, setRepostsLoading] = useState(false);
   const recordedViewsRef = useRef<Set<string>>(new Set());
 
   const requireAuth = useCallback(() => {
@@ -1174,7 +1298,22 @@ export default function VideoFeed({
     return {
       isReposted: local?.isReposted ?? !!tok.isReposted,
       repostsCount: local?.repostsCount ?? tok.repostsCount ?? 0,
+      repostPreview: local?.repostPreview ?? tok.repostPreview ?? [],
     };
+  };
+
+  const openRepostsSheet = async (soundTokId: string) => {
+    setRepostsSheetId(soundTokId);
+    setRepostsLoading(true);
+    try {
+      const data = await soundTokApi.getReposts(soundTokId, { limit: 50, offset: 0 });
+      setRepostUsers(data.items);
+    } catch (error) {
+      console.error('Failed to load reposts:', error);
+      setRepostUsers([]);
+    } finally {
+      setRepostsLoading(false);
+    }
   };
 
   const handleToggleRepost = async (tok: SoundTok) => {
@@ -1186,20 +1325,46 @@ export default function VideoFeed({
     if (repostingId) return;
     const meta = getRepostMeta(tok);
     const nextIsReposted = !meta.isReposted;
+    const optimisticPreview = (() => {
+      if (!currentUser) return meta.repostPreview;
+      if (nextIsReposted) {
+        if (meta.repostPreview.some((u) => u.id === currentUser.id)) return meta.repostPreview;
+        if (meta.repostsCount >= 3) return meta.repostPreview;
+        return [
+          ...meta.repostPreview,
+          {
+            id: currentUser.id,
+            username: currentUser.username,
+            displayName: currentUser.displayName,
+            avatar: currentUser.avatar,
+          },
+        ].slice(0, 3);
+      }
+      return meta.repostPreview.filter((u) => u.id !== currentUser.id);
+    })();
     setRepostState((prev) => ({
       ...prev,
       [tok.id]: {
         isReposted: nextIsReposted,
         repostsCount: Math.max(0, meta.repostsCount + (nextIsReposted ? 1 : -1)),
+        repostPreview: optimisticPreview,
       },
     }));
     setRepostingId(tok.id);
     try {
-      if (meta.isReposted) {
-        await soundTokApi.unrepostSoundTok(tok.id);
-      } else {
-        await soundTokApi.repostSoundTok(tok.id);
-      }
+      const result = nextIsReposted
+        ? await soundTokApi.repostSoundTok(tok.id)
+        : await soundTokApi.unrepostSoundTok(tok.id);
+      setRepostState((prev) => ({
+        ...prev,
+        [tok.id]: {
+          isReposted: Boolean(result.isReposted),
+          repostsCount: Math.max(0, result.repostsCount ?? 0),
+          repostPreview: Array.isArray(result.repostPreview)
+            ? result.repostPreview
+            : optimisticPreview,
+        },
+      }));
     } catch (error) {
       setRepostState((prev) => ({
         ...prev,
@@ -2078,6 +2243,67 @@ export default function VideoFeed({
                   </div>
 
                   <div className="vf-bottom-info">
+                    {(() => {
+                      if (guestMode) return null;
+                      const meta = getRepostMeta(soundTok);
+                      const count = meta.repostsCount;
+                      const preview = meta.repostPreview.slice(0, 3);
+                      if (count <= 0) return null;
+
+                      if (count === 1) {
+                        if (meta.isReposted) {
+                          return (
+                            <div className="vf-repost-attr vf-repost-attr-static">
+                              <Repeat2 size={14} />
+                              <span className="vf-repost-attr-text">вы сделали репост</span>
+                            </div>
+                          );
+                        }
+                        const person = preview[0];
+                        if (!person || !followedAuthors[person.id]) return null;
+                        const avatarUrl = resolveMediaUrl(person.avatar);
+                        const letter = (person.displayName || person.username)[0]?.toUpperCase() ?? '?';
+                        return (
+                          <div className="vf-repost-attr vf-repost-attr-static">
+                            <div className="vf-repost-avatars">
+                              <span className="vf-repost-avatar">
+                                {avatarUrl ? <img src={avatarUrl} alt="" /> : letter}
+                              </span>
+                            </div>
+                            <span className="vf-repost-attr-text">
+                              <span className="vf-repost-attr-user">@{person.username}</span>
+                              {' '}репостнули
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          className="vf-repost-attr"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void openRepostsSheet(soundTok.id);
+                          }}
+                          aria-label={`Репосты: ${count}`}
+                        >
+                          <div className="vf-repost-avatars">
+                            {preview.map((person) => {
+                              const avatarUrl = resolveMediaUrl(person.avatar);
+                              const letter =
+                                (person.displayName || person.username)[0]?.toUpperCase() ?? '?';
+                              return (
+                                <span key={person.id} className="vf-repost-avatar">
+                                  {avatarUrl ? <img src={avatarUrl} alt="" /> : letter}
+                                </span>
+                              );
+                            })}
+                          </div>
+                          <span className="vf-repost-attr-text">Репосты:{count}</span>
+                        </button>
+                      );
+                    })()}
                     <div className="vf-author-row">
                       <button
                         type="button"
@@ -2178,12 +2404,6 @@ export default function VideoFeed({
                         <Heart size={28} fill={soundTok.isLiked ? 'currentColor' : 'none'} strokeWidth={1.8} />
                       </button>
                       <span className="vf-action-count">{formatCount(soundTok.likes)}</span>
-                      {soundTok.views !== undefined && (
-                        <span className="vf-action-views" title="Просмотры">
-                          <Eye size={12} />
-                          {formatCount(soundTok.views)}
-                        </span>
-                      )}
                     </div>
 
                     <div className="vf-action-group">
@@ -2477,6 +2697,69 @@ export default function VideoFeed({
         soundTok={shareTok}
         onClose={() => setShareTok(null)}
       />
+
+      {repostsSheetId && (
+        <>
+          <div
+            className="vf-sheet-backdrop"
+            onClick={() => {
+              setRepostsSheetId(null);
+              setRepostUsers([]);
+            }}
+          />
+          <div className="vf-sheet" role="dialog" aria-label="Кто сделал репост">
+            <div className="vf-sheet-handle" />
+            <div className="vf-sheet-header">
+              <div className="vf-sheet-title">Репосты</div>
+              <button
+                type="button"
+                className="vf-sheet-close"
+                onClick={() => {
+                  setRepostsSheetId(null);
+                  setRepostUsers([]);
+                }}
+                aria-label="Закрыть"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="vf-comments-list">
+              {repostsLoading ? (
+                <div className="vf-empty-comments">Загрузка…</div>
+              ) : repostUsers.length === 0 ? (
+                <div className="vf-empty-comments">Пока нет репостов</div>
+              ) : (
+                repostUsers.map((row) => {
+                  const avatarUrl = resolveMediaUrl(row.user.avatar);
+                  const letter =
+                    (row.user.displayName || row.user.username)[0]?.toUpperCase() ?? '?';
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      className="vf-repost-list-item"
+                      onClick={() => {
+                        setRepostsSheetId(null);
+                        navigate(`/profile/${row.user.username}`);
+                      }}
+                    >
+                      <span className="vf-repost-list-avatar">
+                        {avatarUrl ? <img src={avatarUrl} alt="" /> : letter}
+                      </span>
+                      <span className="vf-repost-list-meta">
+                        <span className="vf-repost-list-name">
+                          {row.user.displayName || `@${row.user.username}`}
+                        </span>
+                        <span className="vf-repost-list-user">@{row.user.username}</span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

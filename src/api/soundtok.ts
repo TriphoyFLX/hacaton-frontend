@@ -23,6 +23,16 @@ export interface Comment {
   };
 }
 
+export interface SoundTokAuthor {
+  id: string;
+  username: string;
+  displayName?: string | null;
+  avatar?: string | null;
+  role?: string;
+  plan?: string;
+  planExpiresAt?: string | null;
+}
+
 export interface SoundTok {
   id: string;
   description: string;
@@ -38,15 +48,8 @@ export interface SoundTok {
   isLiked?: boolean;
   isReposted?: boolean;
   authorIsFollowed?: boolean;
-  author: {
-    id: string;
-    username: string;
-    displayName?: string | null;
-    avatar?: string | null;
-    role?: string;
-    plan?: string;
-    planExpiresAt?: string | null;
-  };
+  repostPreview?: SoundTokAuthor[];
+  author: SoundTokAuthor;
   sound?: {
     id: string;
     title: string;
@@ -131,6 +134,25 @@ export const soundTokApi = {
 
   unrepostSoundTok: async (id: string) => {
     const response = await api.delete(`/soundtok/${id}/repost`);
+    return response.data;
+  },
+
+  getReposts: async (
+    id: string,
+    opts?: { limit?: number; offset?: number }
+  ): Promise<{
+    items: Array<{ id: string; createdAt: string; user: SoundTokAuthor }>;
+    total: number;
+    hasMore: boolean;
+    limit: number;
+    offset: number;
+  }> => {
+    const response = await api.get(`/soundtok/${id}/reposts`, {
+      params: {
+        limit: opts?.limit ?? 30,
+        offset: opts?.offset ?? 0,
+      },
+    });
     return response.data;
   },
 

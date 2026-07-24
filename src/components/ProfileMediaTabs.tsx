@@ -594,9 +594,7 @@ export default function ProfileMediaTabs({
           <div className="pmt-grid">
             {items.map((item) => {
               const src = resolveMediaUrl(item.videoUrl);
-              const showViews =
-                tab === 'soundtoks' &&
-                (isOwner || item.views !== undefined);
+              const showViews = tab === 'soundtoks' && item.views !== undefined;
               return (
                 <button
                   key={item.id}
