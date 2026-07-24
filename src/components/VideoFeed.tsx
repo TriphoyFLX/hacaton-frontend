@@ -36,6 +36,9 @@ const css = `
   width: 100%;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
 }
 
 .vf-top-bar {
@@ -57,15 +60,6 @@ const css = `
   color: #fff;
   letter-spacing: -0.02em;
   text-shadow: 0 1px 6px rgba(0,0,0,0.6);
-}
-
-.vf-top-counter {
-  position: absolute;
-  right: 16px;
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.75);
-  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
 .vf-video-loading {
@@ -380,33 +374,6 @@ const css = `
   font-variant-numeric: tabular-nums;
 }
 
-/* Progress dots */
-.vf-progress-indicator {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 11;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.vf-progress-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.35);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.vf-progress-dot.active {
-  background: #fff;
-  height: 18px;
-  border-radius: 3px;
-}
-
 /* ── Comments bottom sheet (TikTok style) ── */
 .vf-sheet-backdrop {
   position: fixed;
@@ -633,9 +600,6 @@ const css = `
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
-  .vf-progress-indicator {
-    display: none;
-  }
 }
 
 @media (min-width: 769px) {
@@ -739,6 +703,7 @@ export default function VideoFeed({
   const lastWheelTime = useRef(0);
   const wheelVelocity = useRef(0);
   const commentInputRef = useRef<HTMLInputElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const FLING_VELOCITY_THRESHOLD = 0.5;
   const DRAG_THRESHOLD = 80;
@@ -932,12 +897,12 @@ export default function VideoFeed({
       setIsDragging(false);
       const startOffset = dragOffset;
       const startTime = performance.now();
-      const duration = 400;
+      const duration = targetIndex === null ? 180 : 280;
 
       const animate = (currentTime: number) => {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(2, -10 * progress) * Math.cos((progress - 0.1) * 15);
+        const eased = 1 - Math.pow(1 - progress, 3);
         setDragOffset(startOffset + (targetOffset - startOffset) * eased);
         if (progress < 1) {
           animationRef.current = requestAnimationFrame(animate);
@@ -961,11 +926,12 @@ export default function VideoFeed({
     const isFlingDown = velocity < -FLING_VELOCITY_THRESHOLD && dragDuration < 300;
     const isSwipeUp = dragDistance > DRAG_THRESHOLD;
     const isSwipeDown = dragDistance < -DRAG_THRESHOLD;
+    const stageHeight = stageRef.current?.clientHeight || window.innerHeight;
 
     if ((isFlingUp || isSwipeUp) && currentIndex < soundToks.length - 1) {
-      springToPosition(window.innerHeight, currentIndex + 1);
+      springToPosition(stageHeight, currentIndex + 1);
     } else if ((isFlingDown || isSwipeDown) && currentIndex > 0) {
-      springToPosition(-window.innerHeight, currentIndex - 1);
+      springToPosition(-stageHeight, currentIndex - 1);
     } else {
       springToPosition(0);
     }
@@ -980,6 +946,7 @@ export default function VideoFeed({
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       if (commentsOpen) return;
+      e.preventDefault();
       enableSound();
       const now = Date.now();
       const deltaTime = now - lastWheelTime.current;
@@ -1066,6 +1033,7 @@ export default function VideoFeed({
 
       <div className="vf-phone">
         <div
+          ref={stageRef}
           className="vf-stage"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -1074,9 +1042,6 @@ export default function VideoFeed({
         >
           <div className="vf-top-bar">
             <span className="vf-top-title">SoundTok</span>
-            <span className="vf-top-counter">
-              {currentIndex + 1} / {soundToks.length}
-            </span>
           </div>
 
           {soundToks.map((soundTok, index) => {
@@ -1089,7 +1054,7 @@ export default function VideoFeed({
               key={soundTok.id}
               className="vf-video-container"
               style={{
-                transform: `translateY(calc(${(index - currentIndex) * 100}% - ${isActive ? dragOffset : 0}px))`,
+                transform: `translateY(calc(${(index - currentIndex) * 100}% - ${dragOffset}px))`,
                 opacity:
                   isDragging || isAnimating
                     ? Math.abs(index - currentIndex) <= 1
@@ -1284,22 +1249,6 @@ export default function VideoFeed({
         })}
         </div>
 
-        {soundToks.length > 1 && (
-          <div className="vf-progress-indicator">
-            {soundToks.map((_, index) => (
-              <div
-                key={index}
-                className={`vf-progress-dot ${index === currentIndex ? 'active' : ''}`}
-                onClick={() => {
-                  enableSound();
-                  setCurrentIndex(index);
-                }}
-                role="button"
-                aria-label={`Видео ${index + 1}`}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
       {commentsOpen && (
