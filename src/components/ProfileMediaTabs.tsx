@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Heart, Lock, Music2, Play, Video } from 'lucide-react';
+import { Bookmark, Eye, Heart, Lock, Music2, Play, Repeat2, Video } from 'lucide-react';
 import { profileApi } from '../api/profile';
 import { soundsApi, type Sound } from '../api/sounds';
 import type { SoundTok } from '../api/soundtok';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount } from '../lib/format';
 
-type TabKey = 'soundtoks' | 'likes' | 'sounds';
+type TabKey = 'soundtoks' | 'likes' | 'reposts' | 'sounds';
 
 interface ProfileMediaTabsProps {
   identifier: string;
@@ -16,6 +16,9 @@ interface ProfileMediaTabsProps {
   likedSoundToksCount?: number;
   likedSoundToksPublic?: boolean;
   onPrivacyChange?: (value: boolean) => Promise<void> | void;
+  repostedSoundToksCount?: number;
+  repostedSoundToksPublic?: boolean;
+  onRepostPrivacyChange?: (value: boolean) => Promise<void> | void;
 }
 
 const styles = `
@@ -29,6 +32,7 @@ const styles = `
   gap: 4px;
   border-bottom: 1px solid #232323;
   margin-bottom: 18px;
+  flex-wrap: wrap;
 }
 .pmt-tab {
   appearance: none;
@@ -158,6 +162,13 @@ const styles = `
   letter-spacing: 0.04em;
 }
 .pmt-cell-overlay svg { width: 12px; height: 12px; }
+.pmt-cell-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.9;
+}
 .pmt-empty {
   border: 1px dashed #2e2e2e;
   border-radius: 12px;
@@ -252,7 +263,7 @@ const styles = `
 }
 `;
 
-function emptyCopy(tab: TabKey, isOwner: boolean, privateLikes: boolean) {
+function emptyCopy(tab: TabKey, isOwner: boolean, privateBlocked: boolean) {
   if (tab === 'soundtoks') {
     return {
       label: 'Нет SoundTok',
@@ -267,7 +278,19 @@ function emptyCopy(tab: TabKey, isOwner: boolean, privateLikes: boolean) {
         : 'Пока пусто',
     };
   }
-  if (privateLikes && !isOwner) {
+  if (tab === 'reposts') {
+    if (privateBlocked && !isOwner) {
+      return {
+        label: 'Репосты скрыты',
+        hint: 'Пользователь скрыл репостнутые видео',
+      };
+    }
+    return {
+      label: 'Нет репостов',
+      hint: isOwner ? 'Репостите видео в SoundTok — они появятся здесь' : 'Пока пусто',
+    };
+  }
+  if (privateBlocked && !isOwner) {
     return {
       label: 'Лайки скрыты',
       hint: 'Пользователь скрыл лайкнутые видео',
@@ -286,9 +309,13 @@ export default function ProfileMediaTabs({
   likedSoundToksCount,
   likedSoundToksPublic = false,
   onPrivacyChange,
+  repostedSoundToksCount,
+  repostedSoundToksPublic = false,
+  onRepostPrivacyChange,
 }: ProfileMediaTabsProps) {
   const navigate = useNavigate();
   const showLikesTab = isOwner || likedSoundToksPublic;
+  const showRepostsTab = isOwner || repostedSoundToksPublic;
   const [tab, setTab] = useState<TabKey>('soundtoks');
   const [items, setItems] = useState<SoundTok[]>([]);
   const [sounds, setSounds] = useState<Sound[]>([]);
@@ -304,14 +331,26 @@ export default function ProfileMediaTabs({
     if (!showLikesTab && tab === 'likes') {
       setTab('soundtoks');
     }
+    if (!showRepostsTab && tab === 'reposts') {
+      setTab('soundtoks');
+    }
     if (!isOwner && tab === 'sounds') {
       setTab('soundtoks');
     }
-  }, [showLikesTab, tab, isOwner]);
+  }, [showLikesTab, showRepostsTab, tab, isOwner]);
 
   const load = useCallback(
     async (nextTab: TabKey, offset = 0, append = false) => {
       if (nextTab === 'likes' && !showLikesTab) {
+        setItems([]);
+        setSounds([]);
+        setTotal(0);
+        setHasMore(false);
+        setPrivateBlocked(true);
+        setLoading(false);
+        return;
+      }
+      if (nextTab === 'reposts' && !showRepostsTab) {
         setItems([]);
         setSounds([]);
         setTotal(0);
@@ -347,7 +386,9 @@ export default function ProfileMediaTabs({
           const fetcher =
             nextTab === 'soundtoks'
               ? profileApi.getUserSoundToks
-              : profileApi.getUserLikedSoundToks;
+              : nextTab === 'likes'
+                ? profileApi.getUserLikedSoundToks
+                : profileApi.getUserRepostedSoundToks;
           const data = await fetcher(identifier, { limit: 24, offset });
           setItems((prev) => (append ? [...prev, ...data.items] : data.items));
           setSounds([]);
@@ -374,7 +415,7 @@ export default function ProfileMediaTabs({
         setLoadingMore(false);
       }
     },
-    [identifier, showLikesTab, isOwner]
+    [identifier, showLikesTab, showRepostsTab, isOwner]
   );
 
   useEffect(() => {
@@ -382,7 +423,18 @@ export default function ProfileMediaTabs({
   }, [tab, load]);
 
   const handlePrivacyToggle = async () => {
-    if (!isOwner || !onPrivacyChange || privacySaving) return;
+    if (!isOwner || privacySaving) return;
+    if (tab === 'reposts') {
+      if (!onRepostPrivacyChange) return;
+      setPrivacySaving(true);
+      try {
+        await onRepostPrivacyChange(!repostedSoundToksPublic);
+      } finally {
+        setPrivacySaving(false);
+      }
+      return;
+    }
+    if (!onPrivacyChange) return;
     setPrivacySaving(true);
     try {
       await onPrivacyChange(!likedSoundToksPublic);
@@ -399,10 +451,16 @@ export default function ProfileMediaTabs({
     navigate(`/soundtok/sound/${id}`);
   };
 
-  const copy = emptyCopy(tab, isOwner, privateBlocked || (!likedSoundToksPublic && !isOwner));
+  const copy = emptyCopy(tab, isOwner, privateBlocked);
   const displayLikedCount =
     likedSoundToksCount ?? (tab === 'likes' && !privateBlocked ? total : undefined);
+  const displayRepostedCount =
+    repostedSoundToksCount ?? (tab === 'reposts' && !privateBlocked ? total : undefined);
   const listOffset = tab === 'sounds' ? sounds.length : items.length;
+  const showLikesPrivacy = isOwner && tab !== 'reposts';
+  const showRepostsPrivacy = isOwner && tab === 'reposts';
+  const privacyOn = tab === 'reposts' ? repostedSoundToksPublic : likedSoundToksPublic;
+  const privacyLabel = tab === 'reposts' ? 'Репосты в профиле' : 'Лайки в профиле';
 
   return (
     <div className="pmt-root">
@@ -430,6 +488,19 @@ export default function ProfileMediaTabs({
             )}
           </button>
         )}
+        {showRepostsTab && (
+          <button
+            type="button"
+            className={`pmt-tab ${tab === 'reposts' ? 'active' : ''}`}
+            onClick={() => setTab('reposts')}
+          >
+            <Repeat2 />
+            Репосты
+            {displayRepostedCount !== undefined && (
+              <span className="pmt-count">{displayRepostedCount}</span>
+            )}
+          </button>
+        )}
         {isOwner && (
           <button
             type="button"
@@ -441,20 +512,27 @@ export default function ProfileMediaTabs({
             {tab === 'sounds' && <span className="pmt-count">{total}</span>}
           </button>
         )}
-        {isOwner && (
-          <div className="pmt-privacy" title="Могут ли другие видеть ваши лайки">
+        {(showLikesPrivacy || showRepostsPrivacy) && (
+          <div
+            className="pmt-privacy"
+            title={
+              tab === 'reposts'
+                ? 'Могут ли другие видеть ваши репосты'
+                : 'Могут ли другие видеть ваши лайки'
+            }
+          >
             <span className="pmt-privacy-label">
               <Lock size={12} />
-              <span>Лайки в профиле</span>
+              <span>{privacyLabel}</span>
             </span>
             <button
               type="button"
-              className={`pmt-switch ${likedSoundToksPublic ? 'on' : ''}`}
-              aria-pressed={likedSoundToksPublic}
+              className={`pmt-switch ${privacyOn ? 'on' : ''}`}
+              aria-pressed={privacyOn}
               aria-label={
-                likedSoundToksPublic
-                  ? 'Лайки видны всем — нажмите, чтобы скрыть'
-                  : 'Лайки скрыты — нажмите, чтобы показать'
+                privacyOn
+                  ? `${privacyLabel} видны всем — нажмите, чтобы скрыть`
+                  : `${privacyLabel} скрыты — нажмите, чтобы показать`
               }
               disabled={privacySaving}
               onClick={() => void handlePrivacyToggle()}
@@ -516,6 +594,9 @@ export default function ProfileMediaTabs({
           <div className="pmt-grid">
             {items.map((item) => {
               const src = resolveMediaUrl(item.videoUrl);
+              const showViews =
+                tab === 'soundtoks' &&
+                (isOwner || item.views !== undefined);
               return (
                 <button
                   key={item.id}
@@ -534,6 +615,12 @@ export default function ProfileMediaTabs({
                   <div className="pmt-cell-overlay">
                     <Heart size={12} />
                     {item.likes}
+                    {showViews && (
+                      <span className="pmt-cell-meta">
+                        <Eye size={12} />
+                        {formatCount(item.views ?? 0)}
+                      </span>
+                    )}
                   </div>
                 </button>
               );

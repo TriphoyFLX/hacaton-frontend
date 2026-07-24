@@ -1,7 +1,22 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import VideoFeed from '../components/VideoFeed';
 import { SoundTok, soundTokApi } from '../api/soundtok';
+import { useAuthStore } from '../store/authStore';
+
+const GUEST_KEY_STORAGE = 'sl_guest_key';
+
+function getOrCreateGuestKey(): string {
+  try {
+    const existing = localStorage.getItem(GUEST_KEY_STORAGE);
+    if (existing) return existing;
+    const key = crypto.randomUUID();
+    localStorage.setItem(GUEST_KEY_STORAGE, key);
+    return key;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
 
 const FONT_IMPORT = '';
 
@@ -742,6 +757,50 @@ ${FONT_IMPORT}
   border: 1px solid var(--red);
   color: var(--red);
 }
+
+.st-guest-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 80;
+  width: min(520px, calc(100% - 24px));
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 18, 18, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.st-guest-banner-text {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.st-guest-banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.st-guest-banner-actions .st-btn {
+  flex: 1;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (max-width: 768px) {
+  .st-guest-banner {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}
 `;
 
 // ── ICONS ──
@@ -794,6 +853,9 @@ const IconSparkles = () => (
 
 export default function SoundTok() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const token = useAuthStore((s) => s.token);
+  const guestMode = !token;
   const [soundToks, setSoundToks] = useState<SoundTok[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -803,11 +865,15 @@ export default function SoundTok() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [guestKey] = useState(() => (guestMode ? getOrCreateGuestKey() : undefined));
   const PAGE_SIZE = 8;
 
   const sharedVideoId = searchParams.get('v');
   const openCommentsFromQuery = searchParams.get('c') === '1';
   const hasVideos = soundToks.length > 0;
+  const authNext = encodeURIComponent(
+    sharedVideoId ? `/soundtok?v=${sharedVideoId}` : '/soundtok'
+  );
 
   const orderedSoundToks = useMemo(() => {
     if (!sharedVideoId || soundToks.length === 0) return soundToks;
@@ -824,8 +890,27 @@ export default function SoundTok() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const goNeedAuth = useCallback(() => {
+    navigate(`/login?next=${authNext}`);
+  }, [navigate, authNext]);
+
   const fetchSoundToks = async () => {
     try {
+      if (guestMode) {
+        if (!sharedVideoId) {
+          setSoundToks([]);
+          setHasMore(false);
+          return;
+        }
+        const shared = await soundTokApi.getSoundTok(sharedVideoId);
+        setSoundToks([shared]);
+        setHasMore(false);
+        if (guestKey) {
+          void soundTokApi.recordView(shared.id, guestKey).catch(() => undefined);
+        }
+        return;
+      }
+
       const data = await soundTokApi.getSoundToks({ limit: PAGE_SIZE, offset: 0 });
       let items = data.items;
       if (sharedVideoId && !items.some((tok) => tok.id === sharedVideoId)) {
@@ -847,7 +932,7 @@ export default function SoundTok() {
   };
 
   const loadMoreSoundToks = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (guestMode || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const data = await soundTokApi.getSoundToks({
@@ -864,12 +949,13 @@ export default function SoundTok() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, soundToks.length]);
+  }, [guestMode, loadingMore, hasMore, soundToks.length]);
 
   useEffect(() => {
+    setLoading(true);
     fetchSoundToks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once / when deep-link id changes
-  }, [sharedVideoId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once / when deep-link id or auth changes
+  }, [sharedVideoId, guestMode]);
 
   useEffect(() => {
     if (!hasVideos) return;
@@ -886,6 +972,10 @@ export default function SoundTok() {
   }, [hasVideos]);
 
   const handleLike = async (id: string) => {
+    if (guestMode) {
+      goNeedAuth();
+      return;
+    }
     const soundTok = soundToks.find(tok => tok.id === id);
     if (!soundTok) return;
 
@@ -1002,32 +1092,53 @@ export default function SoundTok() {
                 <div className="st-subtitle">Короткие музыкальные видео</div>
               </div>
             </div>
-            <div className="st-header-right">
-              <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
-                <IconPlus />
-                Создать
-              </button>
-            </div>
+            {!guestMode && (
+              <div className="st-header-right">
+                <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
+                  <IconPlus />
+                  Создать
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="st-empty">
             <div className="st-empty-icon">
               <IconPlay />
             </div>
-            <div className="st-empty-title">Запусти свой первый музыкальный клип</div>
-            <div className="st-empty-desc">
-              Поделись треком, покажи процесс создания или собери первые реакции от сообщества.
-            </div>
-            <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
-              <IconUpload />
-              Опубликовать видео
-            </button>
-            <div className="st-empty-hint">MP4 · MOV · WebM</div>
-            <div className="st-empty-steps" aria-label="Как начать">
-              <div className="st-empty-step"><strong>01</strong>Выбери клип</div>
-              <div className="st-empty-step"><strong>02</strong>Добавь описание</div>
-              <div className="st-empty-step"><strong>03</strong>Получи фидбек</div>
-            </div>
+            {guestMode ? (
+              <>
+                <div className="st-empty-title">Войдите, чтобы смотреть SoundTok</div>
+                <div className="st-empty-desc">
+                  Зарегистрируйтесь или войдите, чтобы открыть ленту коротких музыкальных видео.
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <Link className="st-btn st-btn-gradient" to={`/register?next=${authNext}`}>
+                    Регистрация
+                  </Link>
+                  <Link className="st-btn st-btn-ghost" to={`/login?next=${authNext}`}>
+                    Войти
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="st-empty-title">Запусти свой первый музыкальный клип</div>
+                <div className="st-empty-desc">
+                  Поделись треком, покажи процесс создания или собери первые реакции от сообщества.
+                </div>
+                <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
+                  <IconUpload />
+                  Опубликовать видео
+                </button>
+                <div className="st-empty-hint">MP4 · MOV · WebM</div>
+                <div className="st-empty-steps" aria-label="Как начать">
+                  <div className="st-empty-step"><strong>01</strong>Выбери клип</div>
+                  <div className="st-empty-step"><strong>02</strong>Добавь описание</div>
+                  <div className="st-empty-step"><strong>03</strong>Получи фидбек</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : (
@@ -1036,9 +1147,11 @@ export default function SoundTok() {
           <VideoFeed
             soundToks={orderedSoundToks}
             initialIndex={initialIndex}
-            initialOpenComments={openCommentsFromQuery}
+            initialOpenComments={openCommentsFromQuery && !guestMode}
+            guestMode={guestMode}
+            onNeedAuth={goNeedAuth}
             onLike={handleLike}
-            onNearEnd={loadMoreSoundToks}
+            onNearEnd={guestMode ? undefined : loadMoreSoundToks}
             onCommentCountChange={(id, count) => {
               setSoundToks((prev) =>
                 prev.map((tok) => (tok.id === id ? { ...tok, commentsCount: count } : tok))
@@ -1048,19 +1161,37 @@ export default function SoundTok() {
               setSoundToks((prev) => prev.filter((tok) => tok.id !== id));
             }}
           />
-          
-          <button
-            className="st-fab"
-            onClick={() => setShowUpload(true)}
-            title="Загрузить видео"
-          >
-            <IconPlus />
-          </button>
+
+          {!guestMode && (
+            <button
+              className="st-fab"
+              onClick={() => setShowUpload(true)}
+              title="Загрузить видео"
+            >
+              <IconPlus />
+            </button>
+          )}
+
+          {guestMode && (
+            <div className="st-guest-banner">
+              <div className="st-guest-banner-text">
+                Зарегистрируйтесь, чтобы смотреть все видео SoundTok
+              </div>
+              <div className="st-guest-banner-actions">
+                <Link className="st-btn st-btn-gradient" to={`/register?next=${authNext}`}>
+                  Регистрация
+                </Link>
+                <Link className="st-btn st-btn-ghost" to={`/login?next=${authNext}`}>
+                  Войти
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Upload modal */}
-      {showUpload && (
+      {!guestMode && showUpload && (
         <div className="st-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) setShowUpload(false);
         }}>

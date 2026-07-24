@@ -9,6 +9,7 @@ export interface UserProfile {
   bio?: string | null;
   usernameChangeAvailableAt?: string | null;
   likedSoundToksPublic?: boolean;
+  repostedSoundToksPublic?: boolean;
   birthDate?: string;
   role?: string;
   plan?: 'FREE' | 'PRO' | 'PLATINUM';
@@ -17,6 +18,7 @@ export interface UserProfile {
   postsCount?: number;
   soundToksCount?: number;
   likedSoundToksCount?: number;
+  repostedSoundToksCount?: number;
   followersCount?: number;
   followingCount?: number;
   isFollowing?: boolean;
@@ -40,6 +42,7 @@ export interface UpdateProfileData {
   displayName?: string;
   bio?: string;
   likedSoundToksPublic?: boolean;
+  repostedSoundToksPublic?: boolean;
 }
 
 export interface ValidationError {
@@ -125,6 +128,26 @@ export const profileApi = {
     opts?: { limit?: number; offset?: number }
   ) => {
     const response = await api.get(`/profile/${encodeURIComponent(identifier)}/liked-soundtoks`, {
+      params: {
+        limit: opts?.limit ?? 24,
+        offset: opts?.offset ?? 0,
+      },
+    });
+    return response.data as {
+      userId: string;
+      items: import('./soundtok').SoundTok[];
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+  },
+
+  getUserRepostedSoundToks: async (
+    identifier: string,
+    opts?: { limit?: number; offset?: number }
+  ) => {
+    const response = await api.get(`/profile/${encodeURIComponent(identifier)}/reposted-soundtoks`, {
       params: {
         limit: opts?.limit ?? 24,
         offset: opts?.offset ?? 0,

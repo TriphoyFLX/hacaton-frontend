@@ -768,6 +768,27 @@ export default function PublicProfile() {
                   }
                 : undefined
             }
+            repostedSoundToksCount={user.repostedSoundToksCount}
+            repostedSoundToksPublic={Boolean(user.repostedSoundToksPublic)}
+            onRepostPrivacyChange={
+              currentUser?.id === user.id
+                ? async (value) => {
+                    const result = await profileApi.updateProfile({
+                      repostedSoundToksPublic: value,
+                    });
+                    if (result.success && result.user) {
+                      setUser((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              repostedSoundToksPublic: result.user!.repostedSoundToksPublic,
+                            }
+                          : prev
+                      );
+                    }
+                  }
+                : undefined
+            }
           />
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2, MoreVertical, Repeat2, Eye } from 'lucide-react';
 import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
 import { soundsApi } from '../api/sounds';
 import { followsApi } from '../api/follows';
@@ -484,6 +484,69 @@ const css = `
   font-variant-numeric: tabular-nums;
 }
 
+.vf-action-views {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.72);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-more-wrap {
+  position: relative;
+}
+
+.vf-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 168px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(18, 18, 18, 0.96);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vf-more-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #f1f1f1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.vf-more-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.vf-more-item.danger {
+  color: #f5a9a3;
+}
+
+.vf-more-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ── Comments bottom sheet (TikTok style) ── */
 .vf-sheet-backdrop {
   position: fixed;
@@ -942,6 +1005,8 @@ interface VideoFeedProps {
   initialOpenComments?: boolean;
   /** Fired when the user is near the end — used to prefetch the next page. */
   onNearEnd?: () => void;
+  guestMode?: boolean;
+  onNeedAuth?: () => void;
 }
 
 function CommentAvatar({
@@ -975,6 +1040,8 @@ export default function VideoFeed({
   initialIndex = 0,
   initialOpenComments = false,
   onNearEnd,
+  guestMode = false,
+  onNeedAuth,
 }: VideoFeedProps) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
@@ -995,6 +1062,15 @@ export default function VideoFeed({
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [deletingSoundTokId, setDeletingSoundTokId] = useState<string | null>(null);
   const [localCounts, setLocalCounts] = useState<Record<string, number>>({});
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [repostState, setRepostState] = useState<Record<string, { isReposted: boolean; repostsCount: number }>>({});
+  const [repostingId, setRepostingId] = useState<string | null>(null);
+  const recordedViewsRef = useRef<Set<string>>(new Set());
+
+  const requireAuth = useCallback(() => {
+    if (onNeedAuth) onNeedAuth();
+    else navigate('/login');
+  }, [onNeedAuth, navigate]);
 
   const [isPaused, setIsPaused] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
@@ -1013,6 +1089,10 @@ export default function VideoFeed({
 
   const openSoundPage = async (tok: SoundTok, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (guestMode) {
+      requireAuth();
+      return;
+    }
     try {
       const existingId = tok.sound?.id || tok.soundId;
       if (existingId) {
@@ -1063,6 +1143,10 @@ export default function VideoFeed({
 
   const toggleFollow = async (authorId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (guestMode) {
+      requireAuth();
+      return;
+    }
     if (isOwnVideo(authorId) || followLoading[authorId]) return;
 
     const wasFollowing = !!followedAuthors[authorId];
@@ -1083,7 +1167,50 @@ export default function VideoFeed({
     }
   };
 
-  const isOwnVideo = (authorId: string) => currentUser?.id === authorId;
+  const isOwnVideo = (authorId: string) => !guestMode && currentUser?.id === authorId;
+
+  const getRepostMeta = (tok: SoundTok) => {
+    const local = repostState[tok.id];
+    return {
+      isReposted: local?.isReposted ?? !!tok.isReposted,
+      repostsCount: local?.repostsCount ?? tok.repostsCount ?? 0,
+    };
+  };
+
+  const handleToggleRepost = async (tok: SoundTok) => {
+    if (guestMode) {
+      requireAuth();
+      setMenuOpenId(null);
+      return;
+    }
+    if (repostingId) return;
+    const meta = getRepostMeta(tok);
+    const nextIsReposted = !meta.isReposted;
+    setRepostState((prev) => ({
+      ...prev,
+      [tok.id]: {
+        isReposted: nextIsReposted,
+        repostsCount: Math.max(0, meta.repostsCount + (nextIsReposted ? 1 : -1)),
+      },
+    }));
+    setRepostingId(tok.id);
+    try {
+      if (meta.isReposted) {
+        await soundTokApi.unrepostSoundTok(tok.id);
+      } else {
+        await soundTokApi.repostSoundTok(tok.id);
+      }
+    } catch (error) {
+      setRepostState((prev) => ({
+        ...prev,
+        [tok.id]: meta,
+      }));
+      console.error('Failed to toggle repost:', error);
+    } finally {
+      setRepostingId(null);
+      setMenuOpenId(null);
+    }
+  };
 
   useEffect(() => {
     if (soundToks.length === 0) return;
@@ -1099,7 +1226,7 @@ export default function VideoFeed({
   }, [currentIndex, soundToks.length, onNearEnd]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || guestMode) return;
 
     const fromVideos: Record<string, boolean> = {};
     soundToks.forEach((tok) => {
@@ -1123,7 +1250,23 @@ export default function VideoFeed({
         setFollowedAuthors((prev) => ({ ...prev, ...map }));
       })
       .catch((error) => console.error('Failed to load following:', error));
-  }, [currentUser, soundToks]);
+  }, [currentUser, soundToks, guestMode]);
+
+  useEffect(() => {
+    // Guests record the shared video in SoundTok.tsx on load.
+    if (guestMode) return;
+    const tok = soundToks[currentIndex];
+    if (!tok) return;
+    if (recordedViewsRef.current.has(tok.id)) return;
+    recordedViewsRef.current.add(tok.id);
+    void soundTokApi.recordView(tok.id).catch(() => {
+      recordedViewsRef.current.delete(tok.id);
+    });
+  }, [currentIndex, soundToks, guestMode]);
+
+  useEffect(() => {
+    setMenuOpenId(null);
+  }, [currentIndex]);
 
   useEffect(() => {
     const counts: Record<string, number> = {};
@@ -1568,6 +1711,10 @@ export default function VideoFeed({
   }, [initialOpenComments, currentIndex, soundToks]);
 
   const openComments = async (id: string) => {
+    if (guestMode) {
+      requireAuth();
+      return;
+    }
     setCurrentSoundTokId(id);
     setCommentsOpen(true);
     setComments([]);
@@ -2019,12 +2166,24 @@ export default function VideoFeed({
                       <button
                         type="button"
                         className={`vf-action-btn ${soundTok.isLiked ? 'liked' : ''}`}
-                        onClick={() => onLike(soundTok.id)}
+                        onClick={() => {
+                          if (guestMode) {
+                            requireAuth();
+                            return;
+                          }
+                          onLike(soundTok.id);
+                        }}
                         aria-label="Нравится"
                       >
                         <Heart size={28} fill={soundTok.isLiked ? 'currentColor' : 'none'} strokeWidth={1.8} />
                       </button>
                       <span className="vf-action-count">{formatCount(soundTok.likes)}</span>
+                      {soundTok.views !== undefined && (
+                        <span className="vf-action-views" title="Просмотры">
+                          <Eye size={12} />
+                          {formatCount(soundTok.views)}
+                        </span>
+                      )}
                     </div>
 
                     <div className="vf-action-group">
@@ -2045,6 +2204,10 @@ export default function VideoFeed({
                         className="vf-action-btn"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (guestMode) {
+                            requireAuth();
+                            return;
+                          }
                           setShareTok(soundTok);
                         }}
                         aria-label="Поделиться"
@@ -2054,26 +2217,53 @@ export default function VideoFeed({
                       <span className="vf-action-count vf-share-label">Поделиться</span>
                     </div>
 
-                    {isOwnVideo(soundTok.authorId) && (
-                      <div className="vf-action-group">
-                        <button
-                          type="button"
-                          className="vf-action-btn danger"
-                          disabled={deletingSoundTokId === soundTok.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleDeleteSoundTok(soundTok.id);
-                          }}
-                          aria-label="Удалить видео"
-                          title="Удалить"
-                        >
-                          <Trash2 size={24} strokeWidth={1.8} />
-                        </button>
-                        <span className="vf-action-count vf-share-label">
-                          {deletingSoundTokId === soundTok.id ? '…' : 'Удалить'}
-                        </span>
-                      </div>
-                    )}
+                    <div className="vf-action-group vf-more-wrap">
+                      <button
+                        type="button"
+                        className="vf-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId((prev) => (prev === soundTok.id ? null : soundTok.id));
+                        }}
+                        aria-label="Ещё"
+                        aria-expanded={menuOpenId === soundTok.id}
+                      >
+                        <MoreVertical size={24} strokeWidth={1.8} />
+                      </button>
+                      {menuOpenId === soundTok.id && (
+                        <div className="vf-more-menu" role="menu">
+                          <button
+                            type="button"
+                            className="vf-more-item"
+                            role="menuitem"
+                            disabled={repostingId === soundTok.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleToggleRepost(soundTok);
+                            }}
+                          >
+                            <Repeat2 size={16} />
+                            {getRepostMeta(soundTok).isReposted ? 'Убрать репост' : 'Репост'}
+                          </button>
+                          {isOwnVideo(soundTok.authorId) && (
+                            <button
+                              type="button"
+                              className="vf-more-item danger"
+                              role="menuitem"
+                              disabled={deletingSoundTokId === soundTok.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpenId(null);
+                                void handleDeleteSoundTok(soundTok.id);
+                              }}
+                            >
+                              <Trash2 size={16} />
+                              Удалить
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       type="button"

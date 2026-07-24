@@ -759,6 +759,29 @@ export default function Profile() {
     }
   };
 
+  const handleRepostPrivacyChange = async (value: boolean) => {
+    try {
+      const result = await profileApi.updateProfile({ repostedSoundToksPublic: value });
+      if (result.success && result.user) {
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...result.user,
+                repostedSoundToksPublic: result.user!.repostedSoundToksPublic,
+              }
+            : result.user!
+        );
+        setSaveStatus('success');
+      } else {
+        setSaveStatus('error');
+      }
+    } catch (error) {
+      console.error('Failed to update reposts privacy:', error);
+      setSaveStatus('error');
+    }
+  };
+
   const getFieldError = (field: string) => {
     return errors.find(e => e.field === field)?.message;
   };
@@ -1018,6 +1041,9 @@ export default function Profile() {
             likedSoundToksCount={profile.likedSoundToksCount}
             likedSoundToksPublic={Boolean(profile.likedSoundToksPublic)}
             onPrivacyChange={handleLikedPrivacyChange}
+            repostedSoundToksCount={profile.repostedSoundToksCount}
+            repostedSoundToksPublic={Boolean(profile.repostedSoundToksPublic)}
+            onRepostPrivacyChange={handleRepostPrivacyChange}
           />
         </div>
 

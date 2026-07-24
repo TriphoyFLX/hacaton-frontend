@@ -4,6 +4,7 @@ import AuthCallback from './components/AuthCallback';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
+import SoundTokGate from './components/SoundTokGate';
 import PwaInstallBanner from './components/PwaInstallBanner';
 import PwaUninstallFeedbackModal from './components/PwaUninstallFeedbackModal';
 
@@ -45,7 +46,6 @@ function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        {/* Public SEO / marketing — crawlable without login */}
         <Route path="/" element={<Lazy><Landing variant="home" /></Lazy>} />
         <Route path="/online-studiya-zvukozapisi" element={<Lazy><Landing variant="studio" /></Lazy>} />
         <Route path="/zapisat-trek-online" element={<Lazy><Landing variant="record" /></Lazy>} />
@@ -53,7 +53,6 @@ function App() {
         <Route path="/register" element={<Lazy><Register /></Lazy>} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 
-        {/* Legal — public */}
         <Route path="/offer" element={<Lazy><LegalPage docId="offer" /></Lazy>} />
         <Route path="/terms" element={<Lazy><LegalPage docId="offer" /></Lazy>} />
         <Route path="/privacy" element={<Lazy><LegalPage docId="privacy" /></Lazy>} />
@@ -62,7 +61,10 @@ function App() {
         <Route path="/delivery" element={<Lazy><LegalPage docId="delivery" /></Lazy>} />
         <Route path="/service-delivery" element={<Lazy><LegalPage docId="delivery" /></Lazy>} />
 
-        {/* Authenticated app shell */}
+        <Route path="/soundtok" element={<SoundTokGate />}>
+          <Route index element={<Lazy><SoundTok /></Lazy>} />
+        </Route>
+
         <Route
           element={
             <ProtectedRoute>
@@ -74,7 +76,6 @@ function App() {
           <Route path="studio" element={<Lazy><Studio /></Lazy>} />
           <Route path="feed" element={<Lazy><Feed /></Lazy>} />
           <Route path="projects" element={<Lazy><Projects /></Lazy>} />
-          <Route path="soundtok" element={<Lazy><SoundTok /></Lazy>} />
           <Route path="soundtok/sound/:id" element={<Lazy><SoundPage /></Lazy>} />
           <Route path="soundtok/sound/:id/record" element={<Lazy><SoundRecordPage /></Lazy>} />
           <Route path="profile" element={<Lazy><Profile /></Lazy>} />

@@ -31,9 +31,12 @@ export interface SoundTok {
   soundId?: string | null;
   likes: number;
   commentsCount: number;
+  views?: number;
+  repostsCount?: number;
   createdAt: string;
   updatedAt: string;
   isLiked?: boolean;
+  isReposted?: boolean;
   authorIsFollowed?: boolean;
   author: {
     id: string;
@@ -118,6 +121,24 @@ export const soundTokApi = {
 
   deleteSoundTok: async (id: string): Promise<{ success: boolean; id: string }> => {
     const response = await api.delete(`/soundtok/${id}`);
+    return response.data;
+  },
+
+  repostSoundTok: async (id: string) => {
+    const response = await api.post(`/soundtok/${id}/repost`);
+    return response.data;
+  },
+
+  unrepostSoundTok: async (id: string) => {
+    const response = await api.delete(`/soundtok/${id}/repost`);
+    return response.data;
+  },
+
+  recordView: async (id: string, guestKey?: string) => {
+    const response = await api.post(
+      `/soundtok/${id}/view`,
+      guestKey ? { guestKey } : {}
+    );
     return response.data;
   },
 

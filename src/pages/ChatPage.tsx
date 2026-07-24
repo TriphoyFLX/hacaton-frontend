@@ -1533,6 +1533,24 @@ ${FONT_IMPORT}
   padding: 10px 6px;
   border-bottom: 1px solid #1c1c1c;
 }
+.group-member-main {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.group-member-main:hover .group-member-name {
+  color: #fff;
+}
 .group-member-avatar {
   width: 36px;
   height: 36px;

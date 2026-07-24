@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Camera, Crown, Loader2, Plus, Shield, ShieldOff, UserMinus, Users, X } from 'lucide-react';
 import { chatsApi, Chat, ChatMemberRole } from '../api/chats';
 import { resolveMediaUrl } from '../lib/mediaUrl';
@@ -18,6 +19,7 @@ export default function GroupInfoPanel({
   onChatUpdate,
   onLeft,
 }: GroupInfoPanelProps) {
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -313,35 +315,45 @@ export default function GroupInfoPanel({
             const acting = actingUserId === member.userId;
             return (
               <div key={member.id} className="group-member-row">
-                <div className="group-member-avatar">
-                  {memberAvatar ? (
-                    <img src={memberAvatar} alt={member.user.username} />
-                  ) : (
-                    member.user.username[0]?.toUpperCase()
-                  )}
-                </div>
-                <div className="group-member-info">
-                  <div className="group-member-name">
-                    {member.user.displayName || `@${member.user.username}`}
-                    {isSelf && <span className="group-member-you">вы</span>}
-                  </div>
-                  <div className="group-member-sub">
-                    @{member.user.username}
-                    {member.role === 'ADMIN' && (
-                      <span className="group-member-role">
-                        {isCreator ? <Crown size={11} /> : <Shield size={11} />}
-                        {isCreator ? 'создатель' : 'админ'}
-                      </span>
+                <button
+                  type="button"
+                  className="group-member-main"
+                  onClick={() => navigate(`/profile/${member.user.username}`)}
+                  aria-label={`Профиль @${member.user.username}`}
+                >
+                  <div className="group-member-avatar">
+                    {memberAvatar ? (
+                      <img src={memberAvatar} alt={member.user.username} />
+                    ) : (
+                      member.user.username[0]?.toUpperCase()
                     )}
                   </div>
-                </div>
+                  <div className="group-member-info">
+                    <div className="group-member-name">
+                      {member.user.displayName || `@${member.user.username}`}
+                      {isSelf && <span className="group-member-you">вы</span>}
+                    </div>
+                    <div className="group-member-sub">
+                      @{member.user.username}
+                      {member.role === 'ADMIN' && (
+                        <span className="group-member-role">
+                          {isCreator ? <Crown size={11} /> : <Shield size={11} />}
+                          {isCreator ? 'создатель' : 'админ'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
                 <div className="group-member-actions">
                   {isAdmin && !isCreator && !isSelf && member.role !== 'ADMIN' && (
                     <button
                       type="button"
                       title="Сделать админом"
                       disabled={acting}
-                      onClick={() => void handleRole(member.userId, 'ADMIN')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRole(member.userId, 'ADMIN');
+                      }}
                     >
                       {acting ? <Loader2 size={14} className="spin" /> : <Shield size={14} />}
                     </button>
@@ -351,7 +363,10 @@ export default function GroupInfoPanel({
                       type="button"
                       title="Снять админку"
                       disabled={acting}
-                      onClick={() => void handleRole(member.userId, 'MEMBER')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRole(member.userId, 'MEMBER');
+                      }}
                     >
                       {acting ? <Loader2 size={14} className="spin" /> : <ShieldOff size={14} />}
                     </button>
@@ -361,7 +376,10 @@ export default function GroupInfoPanel({
                       type="button"
                       title={isSelf ? 'Выйти из группы' : 'Удалить из группы'}
                       disabled={acting}
-                      onClick={() => void handleRemove(member.userId)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRemove(member.userId);
+                      }}
                     >
                       {acting ? <Loader2 size={14} className="spin" /> : <UserMinus size={14} />}
                     </button>
