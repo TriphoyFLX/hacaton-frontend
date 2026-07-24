@@ -45,6 +45,8 @@ ${FONT_IMPORT}
   gap: 4px;
   padding: 12px 20px;
   max-width: 100%;
+  min-height: var(--app-header-h, 58px);
+  box-sizing: border-box;
 }
 
 /* ── ICON BUTTONS ── */
@@ -252,13 +254,14 @@ ${FONT_IMPORT}
 
 @media (max-width: 768px) {
   .header-inner {
-    padding: 8px 12px;
+    padding: 6px 12px;
+    min-height: var(--app-header-h, 48px);
     justify-content: flex-end;
   }
 
   .header-btn {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
 
   .header-hint {
@@ -266,10 +269,11 @@ ${FONT_IMPORT}
   }
 
   .notifications-panel {
-    top: 65px;
+    top: calc(var(--app-header-h, 48px) + 8px);
     right: 12px;
-    width: calc(100vw - 24px);
-    max-height: calc(100dvh - 77px - var(--app-bottom-nav, 0px));
+    left: 12px;
+    width: auto;
+    max-height: calc(100dvh - var(--app-header-h, 48px) - var(--app-bottom-nav, 0px) - 24px);
   }
 }
 `;

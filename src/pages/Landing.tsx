@@ -199,6 +199,27 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           background: var(--ink); color: #12100e; border-color: var(--ink);
         }
         .sl-btn-primary:hover { background: #fff; border-color: #fff; color: #0c0b0a; }
+        @media (max-width: 520px) {
+          .sl-nav {
+            align-items: flex-start;
+            gap: 14px;
+            padding: 16px 0;
+          }
+          .sl-nav-actions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+          }
+          .sl-nav-actions .sl-btn {
+            width: 100%;
+            min-height: 44px;
+          }
+        }
+        @media (max-width: 380px) {
+          .sl-nav-actions { grid-template-columns: 1fr; }
+          .sl-hero h1 { font-size: clamp(34px, 11vw, 44px); }
+          .sl-wrap { padding: 0 14px; }
+        }
 
         .sl-hero {
           padding: clamp(36px, 8vh, 72px) 0 clamp(40px, 7vh, 64px);

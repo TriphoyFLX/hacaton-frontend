@@ -33,7 +33,7 @@ const formatPrice = (value: number) =>
     : new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value / 100);
 
 const css = `
-.preset-market { min-height:100vh; background:#0b0b0b; color:#f0ede8; font-family:Syne,Arial,sans-serif; padding:42px 28px 90px; }
+.preset-market { min-height:100%; background:#0b0b0b; color:#f0ede8; font-family:Syne,Arial,sans-serif; padding:42px 28px 90px; }
 .preset-shell { max-width:1200px; margin:auto; }
 .preset-head { display:flex; justify-content:space-between; gap:24px; align-items:flex-end; border-bottom:1px solid #252525; padding-bottom:24px; }
 .preset-kicker { color:#8f8270; font:11px 'DM Mono',monospace; letter-spacing:.14em; text-transform:uppercase; }
@@ -90,7 +90,7 @@ const css = `
 .vocal-actions button:disabled { opacity:.55; cursor:wait; }
 .vocal-lead { color:#8f877c; font-size:13px; margin:0 0 18px; max-width:640px; line-height:1.5; }
 
-@media(max-width:700px){.preset-market{padding:28px 16px 100px}.preset-head{align-items:flex-start;flex-direction:column}.preset-files{grid-template-columns:1fr}.preset-grid,.vocal-grid{grid-template-columns:1fr 1fr}.preset-card{min-height:300px}.vocal-actions{grid-template-columns:1fr}} @media(max-width:470px){.preset-grid,.vocal-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.preset-market{padding:var(--page-pad-top,20px) var(--page-pad-x,16px) var(--page-pad-bottom,24px)}.preset-head{align-items:flex-start;flex-direction:column}.preset-files{grid-template-columns:1fr}.preset-grid,.vocal-grid{grid-template-columns:1fr 1fr}.preset-card{min-height:0}.vocal-actions{grid-template-columns:1fr}.preset-search{min-width:0;flex:1 1 100%}.preset-toolbar{align-items:stretch}.preset-tabs button,.preset-filter button{min-height:44px}} @media(max-width:470px){.preset-grid,.vocal-grid{grid-template-columns:1fr}.preset-tabs{width:100%}.preset-tabs button{flex:1 1 auto}}
 `;
 
 export default function PresetsMarketplace() {

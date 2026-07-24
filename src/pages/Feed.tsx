@@ -969,6 +969,59 @@ ${FONT_IMPORT}
 .cp-hashtag-add:hover { border-color: var(--border-hover); color: var(--text-primary); }
 .feed-tag-filter { position: relative; z-index: 10; display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 16px; padding: 7px 10px; border: 1px solid var(--border-mid); border-radius: 7px; color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
 .feed-tag-filter button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
+
+@media (max-width: 768px) {
+  .feed-wrapper {
+    padding: var(--page-pad-top, 20px) var(--page-pad-x, 16px) var(--page-pad-bottom, 24px);
+  }
+  .feed-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .feed-tab {
+    min-height: 44px;
+    padding: 10px 8px;
+    font-size: 12px;
+    text-align: center;
+  }
+  .cp-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .cp-media-btns {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .cp-submit {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .post-media-grid {
+    grid-template-columns: 1fr;
+  }
+  .feed-tag-filter {
+    width: 100%;
+  }
+  .ambient-orb-1,
+  .ambient-orb-2 {
+    width: 280px;
+    height: 280px;
+  }
+}
+
+@media (max-width: 480px) {
+  .feed-tabs {
+    grid-template-columns: 1fr;
+  }
+  .cp-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
 `;
 
 // ── Utils ──

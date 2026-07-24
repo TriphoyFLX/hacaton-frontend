@@ -486,17 +486,22 @@ ${FONT_IMPORT}
 
   .sb-mobile-more-menu {
     position: fixed;
+    left: 12px;
     right: 12px;
     bottom: calc(var(--app-bottom-nav) + 8px);
-    width: min(240px, calc(100vw - 24px));
-    padding: 8px;
+    width: auto;
+    max-width: none;
+    max-height: min(70dvh, 420px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px;
     border: 1px solid var(--border-hover);
-    border-radius: 12px;
+    border-radius: 16px;
     background: var(--bg-elevated);
     box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
+    gap: 6px;
     z-index: 2;
   }
 
@@ -504,7 +509,7 @@ ${FONT_IMPORT}
     position: fixed;
     inset: 0;
     border: 0;
-    background: rgba(0, 0, 0, 0.32);
+    background: rgba(0, 0, 0, 0.45);
     z-index: 1;
   }
 
@@ -512,10 +517,11 @@ ${FONT_IMPORT}
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 8px;
-    border-radius: 8px;
+    min-height: 44px;
+    padding: 10px 10px;
+    border-radius: 10px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 12px;
     text-decoration: none;
   }
 
@@ -526,9 +532,28 @@ ${FONT_IMPORT}
   }
 
   .sb-mobile-more-link svg {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
     stroke-width: 1.7;
+    flex-shrink: 0;
+  }
+
+  .sb-mobile-more-meta {
+    margin-left: auto;
+    font: 9px/1 'DM Mono', monospace;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+}
+
+@media (max-width: 380px) {
+  .sb-mobile-more-menu {
+    grid-template-columns: 1fr;
+  }
+
+  .sb-mobile-label {
+    font-size: 9px;
   }
 }
 
@@ -816,7 +841,7 @@ export default function Sidebar() {
                 <IconMusic />Rap Battle
               </NavLink>
               <NavLink to="/midi" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
-                <IconWaveform />MIDI
+                <IconWaveform />MIDI<span className="sb-mobile-more-meta">ПК</span>
               </NavLink>
               <NavLink to="/presets" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
                 <IconBag />Пресеты

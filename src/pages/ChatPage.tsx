@@ -394,6 +394,29 @@ ${FONT_IMPORT}
     width: 40px;
     padding: 0;
   }
+  .chat-header {
+    padding: 10px 12px;
+  }
+  .chat-input-area {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .message-input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 768px) {
+  .chat-root {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+  .messages-container,
+  .chat-messages {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
 }
 .block-banner {
   position: relative;

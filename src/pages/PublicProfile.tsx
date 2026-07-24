@@ -469,6 +469,39 @@ ${FONT_IMPORT}
   color: var(--text-primary);
   background: var(--bg-surface);
 }
+
+@media (max-width: 768px) {
+  .profile-wrapper {
+    padding: var(--page-pad-top, 20px) var(--page-pad-x, 16px) var(--page-pad-bottom, 24px);
+  }
+  .profile-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .profile-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .profile-actions button,
+  .profile-actions a {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+  .profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-stats {
+    grid-template-columns: 1fr;
+  }
+  .stat-cell + .stat-cell {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}
 `;
 
 export default function PublicProfile() {

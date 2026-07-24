@@ -559,23 +559,28 @@ textarea.rb-input { resize:vertical; min-height:80px; line-height:1.6; }
     padding-left: 0 !important;
   }
   .rb-wrap {
-    padding: 24px 20px 100px !important;
+    padding: var(--page-pad-top, 20px) var(--page-pad-x, 16px) var(--page-pad-bottom, 24px) !important;
     max-width: 100% !important;
   }
   .rb-topbar {
     padding-bottom: 16px !important;
-    margin-bottom: 32px !important;
+    margin-bottom: 24px !important;
+    flex-wrap: wrap;
+    gap: 12px;
   }
   .rb-page-name {
     font-size: 20px !important;
   }
   .rb-hero {
-    padding: 40px 0 32px !important;
+    padding: 28px 0 24px !important;
   }
   .rb-hero-title {
     font-size: 22px !important;
   }
-  .rb-vs-card {
+  .rb-vs-card,
+  .rb-player,
+  .rb-card,
+  .rb-rec-card {
     padding: 16px !important;
   }
   .rb-vs-avatar {
@@ -583,41 +588,30 @@ textarea.rb-input { resize:vertical; min-height:80px; line-height:1.6; }
     height: 36px !important;
     font-size: 14px !important;
   }
-  .rb-player {
-    padding: 16px !important;
-  }
-  .rb-card {
-    padding: 16px !important;
-  }
-  .rb-rec-card {
-    padding: 16px !important;
-  }
   .rb-timer-display {
     font-size: 48px !important;
   }
   .rb-mic-btn {
-    width: 60px !important;
-    height: 60px !important;
+    width: 64px !important;
+    height: 64px !important;
   }
   .rb-mic-btn svg {
     width: 22px !important;
     height: 22px !important;
   }
-  .rb-quality-grid {
+  .rb-quality-grid,
+  .rb-score-grid {
     grid-template-columns: 1fr !important;
-    gap: 8px !important;
+    gap: 10px !important;
   }
   .rb-stars {
     gap: 8px !important;
+    flex-wrap: wrap;
   }
   .rb-star-btn {
-    width: 36px !important;
-    height: 36px !important;
+    width: 40px !important;
+    height: 40px !important;
     font-size: 16px !important;
-  }
-  .rb-score-grid {
-    grid-template-columns: 1fr !important;
-    gap: 12px !important;
   }
 }
 `;

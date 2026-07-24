@@ -1084,15 +1084,21 @@ button.vf-repost-attr:hover {
   }
 
   .vf-actions {
-    right: 8px;
-    bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    z-index: 5;
   }
 
   .vf-bottom-info {
-    right: 56px;
-    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: 78px;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   }
 
+  .vf-action-btn {
+    width: 48px;
+    height: 48px;
+  }
 }
 
 @media (min-width: 769px) {

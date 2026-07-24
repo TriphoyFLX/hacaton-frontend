@@ -324,7 +324,7 @@ const styles: Record<string, CSSProperties> = {
   grid: {
     display: 'grid',
     gap: 16,
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))',
   },
   card: {
     border: '1px solid rgba(243,239,232,0.1)',

@@ -251,6 +251,12 @@ const ADMIN_CSS = `
     right: 13px;
     left: 13px;
   }
+  .admin-root .grid {
+    grid-template-columns: 1fr !important;
+  }
+  .admin-root table {
+    min-width: 640px;
+  }
 }
 `;
 

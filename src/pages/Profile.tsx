@@ -482,45 +482,51 @@ ${FONT_IMPORT}
 /* ── MOBILE ── */
 @media (max-width: 768px) {
   .profile-wrapper {
-    padding: 24px 20px 80px !important;
-    max-width: 100% !important;
+    padding: var(--page-pad-top, 20px) var(--page-pad-x, 16px) var(--page-pad-bottom, 24px);
+    max-width: 100%;
   }
-  
+
   .profile-hero {
     flex-direction: column;
-    gap: 20px !important;
-    margin-bottom: 32px !important;
+    gap: 20px;
+    margin-bottom: 28px;
   }
-  
+
   .avatar {
-    width: 60px !important;
-    height: 60px !important;
+    width: 72px;
+    height: 72px;
   }
-  
+
   .profile-topbar {
     flex-direction: column;
-    align-items: flex-start !important;
-    gap: 16px !important;
-    margin-bottom: 32px !important;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 28px;
   }
-  
+
   .stats-row {
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 12px !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
   }
-  
+
   .detail-row {
-    flex-wrap: wrap !important;
-    gap: 8px !important;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  
+
   .detail-label {
-    flex: 0 0 auto !important;
+    flex: 0 0 auto;
   }
-  
+
   .detail-value {
-    flex: 1 !important;
-    text-align: right !important;
+    flex: 1;
+    text-align: right;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-row {
+    grid-template-columns: 1fr;
   }
 }
 `;

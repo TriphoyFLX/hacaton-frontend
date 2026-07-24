@@ -1,10 +1,11 @@
 /* ── Global responsive tokens ── */
 :root {
-  --app-bottom-nav: 72px;
+  --app-bottom-nav: 0px;
   --app-header-h: 58px;
   --page-pad-x: 28px;
   --page-pad-top: 48px;
   --page-pad-bottom: 80px;
+  --touch-min: 44px;
 }
 
 @media (max-width: 768px) {
@@ -25,6 +26,13 @@
   }
 }
 
+/* Immersive main fills remaining shell after header + bottom nav */
+.app-main--immersive {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* ── Page shells: unified padding ── */
 @media (max-width: 1024px) {
   .feed-wrapper,
@@ -34,7 +42,11 @@
   .chats-wrapper,
   .st-wrapper,
   .db-wrap,
-  .rb-wrap {
+  .rb-wrap,
+  .pr,
+  .preset-wrap,
+  .preset-market,
+  .admin-wrap {
     padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom) !important;
   }
 
@@ -99,8 +111,9 @@
 
   .feed-tab {
     flex: 1;
-    padding: 8px 10px !important;
-    font-size: 10px !important;
+    min-height: 40px !important;
+    padding: 10px 12px !important;
+    font-size: 12px !important;
     text-align: center;
   }
 
@@ -142,6 +155,22 @@
   .chat-root {
     height: 100% !important;
     min-height: 0 !important;
+    max-height: 100% !important;
+  }
+
+  /* Pricing */
+  .pr-grid,
+  .pr-packs {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pr-card,
+  .pr-pack {
+    min-height: 0 !important;
+  }
+
+  .pr-btn {
+    min-height: var(--touch-min) !important;
   }
 
   /* Rap battle */
@@ -183,12 +212,14 @@
     padding: 12px !important;
     align-items: flex-start !important;
     padding-top: max(12px, env(safe-area-inset-top)) !important;
+    padding-bottom: calc(12px + var(--app-bottom-nav)) !important;
   }
 
   .search-modal {
-    max-height: calc(100dvh - 24px) !important;
+    max-height: calc(100dvh - 24px - var(--app-bottom-nav)) !important;
     border-radius: 12px !important;
     margin-top: 0 !important;
+    width: 100% !important;
   }
 
   /* MIDI welcome */
@@ -199,6 +230,25 @@
 
   .welcome-screen {
     padding: 24px 16px !important;
+  }
+
+  /* Landing */
+  .sl-nav {
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+  }
+
+  .sl-nav-actions {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .sl-nav-actions .sl-btn,
+  .sl-nav-actions a {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -217,11 +267,10 @@
   }
 }
 
-/* Safe area for bottom nav */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   @media (max-width: 768px) {
     .sb-root {
-      padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
     }
   }
 }
@@ -372,7 +421,9 @@ select {
   }
 
   .chat-root {
-    height: calc(100dvh - var(--app-bottom-nav)) !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
   }
 
   .chat-header,
@@ -468,7 +519,9 @@ select {
   .ai-wrapper,
   .chats-wrapper,
   .db-wrap,
-  .rb-wrap {
+  .rb-wrap,
+  .pr,
+  .preset-wrap {
     padding-left: 10px !important;
     padding-right: 10px !important;
   }
@@ -485,6 +538,15 @@ select {
 
   .vf-description {
     font-size: 13px !important;
+  }
+
+  .sl-nav-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pr-price,
+  .pr-pack-price {
+    font-size: 24px !important;
   }
 }
 
@@ -651,4 +713,39 @@ select {
     opacity: 1 !important;
     background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.58)) !important;
   }
+
+  button,
+  a,
+  .sb-mobile-item,
+  .pr-btn,
+  .feed-tab,
+  .cp-submit {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Touch-friendly minimums on coarse pointers */
+@media (pointer: coarse) {
+  .header-btn,
+  .sb-mobile-item,
+  .pr-btn,
+  .cp-media-btn,
+  .vf-action-btn,
+  .st-fab {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Prevent accidental page-level horizontal scroll */
+.app-shell,
+.app-main,
+.feed-root,
+.profile-root,
+.ai-root,
+.chats-root,
+.projects-root,
+.pr {
+  max-width: 100%;
+  overflow-x: clip;
 }

@@ -81,6 +81,47 @@ const css = `
 .pr-err{color:#ff8a8a;margin:12px 0;font-size:14px}
 .pr-ok{color:#9dffa8;margin:12px 0;font-size:14px}
 .pr a{color:var(--accent)}
+@media (max-width: 768px) {
+  .pr {
+    padding: var(--page-pad-top, 20px) var(--page-pad-x, 16px) var(--page-pad-bottom, 24px);
+  }
+  .pr-status {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+  }
+  .pr-grid,
+  .pr-packs {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .pr-card,
+  .pr-pack {
+    min-height: 0;
+    padding: 16px;
+  }
+  .pr-btn {
+    min-height: 44px;
+  }
+  .pr-sub {
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+}
+@media (max-width: 480px) {
+  .pr h1 {
+    font-size: 26px;
+  }
+  .pr-price,
+  .pr-pack-price {
+    font-size: 24px;
+  }
+  .pr-packs-title {
+    font-size: 18px;
+  }
+}
 `;
 
 export default function Pricing() {

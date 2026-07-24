@@ -472,6 +472,19 @@ ${FONT_IMPORT}
   .settings-grid {
     grid-template-columns: 1fr;
   }
+  .ai-topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .submit-btn {
+    min-height: 48px;
+  }
 }
 
 /* ── SUBMIT BUTTON ── */

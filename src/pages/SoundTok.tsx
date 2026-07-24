@@ -697,15 +697,16 @@ ${FONT_IMPORT}
 
   .st-fab {
     left: auto;
-    right: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     transform: none;
-    width: 48px;
-    height: 48px;
+    width: 52px;
+    height: 52px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--purple), var(--pink));
     border-color: transparent;
     color: #fff;
+    z-index: 6;
   }
 
   .st-fab:hover {
