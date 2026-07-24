@@ -1235,6 +1235,50 @@ export default function ChatPage() {
     setPresenceStatus(isOnline ? 'online' : 'offline');
   };
 
+  const handleUserUpdated = (data: {
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+  }) => {
+    setChat((prev) => {
+      if (!prev) return prev;
+      const patchUser = (u: { id: string; username: string; displayName?: string | null; avatar?: string | null }) =>
+        u.id === data.id
+          ? {
+              ...u,
+              username: data.username,
+              displayName: data.displayName ?? u.displayName,
+              avatar: data.avatar ?? u.avatar,
+            }
+          : u;
+
+      return {
+        ...prev,
+        otherUser: prev.otherUser ? patchUser(prev.otherUser) : prev.otherUser,
+        users: prev.users.map((cu) => ({
+          ...cu,
+          user: patchUser(cu.user),
+        })),
+      };
+    });
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.sender?.id === data.id
+          ? {
+              ...m,
+              sender: {
+                ...m.sender,
+                username: data.username,
+                displayName: data.displayName ?? m.sender.displayName,
+                avatar: data.avatar ?? m.sender.avatar,
+              },
+            }
+          : m,
+      ),
+    );
+  };
+
   const getPresenceLabel = () => {
     if (otherUserTyping) return 'печатает...';
     if (presenceStatus === 'unknown') return 'проверка статуса...';
@@ -1257,6 +1301,7 @@ export default function ChatPage() {
     onTyping: handleTyping,
     onPresence: handlePresence,
     onOtherUserOnline: handlePresence,
+    onUserUpdated: handleUserUpdated,
     onError: handleSocketError,
   });
 

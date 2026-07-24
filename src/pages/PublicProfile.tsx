@@ -489,6 +489,10 @@ export default function PublicProfile() {
         if (currentUser?.id !== data.id) addRecentProfile(data);
         setIsFollowing(!!data.isFollowing);
         setFollowersCount(data.followersCount ?? 0);
+        // Canonicalize URL after username rename / case differences
+        if (data.username && data.username !== username) {
+          navigate(`/profile/${data.username}`, { replace: true });
+        }
       } catch (error) {
         console.error('Failed to fetch user:', error);
         setUser(null);
@@ -498,7 +502,7 @@ export default function PublicProfile() {
     };
 
     fetchUser();
-  }, [username, currentUser?.id]);
+  }, [username, currentUser?.id, navigate]);
 
   const handleFollow = async () => {
     if (!user || followLoading || currentUser?.id === user.id) return;

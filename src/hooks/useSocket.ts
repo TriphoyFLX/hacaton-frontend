@@ -64,6 +64,12 @@ interface ServerToClientEvents {
   'chat:typing': (data: { chatId: string; userId: string; isTyping: boolean }) => void;
   'chat:presence': (data: { chatId: string; userId: string; isOnline: boolean }) => void;
   'user:online': (data: { userId: string; isOnline: boolean }) => void;
+  'user:updated': (data: {
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+  }) => void;
   'error': (error: { message: string; code: string }) => void;
   'connect': () => void;
   'disconnect': (reason: string) => void;
@@ -95,6 +101,12 @@ interface UseSocketOptions {
   onTyping?: (data: { chatId: string; userId: string; isTyping: boolean }) => void;
   onPresence?: (data: { chatId: string; userId: string; isOnline: boolean }) => void;
   onUserOnline?: (data: { userId: string; isOnline: boolean }) => void;
+  onUserUpdated?: (data: {
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+  }) => void;
   onError?: (error: { message: string; code: string }) => void;
   onConnect?: () => void;
   onDisconnect?: (reason: string) => void;
@@ -212,6 +224,10 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
       optionsRef.current.onUserOnline?.(data);
     });
 
+    socket.on('user:updated', (data) => {
+      optionsRef.current.onUserUpdated?.(data);
+    });
+
     socket.on('error', (error) => {
       optionsRef.current.onError?.(error);
     });
@@ -313,6 +329,12 @@ export function useChatSocket(
     onTyping?: (isTyping: boolean, userId: string) => void;
     onPresence?: (isOnline: boolean) => void;
     onOtherUserOnline?: (isOnline: boolean) => void;
+    onUserUpdated?: (data: {
+      id: string;
+      username: string;
+      displayName?: string | null;
+      avatar?: string | null;
+    }) => void;
     onError?: (error: { message: string; code: string }) => void;
   } = {}
 ) {
@@ -355,6 +377,9 @@ export function useChatSocket(
           options.onOtherUserOnline?.(data.isOnline);
           options.onPresence?.(data.isOnline);
         }
+      },
+      onUserUpdated: (data) => {
+        options.onUserUpdated?.(data);
       },
       onError: (error) => {
         options.onError?.(error);

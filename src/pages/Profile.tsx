@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { profileApi, UserProfile, ValidationError } from '../api/profile';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { syncRecentProfile } from '../lib/recentProfiles';
 import FollowListModal from '../components/FollowListModal';
 import BattleRatingCard from '../components/BattleRatingCard';
 import AdminBadge from '../components/AdminBadge';
@@ -690,6 +691,11 @@ export default function Profile() {
         setProfile(result.user);
         setUsername(result.user.username);
         updateUser({
+          username: result.user.username,
+          displayName: result.user.displayName,
+          avatar: result.user.avatar,
+        });
+        syncRecentProfile(result.user.id, {
           username: result.user.username,
           displayName: result.user.displayName,
           avatar: result.user.avatar,

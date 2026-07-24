@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { chatsApi, Chat, resolveChatPinState } from '../api/chats';
 import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
+import { useSocket } from '../hooks/useSocket';
 import { Search, MessageCircle, Pin, PinOff, Users, Plus, X } from 'lucide-react';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 
@@ -552,6 +553,25 @@ ${FONT_IMPORT}
   opacity: 0.45;
   cursor: not-allowed;
 }
+.group-search-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-surface);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.group-search-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .group-members {
   display: flex;
   flex-wrap: wrap;
@@ -638,6 +658,7 @@ const IconChat = () => (
 export default function Chats() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
   const refreshUnread = useChatUnreadStore((s) => s.refresh);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -656,6 +677,7 @@ export default function Chats() {
     id: string;
     username: string;
     displayName?: string | null;
+    avatar?: string | null;
   }>>([]);
   const [groupCreating, setGroupCreating] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
@@ -677,6 +699,51 @@ export default function Chats() {
   useEffect(() => {
     fetchChats();
   }, []);
+
+  useSocket(token, {
+    onUserUpdated: (data) => {
+      setChats((prev) =>
+        prev.map((chat) => {
+          const patchUser = (u?: {
+            id: string;
+            username: string;
+            displayName?: string | null;
+            avatar?: string | null;
+          } | null) => {
+            if (!u || u.id !== data.id) return u;
+            return {
+              ...u,
+              username: data.username,
+              displayName: data.displayName ?? u.displayName,
+              avatar: data.avatar ?? u.avatar,
+            };
+          };
+
+          return {
+            ...chat,
+            otherUser: patchUser(chat.otherUser) ?? null,
+            users: chat.users.map((cu) => ({
+              ...cu,
+              user: patchUser(cu.user)!,
+            })),
+            messages: chat.messages?.map((m) =>
+              m.sender?.id === data.id
+                ? {
+                    ...m,
+                    sender: {
+                      ...m.sender,
+                      username: data.username,
+                      displayName: data.displayName ?? m.sender.displayName,
+                      avatar: data.avatar ?? m.sender.avatar,
+                    },
+                  }
+                : m,
+            ),
+          };
+        }),
+      );
+    },
+  });
 
   useEffect(() => {
     if (!showGroupModal) return;
@@ -859,7 +926,10 @@ export default function Chats() {
     }
     const otherUser = getOtherUser(chat);
     if (!otherUser) return false;
-    return otherUser.username.toLowerCase().includes(query);
+    return (
+      otherUser.username.toLowerCase().includes(query)
+      || (otherUser.displayName || '').toLowerCase().includes(query)
+    );
   });
 
   return (
@@ -1077,6 +1147,13 @@ export default function Chats() {
                         disabled={alreadyAdded || isSelf}
                         onClick={() => addMember(result)}
                       >
+                        <span className="group-search-avatar">
+                          {result.avatar ? (
+                            <img src={resolveMediaUrl(result.avatar) ?? ''} alt={result.username} />
+                          ) : (
+                            result.username[0]?.toUpperCase() || '?'
+                          )}
+                        </span>
                         <span>@{result.username}</span>
                         {result.displayName && (
                           <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>

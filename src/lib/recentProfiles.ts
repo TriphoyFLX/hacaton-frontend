@@ -38,3 +38,18 @@ export function addRecentProfile(profile: UserProfile): void {
     // History is optional and must not prevent profile navigation.
   }
 }
+
+/** Keep cached recent entries in sync after username/avatar changes. */
+export function syncRecentProfile(
+  profileId: string,
+  patch: Partial<Pick<RecentProfile, 'username' | 'displayName' | 'avatar'>>,
+): void {
+  try {
+    const recent = getRecentProfiles().map((item) =>
+      item.id === profileId ? { ...item, ...patch } : item,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recent.slice(0, MAX_RECENT_PROFILES)));
+  } catch {
+    // optional
+  }
+}

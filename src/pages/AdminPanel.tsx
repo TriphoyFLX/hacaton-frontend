@@ -259,6 +259,7 @@ type Tab = 'overview' | 'purchases' | 'reports' | 'users' | 'posts' | 'soundtoks
 type PurchaseFilter = 'all' | 'subscriptions' | 'tokens' | 'presets';
 type PaymentStatusFilter = 'ALL' | 'SUCCEEDED' | 'PENDING' | 'CANCELED';
 type ReportStatusFilter = 'OPEN' | 'REVIEWING' | 'RESOLVED' | 'DISMISSED' | 'ALL';
+type UserRoleFilter = 'ALL' | 'ADMIN' | 'USER';
 
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
@@ -468,6 +469,7 @@ export default function AdminPanel() {
   const [reportsTotal, setReportsTotal] = useState(0);
   const [reportsOpenCount, setReportsOpenCount] = useState(0);
   const [reportStatusFilter, setReportStatusFilter] = useState<ReportStatusFilter>('OPEN');
+  const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('ALL');
   const [userQuery, setUserQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -484,9 +486,10 @@ export default function AdminPanel() {
     setStats(data);
   }, []);
 
-  const loadUsers = useCallback(async (q: string) => {
+  const loadUsers = useCallback(async (q: string, role: UserRoleFilter) => {
     const qs = new URLSearchParams({ limit: String(PAGE_SIZE), offset: '0' });
     if (q) qs.set('q', q);
+    if (role !== 'ALL') qs.set('role', role);
     const data = await adminFetch<Paged<User>>(`/users?${qs}`);
     setUsers(data.items);
     setUsersTotal(data.total);
@@ -559,7 +562,7 @@ export default function AdminPanel() {
       activeTab,
       activeTab === 'purchases' ? `${purchaseFilter}:${paymentStatusFilter}` : '',
       activeTab === 'reports' ? reportStatusFilter : '',
-      activeTab === 'users' ? debouncedQuery : '',
+      activeTab === 'users' ? `${userRoleFilter}:${debouncedQuery}` : '',
     ].join(':');
 
     const loadedAt = loadedAtRef.current.get(cacheKey) ?? 0;
@@ -582,7 +585,7 @@ export default function AdminPanel() {
           await loadReports(reportStatusFilter);
           break;
         case 'users':
-          await loadUsers(debouncedQuery);
+          await loadUsers(debouncedQuery, userRoleFilter);
           break;
         case 'posts':
           await loadPosts();
@@ -603,6 +606,7 @@ export default function AdminPanel() {
     purchaseFilter,
     paymentStatusFilter,
     reportStatusFilter,
+    userRoleFilter,
     debouncedQuery,
     loadOverview,
     loadPurchases,
@@ -1256,6 +1260,28 @@ export default function AdminPanel() {
 
         {activeTab === 'users' && (
           <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ['ALL', 'Все'],
+                  ['ADMIN', 'Админы'],
+                  ['USER', 'Юзеры'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setUserRoleFilter(id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                    userRoleFilter === id
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="relative max-w-md">
               <Search
                 size={16}
