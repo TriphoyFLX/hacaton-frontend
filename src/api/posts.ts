@@ -24,6 +24,8 @@ export interface Post {
     displayName?: string | null;
     avatar?: string | null;
     role?: string;
+    plan?: string;
+    planExpiresAt?: string | null;
   };
 }
 
@@ -45,6 +47,8 @@ export interface PostComment {
     displayName?: string | null;
     avatar?: string | null;
     role?: string;
+    plan?: string;
+    planExpiresAt?: string | null;
   };
 }
 

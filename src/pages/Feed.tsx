@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminBadge from '../components/AdminBadge';
+import PlatinumBadge from '../components/PlatinumBadge';
 import { renderTextWithMentions } from '../utils/messageMentions';
 
 // ── Styles ──
@@ -1520,6 +1521,12 @@ function PostCard({
             <div>
               <div className="post-handle">
                 @{post?.author?.username ?? 'unknown'}
+                <PlatinumBadge
+                  plan={post?.author?.plan}
+                  planExpiresAt={post?.author?.planExpiresAt}
+                  role={post?.author?.role}
+                  size={12}
+                />
                 <AdminBadge role={post?.author?.role} size={12} />
               </div>
               <div className="post-name">{post?.author?.displayName || post?.author?.username || 'Unknown'}</div>
@@ -1614,6 +1621,12 @@ function PostCard({
                         onClick={() => navigate(`/profile/${comment.author.username}`)}
                       >
                         @{comment.author.username}
+                        <PlatinumBadge
+                          plan={comment.author.plan}
+                          planExpiresAt={comment.author.planExpiresAt}
+                          role={comment.author.role}
+                          size={11}
+                        />
                       </button>
                       <span className={comment.isHidden ? 'post-comment-text hidden' : 'post-comment-text'}>
                         {renderTextWithMentions({

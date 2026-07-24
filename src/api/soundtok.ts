@@ -18,6 +18,8 @@ export interface Comment {
     displayName?: string | null;
     avatar?: string | null;
     role?: string;
+    plan?: string;
+    planExpiresAt?: string | null;
   };
 }
 
@@ -39,6 +41,8 @@ export interface SoundTok {
     displayName?: string | null;
     avatar?: string | null;
     role?: string;
+    plan?: string;
+    planExpiresAt?: string | null;
   };
   sound?: {
     id: string;

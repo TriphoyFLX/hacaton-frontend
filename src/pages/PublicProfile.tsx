@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/authStore';
 import FollowListModal from '../components/FollowListModal';
 import BattleRatingCard from '../components/BattleRatingCard';
 import AdminBadge from '../components/AdminBadge';
+import PlatinumBadge, { isPlatinumUser, PLATINUM_PROFILE_CSS } from '../components/PlatinumBadge';
 import ReportUserModal from '../components/ReportUserModal';
 import ProfileMediaTabs from '../components/ProfileMediaTabs';
 
@@ -174,6 +175,11 @@ ${FONT_IMPORT}
   color: var(--accent);
   letter-spacing: -0.01em;
   overflow: hidden;
+}
+.pt-avatar-ring .profile-avatar {
+  width: 74px;
+  height: 74px;
+  border: none;
 }
 .profile-avatar img {
   width: 100%;
@@ -547,6 +553,7 @@ export default function PublicProfile() {
     return (
       <div className="profile-root">
         <style>{css}</style>
+      <style>{PLATINUM_PROFILE_CSS}</style>
         <div className="profile-ambient">
           <div className="ambient-orb ambient-orb-1" />
           <div className="ambient-orb ambient-orb-2" />
@@ -565,6 +572,7 @@ export default function PublicProfile() {
     return (
       <div className="profile-root">
         <style>{css}</style>
+      <style>{PLATINUM_PROFILE_CSS}</style>
         <div className="profile-ambient">
           <div className="ambient-orb ambient-orb-1" />
           <div className="ambient-orb ambient-orb-2" />
@@ -584,6 +592,7 @@ export default function PublicProfile() {
   return (
     <div className="profile-root">
       <style>{css}</style>
+      <style>{PLATINUM_PROFILE_CSS}</style>
 
       {/* Ambient Background */}
       <div className="profile-ambient">
@@ -606,19 +615,27 @@ export default function PublicProfile() {
 
         {/* Profile Header */}
         <div className="profile-header">
-          <div className="profile-avatar">
-            {user.avatar ? (
-              <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} />
-            ) : (
-              user.username[0].toUpperCase()
-            )}
+          <div className={isPlatinumUser(user) ? 'pt-avatar-ring' : undefined}>
+            <div className="profile-avatar">
+              {user.avatar ? (
+                <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} />
+              ) : (
+                user.username[0].toUpperCase()
+              )}
+            </div>
           </div>
           <div className="profile-info">
             <div className="profile-handle">
               @{user.username}
+              <PlatinumBadge plan={user.plan} role={user.role} />
               <AdminBadge role={user.role} />
+              {isPlatinumUser(user) && user.role !== 'ADMIN' && (
+                <span className="pt-chip">Platinum</span>
+              )}
             </div>
-            <h1 className="profile-name">{user.displayName || user.username}</h1>
+            <h1 className={`profile-name${isPlatinumUser(user) ? ' pt-name' : ''}`}>
+              {user.displayName || user.username}
+            </h1>
           </div>
           <div className="profile-actions">
             {currentUser?.id !== user.id && (

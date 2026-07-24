@@ -15,6 +15,7 @@ import {
 } from '../lib/mediaUnlock';
 import ShareSoundTokModal from './ShareSoundTokModal';
 import AdminBadge from './AdminBadge';
+import PlatinumBadge from './PlatinumBadge';
 import { renderTextWithMentions } from '../utils/messageMentions';
 
 const css = `
@@ -1851,6 +1852,12 @@ export default function VideoFeed({
                         }}
                       >
                         @{soundTok.author?.username || 'user'}
+                        <PlatinumBadge
+                          plan={soundTok.author?.plan}
+                          planExpiresAt={soundTok.author?.planExpiresAt}
+                          role={soundTok.author?.role}
+                          size={12}
+                        />
                         <AdminBadge role={soundTok.author?.role} size={12} />
                       </button>
                     </div>
@@ -2056,6 +2063,13 @@ export default function VideoFeed({
                             onClick={() => openCommentProfile(comment.author.username)}
                           >
                             {comment.author.displayName || comment.author.username}
+                            <PlatinumBadge
+                              plan={comment.author.plan}
+                              planExpiresAt={comment.author.planExpiresAt}
+                              role={comment.author.role}
+                              size={11}
+                            />
+                            <AdminBadge role={comment.author.role} size={11} />
                           </button>
                           <span className="vf-comment-time">
                             {formatRelativeTime(comment.createdAt)}

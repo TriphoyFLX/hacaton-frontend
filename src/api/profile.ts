@@ -11,6 +11,7 @@ export interface UserProfile {
   likedSoundToksPublic?: boolean;
   birthDate?: string;
   role?: string;
+  plan?: 'FREE' | 'PRO' | 'PLATINUM';
   createdAt: string;
   updatedAt?: string;
   postsCount?: number;

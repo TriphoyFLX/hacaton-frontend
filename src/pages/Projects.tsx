@@ -13,6 +13,7 @@ import { postsApi, type Post, type PostComment } from '../api/posts';
 import { BEAT_POST_TAG } from '../lib/audioExport';
 import { useAuthStore } from '../store/authStore';
 import AdminBadge from '../components/AdminBadge';
+import PlatinumBadge from '../components/PlatinumBadge';
 
 function mediaUrl(url: string) {
   if (!url) return '';
@@ -204,6 +205,7 @@ export default function Projects() {
                         <Link to={`/profile/${post.author.username}`} style={styles.author}>
                           @{post.author.username}
                         </Link>
+                        <PlatinumBadge plan={post.author.plan} planExpiresAt={post.author.planExpiresAt} role={post.author.role} size={12} />
                         {post.author.role === 'ADMIN' && <AdminBadge />}
                         <span>В· {timeAgo(post.createdAt)}</span>
                       </div>

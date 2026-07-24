@@ -6,6 +6,7 @@ import { syncRecentProfile } from '../lib/recentProfiles';
 import FollowListModal from '../components/FollowListModal';
 import BattleRatingCard from '../components/BattleRatingCard';
 import AdminBadge from '../components/AdminBadge';
+import PlatinumBadge, { isPlatinumUser, PLATINUM_PROFILE_CSS } from '../components/PlatinumBadge';
 import ProfileMediaTabs from '../components/ProfileMediaTabs';
 
 const FONT_IMPORT = '';
@@ -116,6 +117,11 @@ ${FONT_IMPORT}
   letter-spacing: -0.01em;
   overflow: hidden;
   position: relative;
+}
+.pt-avatar-ring .avatar {
+  width: 74px;
+  height: 74px;
+  border: none;
 }
 .avatar img {
   width: 100%;
@@ -795,6 +801,7 @@ export default function Profile() {
   return (
     <div className="profile-root">
       <style>{css}</style>
+      <style>{PLATINUM_PROFILE_CSS}</style>
       <div className="profile-wrapper">
 
         {/* Top bar */}
@@ -817,12 +824,14 @@ export default function Profile() {
         {/* Hero */}
         <div className="profile-hero">
           <div className="avatar-wrapper">
-            <div className="avatar">
-              {avatar ? (
-                <img src={resolveMediaUrl(avatar) ?? ''} alt={profile.username} />
-              ) : (
-                profile.username[0].toUpperCase()
-              )}
+            <div className={isPlatinumUser(profile) ? 'pt-avatar-ring' : undefined}>
+              <div className="avatar">
+                {avatar ? (
+                  <img src={resolveMediaUrl(avatar) ?? ''} alt={profile.username} />
+                ) : (
+                  profile.username[0].toUpperCase()
+                )}
+              </div>
             </div>
             <button className="avatar-edit-btn" onClick={handleAvatarClick} title="Изменить аватар">
               <IconCamera />
@@ -848,9 +857,15 @@ export default function Profile() {
           <div className="hero-info">
             <div className="hero-handle">
               @{profile.username}
+              <PlatinumBadge plan={profile.plan} role={profile.role} />
               <AdminBadge role={profile.role} />
+              {isPlatinumUser(profile) && profile.role !== 'ADMIN' && (
+                <span className="pt-chip">Platinum</span>
+              )}
             </div>
-            <h1 className="hero-name">{profile.displayName || profile.username}</h1>
+            <h1 className={`hero-name${isPlatinumUser(profile) ? ' pt-name' : ''}`}>
+              {profile.displayName || profile.username}
+            </h1>
             <div className="hero-email">{profile.email}</div>
           </div>
         </div>

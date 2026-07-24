@@ -7,6 +7,7 @@ import { resolveMediaUrl } from '../lib/mediaUrl';
 import { unlockMediaPlayback, setSoundTokAudioPreference } from '../lib/mediaUnlock';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import PwaInstallButton from './PwaInstallButton';
+import PlatinumBadge, { isPlatinumUser } from './PlatinumBadge';
 
 const FONT_IMPORT = '';
 
@@ -349,6 +350,9 @@ ${FONT_IMPORT}
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
 }
 .sb-plan {
   font-family: 'DM Mono', monospace;
@@ -357,6 +361,22 @@ ${FONT_IMPORT}
   line-height: 1.45;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+.sb-plan.platinum {
+  color: #e8b84a;
+}
+.sb-avatar.platinum {
+  padding: 2px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f6e27a, #e8b84a, #9b7fd4);
+}
+.sb-avatar.platinum img,
+.sb-avatar.platinum > span {
+  border-radius: 10px;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .sb-chevron {
   color: var(--text-faint);
@@ -831,7 +851,7 @@ export default function Sidebar() {
       {user && (
         <div className="sb-footer">
           <NavLink to="/profile" className="sb-user">
-            <div className="sb-avatar">
+            <div className={`sb-avatar${isPlatinumUser(user) ? ' platinum' : ''}`}>
               {avatarUrl ? (
                 <img src={avatarUrl} alt={user.username} />
               ) : (
@@ -839,8 +859,13 @@ export default function Sidebar() {
               )}
             </div>
             <div className="sb-user-info">
-              <div className="sb-username">@{user.username}</div>
-              <div className="sb-plan">{user.plan === 'PRO' ? 'Pro' : user.plan === 'PLATINUM' ? 'Platinum' : 'Free'} · {user.tokenBalance ?? 0} ток.</div>
+              <div className="sb-username">
+                @{user.username}
+                <PlatinumBadge plan={user.plan} planExpiresAt={user.planExpiresAt} role={user.role} size={11} />
+              </div>
+              <div className={`sb-plan${isPlatinumUser(user) ? ' platinum' : ''}`}>
+                {user.plan === 'PRO' ? 'Pro' : user.plan === 'PLATINUM' || user.role === 'ADMIN' ? 'Platinum' : 'Free'} · {user.tokenBalance ?? 0} ток.
+              </div>
             </div>
             <div className="sb-chevron"><IconChevron /></div>
           </NavLink>
