@@ -1730,7 +1730,7 @@ export default function VideoFeed({
                 className="vf-video"
                 loop
                 playsInline
-                preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'none'}
+                preload={index === currentIndex ? 'metadata' : 'none'}
                 muted={
                   index !== currentIndex ||
                   !soundEnabled ||
@@ -1789,14 +1789,14 @@ export default function VideoFeed({
               />
               {usesExternalSound(soundTok) &&
                 soundTok.sound?.audioUrl &&
-                Math.abs(index - currentIndex) <= 1 && (
+                index === currentIndex && (
                 <audio
                   ref={(el) => {
                     bedAudioRefs.current[index] = el;
                   }}
                   src={`${API_ORIGIN}${soundTok.sound.audioUrl}`}
                   loop
-                  preload="auto"
+                  preload="metadata"
                 />
               )}
 

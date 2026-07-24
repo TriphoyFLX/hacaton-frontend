@@ -803,7 +803,7 @@ export default function SoundTok() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 8;
 
   const sharedVideoId = searchParams.get('v');
   const hasVideos = soundToks.length > 0;

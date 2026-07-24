@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
-import SearchModal from './SearchModal';
 import { AppNotification, notificationsApi } from '../api/notifications';
 import { useAuthStore } from '../store/authStore';
-import { API_ORIGIN, SOCKET_ORIGIN } from '../api/client';
+import { API_ORIGIN } from '../api/client';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import PwaInstallButton from './PwaInstallButton';
+import { appSocket } from '../lib/appSocket';
+
+const SearchModal = lazy(() => import('./SearchModal'));
 
 const FONT_IMPORT = '';
 
@@ -293,10 +294,21 @@ export default function Header() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const notificationsLoadedRef = useRef(false);
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const token = useAuthStore((state) => state.token);
   const navigate = useNavigate();
   const { standalone, installedOnDevice } = usePwaInstall();
+
+  const loadUnreadBadge = useCallback(async () => {
+    if (!token) return;
+    try {
+      const count = await notificationsApi.getUnreadCount();
+      setUnreadCount(count);
+    } catch {
+      // Keep header usable when temporarily unavailable.
+    }
+  }, [token]);
 
   const loadNotifications = useCallback(async () => {
     if (!token) return;
@@ -304,19 +316,47 @@ export default function Header() {
       const result = await notificationsApi.getAll();
       setNotifications(result.items);
       setUnreadCount(result.unreadCount);
+      notificationsLoadedRef.current = true;
     } catch {
       // Keep the header usable when a request is temporarily unavailable.
     }
   }, [token]);
 
+  // Lightweight badge only — defer off critical path
   useEffect(() => {
-    void loadNotifications();
-    const interval = window.setInterval(() => {
-      if (document.hidden) return;
-      void loadNotifications();
-    }, 60_000);
-    return () => window.clearInterval(interval);
-  }, [loadNotifications]);
+    if (!token) return;
+    const schedule =
+      'requestIdleCallback' in window
+        ? (cb: () => void) => window.requestIdleCallback(() => cb(), { timeout: 2500 })
+        : (cb: () => void) => window.setTimeout(cb, 1200);
+    const id = schedule(() => {
+      void loadUnreadBadge();
+    });
+    return () => {
+      if (typeof id === 'number' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(id);
+      } else {
+        window.clearTimeout(id as number);
+      }
+    };
+  }, [token, loadUnreadBadge]);
+
+  useEffect(() => {
+    if (!token) return;
+    const socket = appSocket.acquire(token);
+    const onNotification = (notification: AppNotification) => {
+      setNotifications((current) => {
+        if (!notificationsLoadedRef.current) return current;
+        return [notification, ...current.filter((item) => item.id !== notification.id)];
+      });
+      setUnreadCount((current) => current + 1);
+    };
+    socket.on('notification:new', onNotification);
+    return () => {
+      socket.off('notification:new', onNotification);
+      appSocket.release();
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!isNotificationsOpen) return;
@@ -327,24 +367,10 @@ export default function Header() {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [isNotificationsOpen]);
 
-  useEffect(() => {
-    if (!token) return;
-    const socket = io(SOCKET_ORIGIN, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-    });
-    socket.on('notification:new', (notification: AppNotification) => {
-      setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
-      setUnreadCount((current) => current + 1);
-    });
-    return () => {
-      socket.disconnect();
-    };
-  }, [token]);
-
   const openNotifications = async () => {
-    setIsNotificationsOpen((current) => !current);
-    if (!isNotificationsOpen) await loadNotifications();
+    const opening = !isNotificationsOpen;
+    setIsNotificationsOpen(opening);
+    if (opening) await loadNotifications();
   };
 
   const notificationText = (notification: AppNotification) => {
@@ -465,7 +491,11 @@ export default function Header() {
         document.body,
       )}
       
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      {isSearchOpen && (
+        <Suspense fallback={null}>
+          <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+        </Suspense>
+      )}
     </>
   );
 }

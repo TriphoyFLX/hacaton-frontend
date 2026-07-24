@@ -640,9 +640,28 @@ export default function Sidebar() {
   useEffect(() => {
     if (!token) return;
 
-    refreshUnread();
-    const interval = setInterval(refreshUnread, 15000);
-    return () => clearInterval(interval);
+    const schedule =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? (cb: () => void) => window.requestIdleCallback(() => cb(), { timeout: 2500 })
+        : (cb: () => void) => window.setTimeout(cb, 1200);
+
+    let intervalId: number | undefined;
+    const idleId = schedule(() => {
+      void refreshUnread();
+      intervalId = window.setInterval(() => {
+        if (document.hidden) return;
+        void refreshUnread();
+      }, 60_000);
+    });
+
+    return () => {
+      if (typeof idleId === 'number' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId);
+      } else {
+        window.clearTimeout(idleId as number);
+      }
+      if (intervalId) window.clearInterval(intervalId);
+    };
   }, [token, refreshUnread]);
 
   const linkClass = ({ isActive }: { isActive: boolean }, extra = '') => {

@@ -729,7 +729,7 @@ export default function Chats() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const CHAT_PAGE_SIZE = 40;
+  const CHAT_PAGE_SIZE = 25;
   const [pinningId, setPinningId] = useState<string | null>(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupName, setGroupName] = useState('');

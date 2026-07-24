@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { SOCKET_ORIGIN } from '../api/client';
+import { Socket } from 'socket.io-client';
+import { appSocket } from '../lib/appSocket';
 
 // Types matching backend
 export interface MessageReaction {
@@ -167,44 +167,32 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
 
   useEffect(() => {
     if (!token) {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsConnected(false);
-      }
+      socketRef.current = null;
+      setIsConnected(false);
       return;
     }
 
-    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_ORIGIN, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      randomizationFactor: 0.5,
-      timeout: 10000,
-    });
-
+    const socket = appSocket.acquire(token) as Socket<ServerToClientEvents, ClientToServerEvents>;
     socketRef.current = socket;
+    setIsConnected(socket.connected);
 
-    socket.on('connect', () => {
+    const onConnect = () => {
       setIsConnected(true);
       setIsReconnecting(false);
       setReconnectAttempts(0);
       optionsRef.current.onConnect?.();
-    });
+    };
 
-    socket.on('disconnect', (reason) => {
+    const onDisconnect = (reason: string) => {
       setIsConnected(false);
       optionsRef.current.onDisconnect?.(reason);
 
       if (reason === 'io server disconnect' || reason === 'transport close') {
         setIsReconnecting(true);
       }
-    });
+    };
 
-    socket.on('connect_error', () => {
+    const onConnectError = () => {
       setReconnectAttempts((prev) => {
         const next = prev + 1;
         if (next >= MAX_RECONNECT_ATTEMPTS) {
@@ -212,55 +200,79 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
         }
         return next;
       });
-    });
+    };
 
-    socket.on('message:new', (message) => {
+    const onMessageNew = (message: Message) => {
       optionsRef.current.onMessage?.(message);
-    });
-
-    socket.on('message:deleted', (data) => {
+    };
+    const onMessageDeleted = (data: { chatId: string; message: Message }) => {
       optionsRef.current.onMessageDeleted?.(data);
-    });
-
-    socket.on('message:edited', (data) => {
+    };
+    const onMessageEdited = (data: { chatId: string; message: Message }) => {
       optionsRef.current.onMessageEdited?.(data);
-    });
-
-    socket.on('message:reaction', (data) => {
+    };
+    const onMessageReaction = (data: { chatId: string; message: Message }) => {
       optionsRef.current.onMessageReaction?.(data);
-    });
-
-    socket.on('message:delivered', (data) => {
+    };
+    const onMessageDelivered = (data: { clientMessageId: string; messageId: string }) => {
       optionsRef.current.onMessageDelivered?.(data);
-    });
-
-    socket.on('message:status', (data) => {
+    };
+    const onMessageStatus = (data: { messageId: string; status: string; readAt?: Date }) => {
       optionsRef.current.onMessageRead?.(data);
-    });
-
-    socket.on('chat:typing', (data) => {
+    };
+    const onTyping = (data: { chatId: string; userId: string; isTyping: boolean }) => {
       optionsRef.current.onTyping?.(data);
-    });
-
-    socket.on('chat:presence', (data) => {
+    };
+    const onPresence = (data: { chatId: string; userId: string; isOnline: boolean }) => {
       optionsRef.current.onPresence?.(data);
-    });
-
-    socket.on('user:online', (data) => {
+    };
+    const onUserOnline = (data: { userId: string; isOnline: boolean }) => {
       optionsRef.current.onUserOnline?.(data);
-    });
-
-    socket.on('user:updated', (data) => {
+    };
+    const onUserUpdated = (data: {
+      id: string;
+      username: string;
+      displayName?: string | null;
+      avatar?: string | null;
+    }) => {
       optionsRef.current.onUserUpdated?.(data);
-    });
-
-    socket.on('error', (error) => {
+    };
+    const onError = (error: { message: string; code: string }) => {
       optionsRef.current.onError?.(error);
-    });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+    socket.on('message:new', onMessageNew);
+    socket.on('message:deleted', onMessageDeleted);
+    socket.on('message:edited', onMessageEdited);
+    socket.on('message:reaction', onMessageReaction);
+    socket.on('message:delivered', onMessageDelivered);
+    socket.on('message:status', onMessageStatus);
+    socket.on('chat:typing', onTyping);
+    socket.on('chat:presence', onPresence);
+    socket.on('user:online', onUserOnline);
+    socket.on('user:updated', onUserUpdated);
+    socket.on('error', onError);
 
     return () => {
-      socket.disconnect();
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
+      socket.off('message:new', onMessageNew);
+      socket.off('message:deleted', onMessageDeleted);
+      socket.off('message:edited', onMessageEdited);
+      socket.off('message:reaction', onMessageReaction);
+      socket.off('message:delivered', onMessageDelivered);
+      socket.off('message:status', onMessageStatus);
+      socket.off('chat:typing', onTyping);
+      socket.off('chat:presence', onPresence);
+      socket.off('user:online', onUserOnline);
+      socket.off('user:updated', onUserUpdated);
+      socket.off('error', onError);
       socketRef.current = null;
+      appSocket.release();
     };
   }, [token]);
 

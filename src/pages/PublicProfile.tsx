@@ -645,7 +645,7 @@ export default function PublicProfile() {
                 Баттл
               </button>
             )}
-            {currentUser?.id !== user.id && user.role !== 'ADMIN' && (
+            {currentUser && currentUser.id !== user.id && user.role !== 'ADMIN' && (
               <button
                 onClick={() => setReportOpen(true)}
                 className="btn-primary"

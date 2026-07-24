@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { billingApi, type PaymentKind } from '../api/billing';
 import { useBilling } from '../hooks/useBilling';
@@ -13,9 +13,9 @@ const TOKEN_PACK_UI: Array<{
   highlight?: boolean;
 }> = [
   { kind: 'TOKENS_400', tokens: 400, gens: 4, price: 199, badge: null },
-  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 359, badge: '−10%' },
-  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 499, badge: '−16%', highlight: true },
-  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 899, badge: '−25%' },
+  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 359, badge: 'в€’10%' },
+  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 499, badge: 'в€’16%', highlight: true },
+  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 899, badge: 'в€’25%' },
 ];
 
 const css = `
@@ -23,7 +23,7 @@ const css = `
   --bg:#0c0b0a; --ink:#f3efe8; --muted:#9a948c; --line:rgba(243,239,232,.12); --accent:#e8a87c;
   --save:#9dffa8; --save-dim:rgba(157,255,168,.12);
   min-height:100%; background:var(--bg); color:var(--ink);
-  font-family:'Instrument Sans',sans-serif; padding:28px 24px 64px;
+  font-family:'Syne',sans-serif; padding:28px 24px 64px;
 }
 .pr *{box-sizing:border-box}
 .pr-wrap{max-width:980px;margin:0 auto}
@@ -34,7 +34,7 @@ const css = `
   display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;
 }
 .pr-status strong{font-size:18px}
-.pr-meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)}
+.pr-meta{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)}
 .pr-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-bottom:32px}
 .pr-card{
   border:1px solid var(--line);border-radius:16px;padding:20px;background:#141210;
@@ -63,20 +63,20 @@ const css = `
 .pr-pack.highlight{border-color:rgba(232,168,124,.55);box-shadow:0 0 0 1px rgba(232,168,124,.18)}
 .pr-pack-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .pr-pack-badge{
-  flex-shrink:0;padding:4px 8px;border-radius:999px;font:11px/1 'IBM Plex Mono',monospace;
+  flex-shrink:0;padding:4px 8px;border-radius:999px;font:11px/1 'DM Mono',monospace;
   color:var(--save);background:var(--save-dim);border:1px solid rgba(157,255,168,.28);
 }
 .pr-pack-popular{
   position:absolute;top:-10px;left:16px;padding:3px 10px;border-radius:999px;
-  font:10px/1 'IBM Plex Mono',monospace;letter-spacing:.04em;text-transform:uppercase;
+  font:10px/1 'DM Mono',monospace;letter-spacing:.04em;text-transform:uppercase;
   color:#12100e;background:var(--accent);
 }
 .pr-pack strong{font-size:18px;letter-spacing:-.02em}
 .pr-pack-price-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .pr-pack-price{font-size:28px;font-weight:700;letter-spacing:-.03em}
-.pr-pack-old{font:13px 'IBM Plex Mono',monospace;color:var(--muted);text-decoration:line-through}
-.pr-pack-unit{font:12px 'IBM Plex Mono',monospace;color:var(--muted)}
-.pr-pack-save{font:12px 'IBM Plex Mono',monospace;color:var(--save)}
+.pr-pack-old{font:13px 'DM Mono',monospace;color:var(--muted);text-decoration:line-through}
+.pr-pack-unit{font:12px 'DM Mono',monospace;color:var(--muted)}
+.pr-pack-save{font:12px 'DM Mono',monospace;color:var(--save)}
 .pr-pack .pr-btn{width:100%;margin-top:auto}
 .pr-err{color:#ff8a8a;margin:12px 0;font-size:14px}
 .pr-ok{color:#9dffa8;margin:12px 0;font-size:14px}
@@ -112,7 +112,7 @@ export default function Pricing() {
       try {
         await billingApi.syncPayment(paymentId);
         localStorage.removeItem('sl_pending_payment');
-        setMsg('Платёж обработан. Тариф и токены обновлены.');
+        setMsg('РџР»Р°С‚С‘Р¶ РѕР±СЂР°Р±РѕС‚Р°РЅ. РўР°СЂРёС„ Рё С‚РѕРєРµРЅС‹ РѕР±РЅРѕРІР»РµРЅС‹.');
         await refresh();
       } catch {
         /* webhook may still complete */
@@ -128,10 +128,10 @@ export default function Pricing() {
       const returnUrl = `${window.location.origin}/pricing?payment=return`;
       const created = await billingApi.createPayment(kind, returnUrl);
       if (created.paymentId) localStorage.setItem('sl_pending_payment', created.paymentId);
-      if (!created.confirmationUrl) throw new Error('Нет ссылки на оплату');
+      if (!created.confirmationUrl) throw new Error('РќРµС‚ СЃСЃС‹Р»РєРё РЅР° РѕРїР»Р°С‚Сѓ');
       window.location.href = created.confirmationUrl;
     } catch (e: any) {
-      setErr(e?.response?.data?.error || e?.message || 'Не удалось создать платёж');
+      setErr(e?.response?.data?.error || e?.message || 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РїР»Р°С‚С‘Р¶');
       setBusy(null);
     }
   };
@@ -142,122 +142,122 @@ export default function Pricing() {
     <div className="pr">
       <style>{css}</style>
       <div className="pr-wrap">
-        <h1>Тарифы SoundLab</h1>
+        <h1>РўР°СЂРёС„С‹ SoundLab</h1>
         <p className="pr-sub">
-          Free — старт. Pro и Platinum — облако, AI-токены и вокальные пресеты.
-          Токены можно докупить в любой момент, не дожидаясь нового месяца.
+          Free вЂ” СЃС‚Р°СЂС‚. Pro Рё Platinum вЂ” РѕР±Р»Р°РєРѕ, AI-С‚РѕРєРµРЅС‹ Рё РІРѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹.
+          РўРѕРєРµРЅС‹ РјРѕР¶РЅРѕ РґРѕРєСѓРїРёС‚СЊ РІ Р»СЋР±РѕР№ РјРѕРјРµРЅС‚, РЅРµ РґРѕР¶РёРґР°СЏСЃСЊ РЅРѕРІРѕРіРѕ РјРµСЃСЏС†Р°.
         </p>
 
         <div className="pr-status">
           <div>
-            <div className="pr-meta">Текущий тариф</div>
+            <div className="pr-meta">РўРµРєСѓС‰РёР№ С‚Р°СЂРёС„</div>
             <strong>{plan}</strong>
             {billing?.planExpiresAt && (
-              <div className="pr-meta">до {new Date(billing.planExpiresAt).toLocaleDateString('ru-RU')}</div>
+              <div className="pr-meta">РґРѕ {new Date(billing.planExpiresAt).toLocaleDateString('ru-RU')}</div>
             )}
           </div>
           <div className="pr-meta">
-            Токены: {billing?.tokenBalance ?? (user as any)?.tokenBalance ?? 0}
-            {' · '}
-            Генераций: {billing?.generationsAvailable ?? 0}
-            {' · '}
-            Проекты: {billing?.cloudProjectCount ?? 0}
+            РўРѕРєРµРЅС‹: {billing?.tokenBalance ?? (user as any)?.tokenBalance ?? 0}
+            {' В· '}
+            Р“РµРЅРµСЂР°С†РёР№: {billing?.generationsAvailable ?? 0}
+            {' В· '}
+            РџСЂРѕРµРєС‚С‹: {billing?.cloudProjectCount ?? 0}
             {billing?.maxCloudProjects != null ? `/${billing.maxCloudProjects}` : ''}
           </div>
         </div>
 
         {err && <div className="pr-err">{err}</div>}
         {msg && <div className="pr-ok">{msg}</div>}
-        {loading && <div className="pr-meta">Обновление…</div>}
+        {loading && <div className="pr-meta">РћР±РЅРѕРІР»РµРЅРёРµвЂ¦</div>}
 
         <div className="pr-grid">
           <article className={`pr-card${plan === 'FREE' ? ' current' : ''}`}>
             <h2>Free</h2>
-            <div className="pr-price">0 ₽ <span>/ всегда</span></div>
+            <div className="pr-price">0 в‚Ѕ <span>/ РІСЃРµРіРґР°</span></div>
             <ul>
-              <li>5 проектов секвенсора в облаке</li>
-              <li>0 AI-генераций</li>
-              <li>Вокальные пресеты недоступны</li>
+              <li>5 РїСЂРѕРµРєС‚РѕРІ СЃРµРєРІРµРЅСЃРѕСЂР° РІ РѕР±Р»Р°РєРµ</li>
+              <li>0 AI-РіРµРЅРµСЂР°С†РёР№</li>
+              <li>Р’РѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹ РЅРµРґРѕСЃС‚СѓРїРЅС‹</li>
             </ul>
-            <button className="pr-btn" disabled>Текущий / базовый</button>
+            <button className="pr-btn" disabled>РўРµРєСѓС‰РёР№ / Р±Р°Р·РѕРІС‹Р№</button>
           </article>
 
           <article className={`pr-card${plan === 'PRO' ? ' current' : ''}`}>
             <h2>Pro</h2>
-            <div className="pr-price">249 ₽ <span>/ 30 дней</span></div>
+            <div className="pr-price">249 в‚Ѕ <span>/ 30 РґРЅРµР№</span></div>
             <ul>
-              <li>30 проектов в облаке</li>
-              <li>300 токенов (3 генерации)</li>
-              <li>Вокальные пресеты</li>
+              <li>30 РїСЂРѕРµРєС‚РѕРІ РІ РѕР±Р»Р°РєРµ</li>
+              <li>300 С‚РѕРєРµРЅРѕРІ (3 РіРµРЅРµСЂР°С†РёРё)</li>
+              <li>Р’РѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹</li>
             </ul>
             <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay('PLAN_PRO')}>
-              {busy === 'PLAN_PRO' ? 'Переход…' : 'Оформить Pro'}
+              {busy === 'PLAN_PRO' ? 'РџРµСЂРµС…РѕРґвЂ¦' : 'РћС„РѕСЂРјРёС‚СЊ Pro'}
             </button>
           </article>
 
           <article className={`pr-card${plan === 'PLATINUM' ? ' current' : ''}`}>
             <h2>Platinum</h2>
-            <div className="pr-price">499 ₽ <span>/ 30 дней</span></div>
+            <div className="pr-price">499 в‚Ѕ <span>/ 30 РґРЅРµР№</span></div>
             <ul>
-              <li>Безлимит функций</li>
-              <li>До 20 сохранений в облако в день</li>
-              <li>700 токенов (7 генераций)</li>
-              <li>Вокальные пресеты</li>
+              <li>Р‘РµР·Р»РёРјРёС‚ С„СѓРЅРєС†РёР№</li>
+              <li>Р”Рѕ 20 СЃРѕС…СЂР°РЅРµРЅРёР№ РІ РѕР±Р»Р°РєРѕ РІ РґРµРЅСЊ</li>
+              <li>700 С‚РѕРєРµРЅРѕРІ (7 РіРµРЅРµСЂР°С†РёР№)</li>
+              <li>Р’РѕРєР°Р»СЊРЅС‹Рµ РїСЂРµСЃРµС‚С‹</li>
             </ul>
             <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay('PLAN_PLATINUM')}>
-              {busy === 'PLAN_PLATINUM' ? 'Переход…' : 'Оформить Platinum'}
+              {busy === 'PLAN_PLATINUM' ? 'РџРµСЂРµС…РѕРґвЂ¦' : 'РћС„РѕСЂРјРёС‚СЊ Platinum'}
             </button>
           </article>
         </div>
 
         <div className="pr-packs-head">
-          <h2 className="pr-packs-title">Доп. пакеты токенов</h2>
+          <h2 className="pr-packs-title">Р”РѕРї. РїР°РєРµС‚С‹ С‚РѕРєРµРЅРѕРІ</h2>
           <p className="pr-packs-hint">
-            100 токенов = 1 AI-генерация.{' '}
-            <strong>Чем больше пакет — тем дешевле генерация.</strong>
+            100 С‚РѕРєРµРЅРѕРІ = 1 AI-РіРµРЅРµСЂР°С†РёСЏ.{' '}
+            <strong>Р§РµРј Р±РѕР»СЊС€Рµ РїР°РєРµС‚ вЂ” С‚РµРј РґРµС€РµРІР»Рµ РіРµРЅРµСЂР°С†РёСЏ.</strong>
           </p>
         </div>
         <div className="pr-packs">
           {packs.map((pack) => (
             <div className={`pr-pack${pack.highlight ? ' highlight' : ''}`} key={pack.kind}>
-              {pack.highlight && <span className="pr-pack-popular">Выгоднее</span>}
+              {pack.highlight && <span className="pr-pack-popular">Р’С‹РіРѕРґРЅРµРµ</span>}
               <div className="pr-pack-top">
-                <strong>{pack.tokens} токенов</strong>
+                <strong>{pack.tokens} С‚РѕРєРµРЅРѕРІ</strong>
                 {pack.badge && <span className="pr-pack-badge">{pack.badge}</span>}
               </div>
               <div className="pr-pack-price-row">
-                <span className="pr-pack-price">{pack.price} ₽</span>
-                {pack.saveRub > 0 && <span className="pr-pack-old">{pack.compareAt} ₽</span>}
+                <span className="pr-pack-price">{pack.price} в‚Ѕ</span>
+                {pack.saveRub > 0 && <span className="pr-pack-old">{pack.compareAt} в‚Ѕ</span>}
               </div>
               <div className="pr-pack-unit">
-                ≈ {pack.gens} генераций · {pack.perGen} ₽ / генерация
+                в‰€ {pack.gens} РіРµРЅРµСЂР°С†РёР№ В· {pack.perGen} в‚Ѕ / РіРµРЅРµСЂР°С†РёСЏ
               </div>
               {pack.saveRub > 0 ? (
                 <div className="pr-pack-save">
-                  Экономия {pack.saveRub} ₽ (−{pack.savePercent}%) vs маленький пакет
+                  Р­РєРѕРЅРѕРјРёСЏ {pack.saveRub} в‚Ѕ (в€’{pack.savePercent}%) vs РјР°Р»РµРЅСЊРєРёР№ РїР°РєРµС‚
                 </div>
               ) : (
-                <div className="pr-pack-unit">Базовая цена за генерацию</div>
+                <div className="pr-pack-unit">Р‘Р°Р·РѕРІР°СЏ С†РµРЅР° Р·Р° РіРµРЅРµСЂР°С†РёСЋ</div>
               )}
               <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay(pack.kind)}>
-                {busy === pack.kind ? 'Переход…' : 'Купить'}
+                {busy === pack.kind ? 'РџРµСЂРµС…РѕРґвЂ¦' : 'РљСѓРїРёС‚СЊ'}
               </button>
             </div>
           ))}
         </div>
 
         <p className="pr-sub" style={{ marginTop: 28 }}>
-          Оплата через ЮKassa. После оплаты вернётесь на эту страницу.
+          РћРїР»Р°С‚Р° С‡РµСЂРµР· Р®Kassa. РџРѕСЃР»Рµ РѕРїР»Р°С‚С‹ РІРµСЂРЅС‘С‚РµСЃСЊ РЅР° СЌС‚Сѓ СЃС‚СЂР°РЅРёС†Сѓ.
           {' '}
-          <Link to="/offer">Оферта</Link>
-          {' · '}
-          <Link to="/privacy">Конфиденциальность</Link>
-          {' · '}
-          <Link to="/refunds">Возвраты</Link>
-          {' · '}
-          <Link to="/delivery">Получение услуги</Link>
-          {' · '}
-          <Link to="/contacts">Контакты</Link>
+          <Link to="/offer">РћС„РµСЂС‚Р°</Link>
+          {' В· '}
+          <Link to="/privacy">РљРѕРЅС„РёРґРµРЅС†РёР°Р»СЊРЅРѕСЃС‚СЊ</Link>
+          {' В· '}
+          <Link to="/refunds">Р’РѕР·РІСЂР°С‚С‹</Link>
+          {' В· '}
+          <Link to="/delivery">РџРѕР»СѓС‡РµРЅРёРµ СѓСЃР»СѓРіРё</Link>
+          {' В· '}
+          <Link to="/contacts">РљРѕРЅС‚Р°РєС‚С‹</Link>
         </p>
       </div>
     </div>

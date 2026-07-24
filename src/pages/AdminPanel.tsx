@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { API_ORIGIN } from '../api/client';
 import { getAuthToken } from '../lib/authToken';
-import { REPORT_REASON_OPTIONS } from '../api/reports';
+import { REPORT_REASON_OPTIONS, REPORT_STATUS_OPTIONS, reportReasonLabel, reportStatusLabel } from '../api/reports';
 
 const ADMIN_API = `${API_ORIGIN}/api/admin`;
 const PAGE_SIZE = 40;
@@ -258,6 +258,7 @@ type Tab = 'overview' | 'purchases' | 'reports' | 'users' | 'posts' | 'soundtoks
 type PurchaseFilter = 'all' | 'subscriptions' | 'tokens' | 'presets';
 type PaymentStatusFilter = 'ALL' | 'SUCCEEDED' | 'PENDING' | 'CANCELED';
 type ReportStatusFilter = 'OPEN' | 'REVIEWING' | 'RESOLVED' | 'DISMISSED' | 'ALL';
+type ReportReasonFilter = 'ALL' | (typeof REPORT_REASON_OPTIONS)[number]['id'];
 type UserRoleFilter = 'ALL' | 'ADMIN' | 'USER';
 
 function authHeaders(): HeadersInit {
@@ -424,6 +425,7 @@ interface ReportRow {
   adminNote: string | null;
   resolvedAt: string | null;
   createdAt: string;
+  openAgainstReported?: number;
   reporter: { id: string; username: string; email: string; role: string };
   reported: { id: string; username: string; email: string; role: string };
 }
@@ -468,6 +470,12 @@ export default function AdminPanel() {
   const [reportsTotal, setReportsTotal] = useState(0);
   const [reportsOpenCount, setReportsOpenCount] = useState(0);
   const [reportStatusFilter, setReportStatusFilter] = useState<ReportStatusFilter>('OPEN');
+  const [reportReasonFilter, setReportReasonFilter] = useState<ReportReasonFilter>('ALL');
+  const [reportQuery, setReportQuery] = useState('');
+  const [debouncedReportQuery, setDebouncedReportQuery] = useState('');
+  const [reportNotes, setReportNotes] = useState<Record<string, string>>({});
+  const [reportSavingId, setReportSavingId] = useState<string | null>(null);
+  const [reportsOffset, setReportsOffset] = useState(0);
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('ALL');
   const [userQuery, setUserQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -479,6 +487,11 @@ export default function AdminPanel() {
     const t = window.setTimeout(() => setDebouncedQuery(userQuery.trim()), 300);
     return () => window.clearTimeout(t);
   }, [userQuery]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedReportQuery(reportQuery.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [reportQuery]);
 
   const loadOverview = useCallback(async (force = false) => {
     const data = await adminFetch<AdminStats>(force ? '/stats?refresh=1' : '/stats');
@@ -544,23 +557,44 @@ export default function AdminPanel() {
     }
   }, []);
 
-  const loadReports = useCallback(async (status: ReportStatusFilter) => {
-    const qs = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      offset: '0',
-      status,
-    });
-    const data = await adminFetch<Paged<ReportRow> & { openCount?: number }>(`/reports?${qs}`);
-    setReports(data.items);
-    setReportsTotal(data.total);
-    setReportsOpenCount(data.openCount ?? 0);
-  }, []);
+  const loadReports = useCallback(
+    async (
+      status: ReportStatusFilter,
+      reason: ReportReasonFilter = 'ALL',
+      q = '',
+      offset = 0,
+      append = false,
+    ) => {
+      const qs = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+        status,
+      });
+      if (reason !== 'ALL') qs.set('reason', reason);
+      if (q) qs.set('q', q);
+      const data = await adminFetch<Paged<ReportRow> & { openCount?: number }>(`/reports?${qs}`);
+      setReports((prev) => (append ? [...prev, ...data.items] : data.items));
+      setReportsTotal(data.total);
+      setReportsOpenCount(data.openCount ?? 0);
+      setReportsOffset(offset + data.items.length);
+      setReportNotes((prev) => {
+        const next = append ? { ...prev } : {};
+        for (const item of data.items) {
+          next[item.id] = item.adminNote || '';
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const fetchData = useCallback(async (force = false) => {
     const cacheKey = [
       activeTab,
       activeTab === 'purchases' ? `${purchaseFilter}:${paymentStatusFilter}` : '',
-      activeTab === 'reports' ? reportStatusFilter : '',
+      activeTab === 'reports'
+        ? `${reportStatusFilter}:${reportReasonFilter}:${debouncedReportQuery}`
+        : '',
       activeTab === 'users' ? `${userRoleFilter}:${debouncedQuery}` : '',
     ].join(':');
 
@@ -581,7 +615,7 @@ export default function AdminPanel() {
           await loadPurchases(purchaseFilter, paymentStatusFilter);
           break;
         case 'reports':
-          await loadReports(reportStatusFilter);
+          await loadReports(reportStatusFilter, reportReasonFilter, debouncedReportQuery, 0, false);
           break;
         case 'users':
           await loadUsers(debouncedQuery, userRoleFilter);
@@ -605,6 +639,8 @@ export default function AdminPanel() {
     purchaseFilter,
     paymentStatusFilter,
     reportStatusFilter,
+    reportReasonFilter,
+    debouncedReportQuery,
     userRoleFilter,
     debouncedQuery,
     loadOverview,
@@ -679,21 +715,32 @@ export default function AdminPanel() {
     }
   };
 
-  const updateReportStatus = async (reportId: string, status: string) => {
+  const updateReport = async (
+    reportId: string,
+    payload: { status?: string; adminNote?: string },
+  ) => {
+    setReportSavingId(reportId);
     try {
       const res = await fetch(`${ADMIN_API}/reports/${reportId}`, {
         method: 'PATCH',
         headers: authHeaders(),
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Не удалось обновить');
-      await loadReports(reportStatusFilter);
-      if (stats) {
-        void loadOverview(true);
+      if (payload.adminNote !== undefined) {
+        setReportNotes((prev) => ({ ...prev, [reportId]: payload.adminNote || '' }));
       }
+      await loadReports(reportStatusFilter, reportReasonFilter, debouncedReportQuery, 0, false);
+      if (stats) void loadOverview(true);
     } catch {
       alert('Не удалось обновить жалобу');
+    } finally {
+      setReportSavingId(null);
     }
+  };
+
+  const updateReportStatus = async (reportId: string, status: string) => {
+    await updateReport(reportId, { status });
   };
 
   const tabs = useMemo(
@@ -1158,8 +1205,8 @@ export default function AdminPanel() {
                 [
                   ['OPEN', 'Открытые'],
                   ['REVIEWING', 'В работе'],
-                  ['RESOLVED', 'Решено'],
-                  ['DISMISSED', 'Отклонено'],
+                  ['RESOLVED', 'Решённые'],
+                  ['DISMISSED', 'Отклонённые'],
                   ['ALL', 'Все'],
                 ] as const
               ).map(([id, label]) => (
@@ -1169,7 +1216,7 @@ export default function AdminPanel() {
                   onClick={() => setReportStatusFilter(id)}
                   className={`px-3 py-1.5 rounded-lg text-sm transition ${
                     reportStatusFilter === id
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-[#e8e4dc] text-[#111]'
                       : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                   }`}
                 >
@@ -1177,82 +1224,231 @@ export default function AdminPanel() {
                 </button>
               ))}
             </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select
+                value={reportReasonFilter}
+                onChange={(e) => setReportReasonFilter(e.target.value as ReportReasonFilter)}
+                className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-[#c5c0b8]"
+              >
+                <option value="ALL">Все причины</option>
+                {REPORT_REASON_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <div className="relative flex-1 max-w-md">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+                />
+                <input
+                  value={reportQuery}
+                  onChange={(e) => setReportQuery(e.target.value)}
+                  placeholder="Поиск: @username или текст жалобы…"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-[#c5c0b8]"
+                />
+              </div>
+            </div>
+
             <p className="text-gray-500 text-xs">
-              Показано: {reportsTotal} · открытых всего: {reportsOpenCount}
+              Показано {reports.length} из {reportsTotal} · в очереди (открытые + в работе):{' '}
+              {reportsOpenCount}
             </p>
+
             {loading ? (
               <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
             ) : reports.length === 0 ? (
-              <p className="text-gray-500 text-sm">Жалоб нет</p>
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-8 text-center">
+                <Flag className="mx-auto mb-3 text-gray-600" size={28} />
+                <p className="text-gray-400 text-sm">Жалоб по текущим фильтрам нет</p>
+              </div>
             ) : (
-              reports.map((report) => {
-                const reasonLabel =
-                  REPORT_REASON_OPTIONS.find((r) => r.id === report.reason)?.label || report.reason;
-                return (
-                  <div key={report.id} className="bg-gray-800 rounded-lg p-3 sm:p-4 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      <div>
-                        <p className="text-white font-medium">{reasonLabel}</p>
-                        <p className="text-gray-300 text-sm mt-1">
-                          На{' '}
-                          <a
-                            className="text-emerald-400 hover:underline"
-                            href={`/profile/${report.reported.username}`}
-                          >
-                            @{report.reported.username}
-                          </a>
-                          {' · '}от @{report.reporter.username}
-                        </p>
-                        {report.details && (
-                          <p className="text-gray-400 text-sm mt-2 whitespace-pre-wrap">{report.details}</p>
-                        )}
-                        <p className="text-gray-500 text-xs mt-2">{formatDate(report.createdAt)}</p>
+              <div className="space-y-3">
+                {reports.map((report) => {
+                  const statusMeta =
+                    REPORT_STATUS_OPTIONS.find((s) => s.id === report.status) ||
+                    REPORT_STATUS_OPTIONS[0];
+                  const statusClass =
+                    statusMeta.tone === 'open'
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      : statusMeta.tone === 'review'
+                        ? 'bg-amber-500/15 text-amber-200 border-amber-500/30'
+                        : statusMeta.tone === 'ok'
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-gray-700/60 text-gray-300 border-gray-600';
+                  const saving = reportSavingId === report.id;
+                  return (
+                    <div
+                      key={report.id}
+                      className="rounded-xl border border-gray-800 bg-gradient-to-br from-[#161616] to-[#111] p-4 space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-white font-semibold">
+                              {reportReasonLabel(report.reason)}
+                            </p>
+                            <span
+                              className={`text-[11px] px-2 py-0.5 rounded-full border ${statusClass}`}
+                            >
+                              {reportStatusLabel(report.status)}
+                            </span>
+                            {(report.openAgainstReported || 0) > 1 && (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-200">
+                                {report.openAgainstReported} активных на пользователя
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-300 text-sm mt-2">
+                            На{' '}
+                            <a
+                              className="text-[#ded8cd] hover:underline font-medium"
+                              href={`/profile/${report.reported.username}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              @{report.reported.username}
+                            </a>
+                            <span className="text-gray-500"> · {report.reported.email}</span>
+                          </p>
+                          <p className="text-gray-500 text-xs mt-1">
+                            От{' '}
+                            <a
+                              className="hover:underline text-gray-400"
+                              href={`/profile/${report.reporter.username}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              @{report.reporter.username}
+                            </a>
+                            {' · '}
+                            {formatDate(report.createdAt)}
+                          </p>
+                          {report.details && (
+                            <p className="text-gray-300 text-sm mt-3 whitespace-pre-wrap rounded-lg bg-black/30 border border-gray-800 px-3 py-2">
+                              {report.details}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-200 h-fit">
-                        {report.status}
-                      </span>
+
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1.5">
+                          Заметка модератора
+                        </label>
+                        <textarea
+                          value={reportNotes[report.id] ?? report.adminNote ?? ''}
+                          onChange={(e) =>
+                            setReportNotes((prev) => ({
+                              ...prev,
+                              [report.id]: e.target.value.slice(0, 1000),
+                            }))
+                          }
+                          rows={2}
+                          placeholder="Что проверили, какое решение…"
+                          className="w-full px-3 py-2 rounded-lg bg-black/40 border border-gray-800 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-gray-600"
+                        />
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() =>
+                              void updateReport(report.id, {
+                                adminNote: reportNotes[report.id] ?? '',
+                              })
+                            }
+                            className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-50"
+                          >
+                            Сохранить заметку
+                          </button>
+                          <a
+                            href={`/profile/${report.reported.username}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200"
+                          >
+                            Профиль
+                          </a>
+                          {report.reported.role !== 'ADMIN' && (
+                            <button
+                              type="button"
+                              onClick={() => banUser(report.reported.id)}
+                              className="px-3 py-1.5 text-xs rounded-lg bg-rose-900/70 hover:bg-rose-800 text-rose-100 inline-flex items-center gap-1"
+                            >
+                              <Ban size={12} />
+                              Забанить
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-800/80">
+                        {report.status !== 'REVIEWING' && (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void updateReportStatus(report.id, 'REVIEWING')}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-amber-800/80 hover:bg-amber-700 text-white disabled:opacity-50"
+                          >
+                            В работу
+                          </button>
+                        )}
+                        {report.status !== 'RESOLVED' && (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void updateReportStatus(report.id, 'RESOLVED')}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-emerald-800/80 hover:bg-emerald-700 text-white disabled:opacity-50"
+                          >
+                            Решено
+                          </button>
+                        )}
+                        {report.status !== 'DISMISSED' && (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void updateReportStatus(report.id, 'DISMISSED')}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-50"
+                          >
+                            Отклонить
+                          </button>
+                        )}
+                        {report.status !== 'OPEN' && (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void updateReportStatus(report.id, 'OPEN')}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-sky-900/70 hover:bg-sky-800 text-sky-100 disabled:opacity-50"
+                          >
+                            Открыть снова
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {report.status !== 'REVIEWING' && (
-                        <button
-                          type="button"
-                          onClick={() => void updateReportStatus(report.id, 'REVIEWING')}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-amber-700 hover:bg-amber-600 text-white"
-                        >
-                          В работу
-                        </button>
-                      )}
-                      {report.status !== 'RESOLVED' && (
-                        <button
-                          type="button"
-                          onClick={() => void updateReportStatus(report.id, 'RESOLVED')}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white"
-                        >
-                          Решено
-                        </button>
-                      )}
-                      {report.status !== 'DISMISSED' && (
-                        <button
-                          type="button"
-                          onClick={() => void updateReportStatus(report.id, 'DISMISSED')}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-gray-600 hover:bg-gray-500 text-white"
-                        >
-                          Отклонить
-                        </button>
-                      )}
-                      {report.status !== 'OPEN' && (
-                        <button
-                          type="button"
-                          onClick={() => void updateReportStatus(report.id, 'OPEN')}
-                          className="px-3 py-1.5 text-xs rounded-lg bg-sky-800 hover:bg-sky-700 text-white"
-                        >
-                          Открыть снова
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+
+                {reports.length < reportsTotal && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() =>
+                      void loadReports(
+                        reportStatusFilter,
+                        reportReasonFilter,
+                        debouncedReportQuery,
+                        reportsOffset,
+                        true,
+                      )
+                    }
+                    className="w-full py-2.5 rounded-lg border border-gray-700 text-sm text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+                  >
+                    Показать ещё
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

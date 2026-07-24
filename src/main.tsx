@@ -1,24 +1,46 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+import '@fontsource/syne/latin-400.css'
+import '@fontsource/syne/latin-500.css'
+import '@fontsource/syne/latin-600.css'
+import '@fontsource/syne/latin-700.css'
+import '@fontsource/syne/latin-800.css'
+import '@fontsource/dm-mono/latin-300.css'
+import '@fontsource/dm-mono/latin-400.css'
+import '@fontsource/dm-mono/latin-500.css'
 import './index.css'
 import './styles/responsive.css'
 import App from './App.tsx'
 
-// Auto-update service worker: new deploys activate without sticky stale shells
-registerSW({
-  immediate: true,
-  onRegisteredSW(_swUrl, registration) {
-    if (!registration) return
-    // Check for updates periodically while the tab is open
-    window.setInterval(() => {
-      void registration.update()
-    }, 60 * 60 * 1000)
-  },
-  onNeedRefresh() {
-    // autoUpdate + skipWaiting already handles this; soft reload if preload fails
-  },
-})
+function registerServiceWorker() {
+  // Auto-update service worker: new deploys activate without sticky stale shells
+  registerSW({
+    immediate: false,
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return
+      // Check for updates periodically while the tab is open
+      window.setInterval(() => {
+        void registration.update()
+      }, 60 * 60 * 1000)
+    },
+    onNeedRefresh() {
+      // autoUpdate + skipWaiting already handles this; soft reload if preload fails
+    },
+  })
+}
+
+// Defer SW off the critical first-paint path
+const scheduleIdle =
+  typeof window !== 'undefined' && 'requestIdleCallback' in window
+    ? (cb: () => void) => window.requestIdleCallback(() => cb(), { timeout: 4000 })
+    : (cb: () => void) => window.setTimeout(cb, 1500)
+
+if (typeof window !== 'undefined') {
+  const startSw = () => scheduleIdle(registerServiceWorker)
+  if (document.readyState === 'complete') startSw()
+  else window.addEventListener('load', startSw, { once: true })
+}
 
 // After a deploy, old lazy chunks 404 — reload once to pick up the new index.html
 if (typeof window !== 'undefined') {

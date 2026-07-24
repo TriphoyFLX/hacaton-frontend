@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+﻿import type { CSSProperties } from 'react';
 
 export type BattleRatingInfo = {
   battleElo?: number;
@@ -16,12 +16,12 @@ export type BattleRatingInfo = {
 };
 
 const RANKS = [
-  { label: 'Новичок', min: 0 },
-  { label: 'Любитель', min: 900 },
-  { label: 'Боец', min: 1100 },
-  { label: 'Профи', min: 1300 },
-  { label: 'Элита', min: 1500 },
-  { label: 'Легенда', min: 1700 },
+  { label: 'РќРѕРІРёС‡РѕРє', min: 0 },
+  { label: 'Р›СЋР±РёС‚РµР»СЊ', min: 900 },
+  { label: 'Р‘РѕРµС†', min: 1100 },
+  { label: 'РџСЂРѕС„Рё', min: 1300 },
+  { label: 'Р­Р»РёС‚Р°', min: 1500 },
+  { label: 'Р›РµРіРµРЅРґР°', min: 1700 },
 ];
 
 const css = `
@@ -40,7 +40,7 @@ const css = `
   margin-bottom: 14px;
 }
 .brc-kicker {
-  font-family: 'DM Mono', 'IBM Plex Mono', monospace;
+  font-family: 'DM Mono', 'DM Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -55,13 +55,13 @@ const css = `
   line-height: 1.1;
 }
 .brc-elo {
-  font-family: 'DM Mono', 'IBM Plex Mono', monospace;
+  font-family: 'DM Mono', 'DM Mono', monospace;
   font-size: 20px;
   font-weight: 500;
   color: var(--text-primary, #f0ede8);
 }
 .brc-record {
-  font-family: 'DM Mono', 'IBM Plex Mono', monospace;
+  font-family: 'DM Mono', 'DM Mono', monospace;
   font-size: 11px;
   color: var(--text-secondary, #6b6b6b);
   margin-top: 4px;
@@ -88,7 +88,7 @@ const css = `
   margin-top: 2px;
 }
 .brc-mark {
-  font-family: 'DM Mono', 'IBM Plex Mono', monospace;
+  font-family: 'DM Mono', 'DM Mono', monospace;
   font-size: 11px;
   color: var(--text-muted, #77736d);
   letter-spacing: 0.02em;
@@ -118,7 +118,7 @@ export default function BattleRatingCard({
   const losses = rating.battleLosses ?? 0;
   const draws = rating.battleDraws ?? 0;
   const scale = Math.min(100, Math.max(0, (rating.scaleProgress ?? elo / 2000) * 100));
-  const rankLabel = rating.rankLabel || 'Любитель';
+  const rankLabel = rating.rankLabel || 'Р›СЋР±РёС‚РµР»СЊ';
   const next = rating.nextRankLabel;
   const toNext = rating.nextRankMin != null ? Math.max(0, rating.nextRankMin - elo) : null;
 
@@ -127,12 +127,12 @@ export default function BattleRatingCard({
       <style>{css}</style>
       <div className="brc-top">
         <div>
-          <div className="brc-kicker">Rap Battle рейтинг</div>
+          <div className="brc-kicker">Rap Battle СЂРµР№С‚РёРЅРі</div>
           <div className="brc-rank">{rankLabel}</div>
         </div>
         <div>
           <div className="brc-elo">{elo}</div>
-          <div className="brc-record">{wins}W · {losses}L · {draws}D</div>
+          <div className="brc-record">{wins}W В· {losses}L В· {draws}D</div>
         </div>
       </div>
       <div className="brc-track" aria-hidden>
@@ -149,7 +149,7 @@ export default function BattleRatingCard({
       )}
       {next && toNext != null && (
         <div className="brc-next">
-          До ранга <strong>{next}</strong> — ещё {toNext} Elo
+          Р”Рѕ СЂР°РЅРіР° <strong>{next}</strong> вЂ” РµС‰С‘ {toNext} Elo
         </div>
       )}
     </div>

@@ -1745,7 +1745,7 @@ export default function Feed() {
   const [hasMore, setHasMore] = useState(false);
   const [activeTab, setActiveTab] = useState<'trending' | 'latest'>('trending');
   const [followingIds, setFollowingIds] = useState<string[]>([]);
-  const PAGE_SIZE = 30;
+  const PAGE_SIZE = 12;
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);

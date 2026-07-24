@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { Library, Play, Square, X, Check } from 'lucide-react';
 import {
   formatSampleSize,
@@ -40,7 +40,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : 'Ошибка загрузки библиотеки');
+        setError(e instanceof Error ? e.message : 'РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё Р±РёР±Р»РёРѕС‚РµРєРё');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -99,7 +99,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
     try {
       stopPreview();
       const res = await fetch(sample.url);
-      if (!res.ok) throw new Error('Не удалось скачать сэмпл');
+      if (!res.ok) throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєР°С‡Р°С‚СЊ СЃСЌРјРїР»');
       const blob = await res.blob();
       const type = blob.type || 'audio/wav';
       const ext = sample.file.includes('.') ? sample.file.slice(sample.file.lastIndexOf('.')) : '.wav';
@@ -108,7 +108,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
       await onPick(sample, file);
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Не удалось добавить сэмпл');
+      setError(e instanceof Error ? e.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ СЃСЌРјРїР»');
     } finally {
       setBusyId(null);
     }
@@ -120,7 +120,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Библиотека звуков"
+      aria-label="Р‘РёР±Р»РёРѕС‚РµРєР° Р·РІСѓРєРѕРІ"
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -144,7 +144,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
           borderRadius: 16,
           overflow: 'hidden',
           color: '#f3efe8',
-          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+          fontFamily: "'Syne', system-ui, sans-serif",
         }}
       >
         <div
@@ -161,10 +161,10 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
             <Library size={16} />
             <div>
               <div style={{ fontWeight: 650, letterSpacing: '-0.03em' }}>
-                {manifest?.name || 'Библиотека'} · готовые звуки
+                {manifest?.name || 'Р‘РёР±Р»РёРѕС‚РµРєР°'} В· РіРѕС‚РѕРІС‹Рµ Р·РІСѓРєРё
               </div>
               <div style={{ fontSize: 12, color: '#9a948c' }}>
-                Послушайте и добавьте на трек
+                РџРѕСЃР»СѓС€Р°Р№С‚Рµ Рё РґРѕР±Р°РІСЊС‚Рµ РЅР° С‚СЂРµРє
               </div>
             </div>
           </div>
@@ -173,7 +173,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
             onClick={onClose}
             className="st-chip ghost"
             style={{ width: 34, height: 34, padding: 0, placeContent: 'center' }}
-            aria-label="Закрыть"
+            aria-label="Р—Р°РєСЂС‹С‚СЊ"
           >
             <X size={14} />
           </button>
@@ -187,13 +187,13 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
               onClick={() => setCategoryId(c.id)}
               className={`st-chip ${category?.id === c.id ? 'on' : 'ghost'}`}
             >
-              {c.name} · {c.samples.length}
+              {c.name} В· {c.samples.length}
             </button>
           ))}
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск…"
+            placeholder="РџРѕРёСЃРєвЂ¦"
             style={{
               marginLeft: 'auto',
               minWidth: 160,
@@ -210,14 +210,14 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
-          {loading && <div style={{ color: '#9a948c', padding: 16 }}>Загрузка библиотеки…</div>}
+          {loading && <div style={{ color: '#9a948c', padding: 16 }}>Р—Р°РіСЂСѓР·РєР° Р±РёР±Р»РёРѕС‚РµРєРёвЂ¦</div>}
           {error && (
             <div style={{ color: '#ff8a8a', padding: '8px 12px', marginBottom: 8, fontSize: 13 }}>
               {error}
             </div>
           )}
           {!loading && samples.length === 0 && (
-            <div style={{ color: '#9a948c', padding: 16 }}>Ничего не найдено</div>
+            <div style={{ color: '#9a948c', padding: 16 }}>РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div>
           )}
           <div style={{ display: 'grid', gap: 6 }}>
             {samples.map((sample) => {
@@ -242,7 +242,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
                     onClick={() => void preview(sample)}
                     className={`st-chip ${isPreview ? 'on' : 'ghost'}`}
                     style={{ width: 34, height: 34, padding: 0, placeContent: 'center' }}
-                    title={isPreview ? 'Стоп' : 'Слушать'}
+                    title={isPreview ? 'РЎС‚РѕРї' : 'РЎР»СѓС€Р°С‚СЊ'}
                   >
                     {isPreview ? <Square size={13} /> : <Play size={13} />}
                   </button>
@@ -258,8 +258,8 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
                     >
                       {sample.name}
                     </div>
-                    <div style={{ fontSize: 11, color: '#9a948c', fontFamily: "'IBM Plex Mono', monospace" }}>
-                      {category?.name} · {formatSampleSize(sample.bytes)}
+                    <div style={{ fontSize: 11, color: '#9a948c', fontFamily: "'DM Mono', monospace" }}>
+                      {category?.name} В· {formatSampleSize(sample.bytes)}
                     </div>
                   </div>
                   <button
@@ -269,7 +269,7 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
                     className="st-chip on"
                     style={{ opacity: isBusy ? 0.6 : 1 }}
                   >
-                    <Check size={13} /> {isBusy ? '…' : 'Выбрать'}
+                    <Check size={13} /> {isBusy ? 'вЂ¦' : 'Р’С‹Р±СЂР°С‚СЊ'}
                   </button>
                 </div>
               );
