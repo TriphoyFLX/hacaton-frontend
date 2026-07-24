@@ -6,6 +6,7 @@ export type BeforeInstallPromptEvent = Event & {
 /** Device-scoped (localStorage), not tied to account. */
 const DISMISS_KEY = 'sl_pwa_install_dismissed_device_v1';
 const INSTALLED_KEY = 'sl_pwa_installed_device_v1';
+const UNINSTALL_FEEDBACK_KEY = 'sl_pwa_uninstall_feedback_pending_v1';
 const DISMISS_MS = 1000 * 60 * 60 * 24 * 7;
 
 type RelatedApp = { id?: string; platform?: string; url?: string };
@@ -61,6 +62,15 @@ export function clearPwaDismissed() {
 export function markPwaInstalledOnDevice() {
   try {
     localStorage.setItem(INSTALLED_KEY, '1');
+    localStorage.removeItem(UNINSTALL_FEEDBACK_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearPwaInstalledOnDevice() {
+  try {
+    localStorage.removeItem(INSTALLED_KEY);
   } catch {
     /* ignore */
   }
@@ -74,9 +84,43 @@ export function isPwaMarkedInstalledOnDevice(): boolean {
   }
 }
 
+export function markPwaUninstallFeedbackPending() {
+  try {
+    localStorage.setItem(UNINSTALL_FEEDBACK_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isPwaUninstallFeedbackPending(): boolean {
+  try {
+    return localStorage.getItem(UNINSTALL_FEEDBACK_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function clearPwaUninstallFeedbackPending() {
+  try {
+    localStorage.removeItem(UNINSTALL_FEEDBACK_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function isSoundLabRelatedApp(app: RelatedApp): boolean {
+  if (app.platform && app.platform !== 'webapp') return false;
+  const url = (app.url || app.id || '').toLowerCase();
+  return (
+    url.includes('soundlab-studio.ru') ||
+    url.includes('manifest.webmanifest') ||
+    url.includes('/manifest')
+  );
+}
+
 /**
- * Detect if SoundLab PWA is already installed on THIS device
- * (independent of which account is logged in).
+ * Detect if SoundLab PWA is already installed on THIS device.
+ * Also clears the device flag when uninstall is detected.
  */
 export async function detectPwaInstalledOnDevice(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -86,8 +130,6 @@ export async function detectPwaInstalledOnDevice(): Promise<boolean> {
     return true;
   }
 
-  if (isPwaMarkedInstalledOnDevice()) return true;
-
   const nav = navigator as Navigator & {
     getInstalledRelatedApps?: () => Promise<RelatedApp[]>;
   };
@@ -95,25 +137,34 @@ export async function detectPwaInstalledOnDevice(): Promise<boolean> {
   if (typeof nav.getInstalledRelatedApps === 'function') {
     try {
       const apps = await nav.getInstalledRelatedApps();
-      const hit = apps.some((app) => {
-        if (app.platform && app.platform !== 'webapp') return false;
-        const url = (app.url || app.id || '').toLowerCase();
-        return (
-          url.includes('soundlab-studio.ru') ||
-          url.includes('manifest.webmanifest') ||
-          url.includes('/manifest')
-        );
-      });
+      const hit = apps.some(isSoundLabRelatedApp);
       if (hit) {
         markPwaInstalledOnDevice();
         return true;
       }
+      // Related-apps says not installed — if we thought it was, user uninstalled
+      if (isPwaMarkedInstalledOnDevice()) {
+        handlePwaUninstalledOnDevice();
+      }
+      return false;
     } catch {
       /* API unsupported / permission */
     }
   }
 
-  return false;
+  // Without related-apps API, trust the device flag until beforeinstallprompt clears it
+  return isPwaMarkedInstalledOnDevice();
+}
+
+/** Called when we detect uninstall on this device (not account-scoped). */
+export function handlePwaUninstalledOnDevice() {
+  const wasInstalled = isPwaMarkedInstalledOnDevice();
+  clearPwaInstalledOnDevice();
+  clearPwaDismissed();
+  if (wasInstalled) {
+    markPwaUninstallFeedbackPending();
+  }
+  notify();
 }
 
 /** Shared deferred install event captured once for the whole app. */
@@ -140,7 +191,10 @@ export function bindPwaInstallCapture() {
 
   const onBip = (event: Event) => {
     event.preventDefault();
-    // Browser only fires this when NOT already installed
+    // Browser only fires this when NOT already installed → treat as uninstall if we had a flag
+    if (isPwaMarkedInstalledOnDevice()) {
+      handlePwaUninstalledOnDevice();
+    }
     deferredPrompt = event as BeforeInstallPromptEvent;
     notify();
   };

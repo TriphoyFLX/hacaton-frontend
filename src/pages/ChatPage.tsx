@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy } from 'lucide-react';
 import { chatsApi, Chat, Message, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
@@ -488,6 +489,7 @@ ${FONT_IMPORT}
   padding: 10px 16px;
   border-radius: 16px;
   position: relative;
+  cursor: context-menu;
 }
 .message-bubble.own {
   background: var(--text-primary);
@@ -628,6 +630,72 @@ ${FONT_IMPORT}
 .message-action-btn svg {
   width: 14px;
   height: 14px;
+}
+.msg-ctx-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 188px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border-mid);
+  background: rgba(22, 22, 22, 0.96);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  display: grid;
+  gap: 2px;
+}
+.msg-ctx-emoji-row {
+  display: flex;
+  gap: 2px;
+  padding: 4px 2px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.msg-ctx-emoji {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.msg-ctx-emoji:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.1);
+}
+.msg-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 9px 10px;
+  cursor: pointer;
+  font: 13px 'Syne', sans-serif;
+  text-align: left;
+}
+.msg-ctx-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.msg-ctx-item.danger {
+  color: #f5a9a3;
+}
+.msg-ctx-item.danger:hover {
+  background: rgba(192, 57, 43, 0.14);
+}
+.msg-ctx-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.msg-ctx-item svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
 }
 .reaction-picker {
   position: absolute;
@@ -1141,6 +1209,13 @@ export default function ChatPage() {
   const [editDraft, setEditDraft] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    messageId: string;
+    x: number;
+    y: number;
+    isOwn: boolean;
+  } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<Array<{
     id: string;
     username: string;
@@ -1310,9 +1385,67 @@ export default function ChatPage() {
     }
   };
 
+  const closeContextMenu = () => setContextMenu(null);
+
+  const openMessageContextMenu = (
+    event: ReactMouseEvent,
+    message: DisplayMessage,
+    isOwn: boolean,
+  ) => {
+    if (message.status === 'PENDING') return;
+    if ('deletedAt' in message && message.deletedAt) return;
+    if (editingId === message.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setReactionPickerId(null);
+
+    const menuWidth = 220;
+    const menuHeight = isOwn ? 220 : 160;
+    const padding = 8;
+    const x = Math.min(event.clientX, window.innerWidth - menuWidth - padding);
+    const y = Math.min(event.clientY, window.innerHeight - menuHeight - padding);
+    setContextMenu({
+      messageId: message.id,
+      x: Math.max(padding, x),
+      y: Math.max(padding, y),
+      isOwn,
+    });
+  };
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeContextMenu();
+    };
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (contextMenuRef.current && target && contextMenuRef.current.contains(target)) return;
+      closeContextMenu();
+    };
+    const onScroll = () => closeContextMenu();
+
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onPointer);
+    window.addEventListener('touchstart', onPointer, { passive: true });
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onPointer);
+      window.removeEventListener('touchstart', onPointer);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [contextMenu]);
+
+  const contextMessage = useMemo(() => {
+    if (!contextMenu) return null;
+    return messages.find((m) => m.id === contextMenu.messageId) || null;
+  }, [contextMenu, messages]);
+
   const handleToggleReaction = async (messageId: string, emoji: string) => {
     if (!chatId) return;
     setReactionPickerId(null);
+    closeContextMenu();
     try {
       const result = await chatsApi.toggleReaction(chatId, messageId, emoji);
       setMessages(prev =>
@@ -1979,7 +2112,10 @@ export default function ChatPage() {
                     key={message.id}
                     className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''} ${pickerOpen ? 'picker-open' : ''}`}
                   >
-                    <div className={`message-bubble ${isOwn ? 'own' : 'other'} ${isDeleted ? 'deleted' : ''}`}>
+                    <div
+                      className={`message-bubble ${isOwn ? 'own' : 'other'} ${isDeleted ? 'deleted' : ''}`}
+                      onContextMenu={(event) => openMessageContextMenu(event, message, isOwn)}
+                    >
                       {pickerOpen && (
                         <div className="reaction-picker" role="listbox">
                           {REACTION_EMOJIS.map((emoji) => (
@@ -2259,6 +2395,69 @@ export default function ChatPage() {
             </form>
           </div>
         </>
+      )}
+
+      {contextMenu && contextMessage && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={contextMenuRef}
+          className="msg-ctx-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="msg-ctx-emoji-row" role="group" aria-label="Реакции">
+            {REACTION_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="msg-ctx-emoji"
+                onClick={() => void handleToggleReaction(contextMenu.messageId, emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="msg-ctx-item"
+            disabled={!contextMessage.content?.trim()}
+            onClick={() => {
+              void handleCopyMessage(contextMessage);
+              closeContextMenu();
+            }}
+          >
+            <Copy />
+            Копировать
+          </button>
+          {contextMenu.isOwn && (
+            <button
+              type="button"
+              className="msg-ctx-item"
+              onClick={() => {
+                startEditMessage(contextMessage);
+                closeContextMenu();
+              }}
+            >
+              <Pencil />
+              Редактировать
+            </button>
+          )}
+          {contextMenu.isOwn && (
+            <button
+              type="button"
+              className="msg-ctx-item danger"
+              disabled={deletingId === contextMenu.messageId}
+              onClick={() => {
+                void handleDeleteMessage(contextMenu.messageId);
+                closeContextMenu();
+              }}
+            >
+              <Trash2 />
+              Удалить
+            </button>
+          )}
+        </div>,
+        document.body,
       )}
 
       <ConfirmDialog

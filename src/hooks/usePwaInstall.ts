@@ -11,6 +11,8 @@ import {
   wasPwaDismissed,
   detectPwaInstalledOnDevice,
   isPwaMarkedInstalledOnDevice,
+  isPwaUninstallFeedbackPending,
+  clearPwaUninstallFeedbackPending,
 } from '../lib/pwa';
 
 let captureBound = false;
@@ -35,6 +37,9 @@ export function usePwaInstall() {
   const [installedOnDevice, setInstalledOnDevice] = useState(() =>
     isPwaStandalone() || isPwaMarkedInstalledOnDevice(),
   );
+  const [uninstallFeedbackPending, setUninstallFeedbackPending] = useState(() =>
+    isPwaUninstallFeedbackPending(),
+  );
   const [iosSafari, setIosSafari] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -47,6 +52,7 @@ export function usePwaInstall() {
     void detectPwaInstalledOnDevice().then((installed) => {
       if (cancelled) return;
       setInstalledOnDevice(installed);
+      setUninstallFeedbackPending(isPwaUninstallFeedbackPending());
       setReady(true);
     });
 
@@ -55,10 +61,19 @@ export function usePwaInstall() {
     };
   }, []);
 
-  // If browser later reports install event / clears deferred after install
+  useEffect(() => {
+    return subscribeInstallPrompt(() => {
+      setInstalledOnDevice(isPwaStandalone() || isPwaMarkedInstalledOnDevice());
+      setUninstallFeedbackPending(isPwaUninstallFeedbackPending());
+    });
+  }, []);
+
   useEffect(() => {
     if (!deferred && isPwaMarkedInstalledOnDevice()) {
       setInstalledOnDevice(true);
+    }
+    if (deferred && !isPwaMarkedInstalledOnDevice()) {
+      setInstalledOnDevice(false);
     }
   }, [deferred]);
 
@@ -70,15 +85,19 @@ export function usePwaInstall() {
     ready,
     standalone,
     installedOnDevice,
+    uninstallFeedbackPending,
     iosSafari,
     canNativeInstall,
     canShowIosTip,
-    /** Offer install only if this device does not already have the app */
     canOfferInstall: !hideInstallUi,
     hasDeferred: Boolean(deferred),
     dismissed: wasPwaDismissed(),
     install: promptPwaInstall,
     dismiss: markPwaDismissed,
     clearDismiss: clearPwaDismissed,
+    clearUninstallFeedback: () => {
+      clearPwaUninstallFeedbackPending();
+      setUninstallFeedbackPending(false);
+    },
   };
 }
