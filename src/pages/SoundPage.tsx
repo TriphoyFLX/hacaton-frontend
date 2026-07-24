@@ -6,7 +6,7 @@ import type { SoundTok } from '../api/soundtok';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount } from '../lib/format';
 
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
+const FONT_IMPORT = '';
 
 const css = `
 ${FONT_IMPORT}

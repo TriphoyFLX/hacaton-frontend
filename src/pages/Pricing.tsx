@@ -19,7 +19,6 @@ const TOKEN_PACK_UI: Array<{
 ];
 
 const css = `
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .pr {
   --bg:#0c0b0a; --ink:#f3efe8; --muted:#9a948c; --line:rgba(243,239,232,.12); --accent:#e8a87c;
   --save:#9dffa8; --save-dim:rgba(157,255,168,.12);

@@ -3,7 +3,6 @@ import SeoHead from '../components/SeoHead';
 import { LEGAL, LEGAL_NAV, type LegalDocId } from '../lib/legal';
 
 const css = `
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .lg {
   --bg:#0c0b0a; --ink:#f3efe8; --muted:#9a948c; --dim:#6b6560; --line:rgba(243,239,232,.12); --accent:#e8a87c;
   min-height:100vh; background:var(--bg); color:var(--ink);

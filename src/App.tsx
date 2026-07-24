@@ -1,16 +1,16 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, type ReactNode } from 'react';
-import Login from './components/Login';
-import Register from './components/Register';
 import AuthCallback from './components/AuthCallback';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
-import Landing from './pages/Landing';
-import LegalPage from './pages/LegalPage';
 import PwaInstallBanner from './components/PwaInstallBanner';
 import PwaUninstallFeedbackModal from './components/PwaUninstallFeedbackModal';
 
+const Landing = lazy(() => import('./pages/Landing'));
+const LegalPage = lazy(() => import('./pages/LegalPage'));
+const Login = lazy(() => import('./components/Login'));
+const Register = lazy(() => import('./components/Register'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Studio = lazy(() => import('./pages/Studio'));
 const Feed = lazy(() => import('./pages/Feed'));
@@ -46,21 +46,21 @@ function App() {
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Public SEO / marketing — crawlable without login */}
-        <Route path="/" element={<Landing variant="home" />} />
-        <Route path="/online-studiya-zvukozapisi" element={<Landing variant="studio" />} />
-        <Route path="/zapisat-trek-online" element={<Landing variant="record" />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/" element={<Lazy><Landing variant="home" /></Lazy>} />
+        <Route path="/online-studiya-zvukozapisi" element={<Lazy><Landing variant="studio" /></Lazy>} />
+        <Route path="/zapisat-trek-online" element={<Lazy><Landing variant="record" /></Lazy>} />
+        <Route path="/login" element={<Lazy><Login /></Lazy>} />
+        <Route path="/register" element={<Lazy><Register /></Lazy>} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Legal — public */}
-        <Route path="/offer" element={<LegalPage docId="offer" />} />
-        <Route path="/terms" element={<LegalPage docId="offer" />} />
-        <Route path="/privacy" element={<LegalPage docId="privacy" />} />
-        <Route path="/contacts" element={<LegalPage docId="contacts" />} />
-        <Route path="/refunds" element={<LegalPage docId="refunds" />} />
-        <Route path="/delivery" element={<LegalPage docId="delivery" />} />
-        <Route path="/service-delivery" element={<LegalPage docId="delivery" />} />
+        <Route path="/offer" element={<Lazy><LegalPage docId="offer" /></Lazy>} />
+        <Route path="/terms" element={<Lazy><LegalPage docId="offer" /></Lazy>} />
+        <Route path="/privacy" element={<Lazy><LegalPage docId="privacy" /></Lazy>} />
+        <Route path="/contacts" element={<Lazy><LegalPage docId="contacts" /></Lazy>} />
+        <Route path="/refunds" element={<Lazy><LegalPage docId="refunds" /></Lazy>} />
+        <Route path="/delivery" element={<Lazy><LegalPage docId="delivery" /></Lazy>} />
+        <Route path="/service-delivery" element={<Lazy><LegalPage docId="delivery" /></Lazy>} />
 
         {/* Authenticated app shell */}
         <Route

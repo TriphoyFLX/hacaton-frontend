@@ -152,7 +152,6 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         keywords="SoundLab, онлайн студия звукозаписи, записать трек онлайн, студия онлайн, запись вокала, MIDI онлайн"
       />
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
         .sl-boot {
           min-height: 100vh; background: #0c0b0a; color: #8a8580;

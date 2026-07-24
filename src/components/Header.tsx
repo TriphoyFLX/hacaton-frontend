@@ -9,7 +9,7 @@ import { API_ORIGIN, SOCKET_ORIGIN } from '../api/client';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import PwaInstallButton from './PwaInstallButton';
 
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
+const FONT_IMPORT = '';
 
 const css = `
 ${FONT_IMPORT}
@@ -311,7 +311,10 @@ export default function Header() {
 
   useEffect(() => {
     void loadNotifications();
-    const interval = window.setInterval(() => void loadNotifications(), 30_000);
+    const interval = window.setInterval(() => {
+      if (document.hidden) return;
+      void loadNotifications();
+    }, 60_000);
     return () => window.clearInterval(interval);
   }, [loadNotifications]);
 

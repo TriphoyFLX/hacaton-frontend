@@ -5,7 +5,7 @@ import { soundsApi, type Sound } from '../api/sounds';
 import { soundTokApi } from '../api/soundtok';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
+const FONT_IMPORT = '';
 
 const MAX_SECONDS = 30;
 const MAX_BYTES = 15 * 1024 * 1024;

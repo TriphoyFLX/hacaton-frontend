@@ -1722,11 +1722,15 @@ export default function VideoFeed({
                 ref={(el) => {
                   videoRefs.current[index] = el;
                 }}
-                src={`${API_ORIGIN}${soundTok.videoUrl}`}
+                src={
+                  Math.abs(index - currentIndex) <= 1
+                    ? `${API_ORIGIN}${soundTok.videoUrl}`
+                    : undefined
+                }
                 className="vf-video"
                 loop
                 playsInline
-                preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'metadata'}
+                preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'none'}
                 muted={
                   index !== currentIndex ||
                   !soundEnabled ||
@@ -1783,14 +1787,16 @@ export default function VideoFeed({
                   }
                 }}
               />
-              {usesExternalSound(soundTok) && soundTok.sound?.audioUrl && (
+              {usesExternalSound(soundTok) &&
+                soundTok.sound?.audioUrl &&
+                Math.abs(index - currentIndex) <= 1 && (
                 <audio
                   ref={(el) => {
                     bedAudioRefs.current[index] = el;
                   }}
                   src={`${API_ORIGIN}${soundTok.sound.audioUrl}`}
                   loop
-                  preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'metadata'}
+                  preload="auto"
                 />
               )}
 

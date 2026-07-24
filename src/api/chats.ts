@@ -209,19 +209,31 @@ export const chatsApi = {
 
   uploadImage: async (chatId: string, file: File): Promise<{ imageUrl: string }> => {
     const formData = new FormData();
-    formData.append('image', file);
-    const response = await api.post(`/chats/${chatId}/images`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    // Clipboard blobs often have empty/missing filenames — give multer a real name+ext
+    const mime = file.type || 'image/png';
+    const ext =
+      mime === 'image/jpeg' || mime === 'image/jpg'
+        ? 'jpg'
+        : mime === 'image/gif'
+          ? 'gif'
+          : mime === 'image/webp'
+            ? 'webp'
+            : 'png';
+    const safeName =
+      file.name && /\.(jpe?g|png|gif|webp)$/i.test(file.name)
+        ? file.name
+        : `paste-${Date.now()}.${ext}`;
+    const normalized =
+      safeName === file.name ? file : new File([file], safeName, { type: mime });
+    formData.append('image', normalized);
+    const response = await api.post(`/chats/${chatId}/images`, formData);
     return response.data;
   },
 
   uploadGroupAvatar: async (chatId: string, file: File): Promise<Chat> => {
     const formData = new FormData();
     formData.append('image', file);
-    const response = await api.post(`/chats/${chatId}/avatar`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.post(`/chats/${chatId}/avatar`, formData);
     return response.data;
   },
 

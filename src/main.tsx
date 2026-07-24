@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import './styles/responsive.css'
-import './styles/daw.css'
 import App from './App.tsx'
 
 // Auto-update service worker: new deploys activate without sticky stale shells

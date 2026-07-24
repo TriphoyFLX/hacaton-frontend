@@ -87,7 +87,7 @@ async function playBeatElement(el: HTMLAudioElement, src: string): Promise<void>
 // ─────────────────────────────────────────────────────────
 // DESIGN SYSTEM — matches Sidebar & Profile exactly
 // ─────────────────────────────────────────────────────────
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');`;
+const FONT_IMPORT = '';
 
 const RAP_BATTLE_CSS = `
 ${FONT_IMPORT}

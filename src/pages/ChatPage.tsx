@@ -18,7 +18,7 @@ import {
 } from '../utils/messageMentions';
 
 // ── Styles ──
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
+const FONT_IMPORT = '';
 
 const css = `
 ${FONT_IMPORT}
@@ -2460,16 +2460,33 @@ export default function ChatPage() {
   };
 
   const acceptImageFile = (file: File | null | undefined) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file) return;
+    const looksLikeImage =
+      file.type.startsWith('image/') ||
+      (!file.type && /\.(jpe?g|png|gif|webp)$/i.test(file.name || ''));
+    if (!looksLikeImage) return;
     if (file.size > 8 * 1024 * 1024) {
       setSendError('Изображение слишком большое (макс. 8MB)');
       return;
     }
+    const mime =
+      file.type ||
+      (/\.jpe?g$/i.test(file.name)
+        ? 'image/jpeg'
+        : /\.gif$/i.test(file.name)
+          ? 'image/gif'
+          : /\.webp$/i.test(file.name)
+            ? 'image/webp'
+            : 'image/png');
+    const normalized =
+      file.type === mime
+        ? file
+        : new File([file], file.name || `paste-${Date.now()}.png`, { type: mime });
     setPendingImagePreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
+      return URL.createObjectURL(normalized);
     });
-    setPendingImage(file);
+    setPendingImage(normalized);
     setSendError(null);
   };
 
@@ -2574,17 +2591,27 @@ export default function ChatPage() {
     }
   };
 
-  const handlePasteImage = (e: ReactClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
+  const handlePasteImage = (e: ReactClipboardEvent) => {
+    const dt = e.clipboardData;
+    if (!dt) return;
+
+    const fileFromList = Array.from(dt.files || []).find(
+      (f) => f.type.startsWith('image/') || (!f.type && /\.(jpe?g|png|gif|webp)$/i.test(f.name || ''))
+    );
+    if (fileFromList) {
+      e.preventDefault();
+      acceptImageFile(fileFromList);
+      return;
+    }
+
+    for (const item of Array.from(dt.items || [])) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (file) {
           e.preventDefault();
           acceptImageFile(file);
         }
-        break;
+        return;
       }
     }
   };
@@ -3115,7 +3142,7 @@ export default function ChatPage() {
           </div>
 
           {/* Input */}
-          <div className="chat-input-area">
+          <div className="chat-input-area" onPaste={handlePasteImage}>
             {editingId && editingMessage && (
               <div
                 className="edit-compose-bar"

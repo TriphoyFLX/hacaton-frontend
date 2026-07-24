@@ -24,7 +24,6 @@ const PAGE_SIZE = 40;
 const ADMIN_CACHE_TTL = 30_000;
 
 const ADMIN_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
 
 .admin-root {
   --admin-bg: #0a0a0a;

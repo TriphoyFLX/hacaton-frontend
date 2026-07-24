@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import '../styles/daw.css';
 import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
   Download, Upload, Repeat, Sliders, Activity, Volume2,
@@ -337,7 +338,6 @@ type PlaylistDragState = {
 
 // ================= СТИЛИ =================
 const STUDIO_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 .midi-studio {
   --st-bg: #050505;
@@ -3462,7 +3462,6 @@ function MIDISequencer() {
     return (
       <div className="midi-lib">
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap');
           .midi-lib {
             --ml-bg: #050505;
             --ml-surface: #0e0e0f;

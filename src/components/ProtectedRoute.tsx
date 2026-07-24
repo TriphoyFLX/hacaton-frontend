@@ -18,7 +18,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const checkAuth = useAuthStore((state) => state.checkAuth);
   const location = useLocation();
   const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
-  const [checking, setChecking] = useState(true);
+  // Don't block first paint when we already have a persisted session
+  const [checking, setChecking] = useState(() => !useAuthStore.getState().token);
 
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
@@ -35,22 +36,31 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     if (!hydrated) return;
 
     let cancelled = false;
+    const hasSession = Boolean(useAuthStore.getState().token);
+
+    if (hasSession) {
+      setChecking(false);
+      void checkAuth().finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const verify = async () => {
       await checkAuth();
-      if (!cancelled) {
-        setChecking(false);
-      }
+      if (!cancelled) setChecking(false);
     };
 
-    verify();
+    void verify();
 
     return () => {
       cancelled = true;
     };
   }, [hydrated, checkAuth]);
 
-  if (!hydrated || checking) {
+  if (!hydrated || (checking && !token)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] text-[#f0ede8]">
         Загрузка...
