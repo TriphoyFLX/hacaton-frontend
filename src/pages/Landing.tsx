@@ -152,9 +152,8 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         keywords="SoundLab, онлайн студия звукозаписи, записать трек онлайн, студия онлайн, запись вокала, MIDI онлайн"
       />
       <style>{`
-
         .sl-boot {
-          min-height: 100vh; background: #0c0b0a; color: #8a8580;
+          min-height: 100dvh; background: #0c0b0a; color: #8a8580;
           display: flex; align-items: center; justify-content: center;
           font-family: 'Syne', sans-serif; font-weight: 600; letter-spacing: -0.02em;
         }
@@ -167,7 +166,8 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           --line: rgba(243, 239, 232, 0.12);
           --accent: #e8a87c;
           --panel: #161412;
-          min-height: 100vh;
+          min-height: 100dvh;
+          overflow-x: clip;
           background:
             radial-gradient(120% 80% at 50% -10%, rgba(232, 168, 124, 0.14), transparent 55%),
             linear-gradient(180deg, #12100e 0%, var(--bg) 42%, #0a0908 100%);
@@ -176,22 +176,60 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           -webkit-font-smoothing: antialiased;
         }
         .sl-land * { box-sizing: border-box; }
-        .sl-wrap { max-width: 1100px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 40px); }
+        .sl-wrap {
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 0 16px;
+          width: 100%;
+        }
 
         .sl-nav {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 20px 0;
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 0;
+          margin: 0 -16px;
+          padding-left: 16px;
+          padding-right: 16px;
+          background: rgba(12, 11, 10, 0.88);
+          backdrop-filter: blur(12px);
+          border-bottom: 1px solid transparent;
         }
         .sl-logo {
-          font-weight: 700; font-size: clamp(22px, 3vw, 28px);
-          letter-spacing: -0.04em; color: var(--ink); text-decoration: none;
+          font-weight: 700;
+          font-size: 22px;
+          letter-spacing: -0.04em;
+          color: var(--ink);
+          text-decoration: none;
+          flex-shrink: 0;
         }
-        .sl-nav-actions { display: flex; gap: 8px; align-items: center; }
+        .sl-nav-actions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-shrink: 0;
+        }
         .sl-btn {
-          height: 42px; padding: 0 18px; border-radius: 999px;
-          border: 1px solid var(--line); background: transparent; color: var(--ink);
-          font: inherit; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
-          text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+          min-height: 40px;
+          height: auto;
+          padding: 10px 14px;
+          border-radius: 999px;
+          border: 1px solid var(--line);
+          background: transparent;
+          color: var(--ink);
+          font: inherit;
+          font-size: 13px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          white-space: nowrap;
           transition: background .15s, color .15s, border-color .15s;
         }
         .sl-btn:hover { border-color: rgba(243,239,232,0.28); background: rgba(255,255,255,0.03); }
@@ -199,169 +237,200 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           background: var(--ink); color: #12100e; border-color: var(--ink);
         }
         .sl-btn-primary:hover { background: #fff; border-color: #fff; color: #0c0b0a; }
-        @media (max-width: 520px) {
-          .sl-nav {
-            align-items: flex-start;
-            gap: 14px;
-            padding: 16px 0;
-          }
-          .sl-nav-actions {
-            width: 100%;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-          }
-          .sl-nav-actions .sl-btn {
-            width: 100%;
-            min-height: 44px;
-          }
-        }
-        @media (max-width: 380px) {
-          .sl-nav-actions { grid-template-columns: 1fr; }
-          .sl-hero h1 { font-size: clamp(34px, 11vw, 44px); }
-          .sl-wrap { padding: 0 14px; }
+        .sl-btn-nav-ghost {
+          padding: 10px 12px;
+          border-color: transparent;
+          color: var(--muted);
         }
 
         .sl-hero {
-          padding: clamp(36px, 8vh, 72px) 0 clamp(40px, 7vh, 64px);
-          display: grid; gap: 28px;
+          padding: 28px 0 36px;
+          display: grid;
+          gap: 22px;
         }
-        @media (min-width: 900px) {
-          .sl-hero { grid-template-columns: 1.05fr 0.95fr; align-items: end; gap: 40px; }
-        }
-        .sl-hero-copy { max-width: 34rem; }
+        .sl-hero-copy { max-width: 34rem; min-width: 0; }
         .sl-kicker {
-          margin: 0 0 14px; font-family: 'DM Mono', monospace;
-          font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+          margin: 0 0 10px;
+          font-family: 'DM Mono', monospace;
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--accent);
         }
         .sl-hero h1 {
-          margin: 0; font-size: clamp(40px, 7vw, 72px); font-weight: 700;
-          letter-spacing: -0.05em; line-height: 0.98;
+          margin: 0;
+          font-size: clamp(34px, 10vw, 44px);
+          font-weight: 700;
+          letter-spacing: -0.05em;
+          line-height: 1.02;
+          word-break: break-word;
         }
         .sl-brand-line {
-          display: block; font-size: clamp(28px, 4.5vw, 44px);
-          color: var(--muted); font-weight: 600; letter-spacing: -0.04em; margin-top: 6px;
+          display: block;
+          font-size: clamp(20px, 5.5vw, 28px);
+          color: var(--muted);
+          font-weight: 600;
+          letter-spacing: -0.04em;
+          margin-top: 8px;
+          line-height: 1.15;
         }
         .sl-hero-lead {
-          margin: 18px 0 0; font-size: 17px; line-height: 1.55; color: var(--muted); max-width: 38ch;
+          margin: 14px 0 0;
+          font-size: 15px;
+          line-height: 1.55;
+          color: var(--muted);
+          max-width: 38ch;
         }
-        .sl-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+        .sl-cta {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+          margin-top: 20px;
+        }
+        .sl-cta .sl-btn {
+          width: 100%;
+          min-height: 48px;
+          font-size: 15px;
+        }
         .sl-note {
-          margin: 14px 0 0; font-size: 13px; color: var(--dim); max-width: 40ch; line-height: 1.45;
+          margin: 14px 0 0;
+          font-size: 13px;
+          color: var(--dim);
+          max-width: 42ch;
+          line-height: 1.45;
         }
+        .sl-note-secondary { display: none; }
 
         .sl-preview {
-          border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+          border: 1px solid var(--line);
+          border-radius: 16px;
+          overflow: hidden;
           background: var(--panel);
-          box-shadow: 0 30px 80px rgba(0,0,0,0.35);
-          min-height: 280px;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+          min-height: 220px;
           position: relative;
         }
         .sl-preview-bar {
-          display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+          display: flex; align-items: center; gap: 8px; padding: 10px 12px;
           border-bottom: 1px solid var(--line); background: rgba(0,0,0,0.25);
         }
-        .sl-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(243,239,232,0.2); }
+        .sl-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(243,239,232,0.2); }
         .sl-preview-title {
-          margin-left: 6px; font-family: 'DM Mono', monospace;
+          margin-left: 4px; font-family: 'DM Mono', monospace;
           font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);
         }
-        .sl-preview-body { padding: 18px; display: grid; gap: 10px; }
+        .sl-preview-body { padding: 14px; display: grid; gap: 8px; }
         .sl-lane {
-          height: 38px; border-radius: 8px; border: 1px solid var(--line);
+          height: 32px; border-radius: 8px; border: 1px solid var(--line);
           background: linear-gradient(90deg, rgba(232,168,124,0.12), transparent 55%), #1c1916;
           position: relative; overflow: hidden;
         }
         .sl-lane::after {
-          content: ''; position: absolute; inset: 8px auto 8px 12px; width: 42%;
+          content: ''; position: absolute; inset: 7px auto 7px 10px; width: 42%;
           border-radius: 4px; background: rgba(232,168,124,0.35);
         }
         .sl-lane:nth-child(2)::after { width: 58%; left: 18%; background: rgba(243,239,232,0.18); }
         .sl-lane:nth-child(3)::after { width: 35%; left: 30%; background: rgba(232,168,124,0.22); }
         .sl-lane:nth-child(4)::after { width: 48%; left: 10%; background: rgba(243,239,232,0.12); }
         .sl-preview-lock {
-          position: absolute; inset: auto 16px 16px 16px;
-          padding: 12px 14px; border-radius: 12px;
-          background: rgba(12,11,10,0.82); border: 1px solid var(--line);
-          font-size: 13px; color: var(--muted); line-height: 1.4;
+          position: absolute; inset: auto 12px 12px 12px;
+          padding: 11px 12px; border-radius: 12px;
+          background: rgba(12,11,10,0.88); border: 1px solid var(--line);
+          font-size: 12px; color: var(--muted); line-height: 1.4;
           backdrop-filter: blur(8px);
         }
         .sl-preview-lock strong { color: var(--ink); font-weight: 600; }
 
-        .sl-section { padding: 48px 0; border-top: 1px solid var(--line); }
+        .sl-section { padding: 36px 0; border-top: 1px solid var(--line); }
         .sl-section h2 {
-          margin: 0 0 10px; font-size: clamp(26px, 3.5vw, 36px);
-          letter-spacing: -0.035em; font-weight: 700;
+          margin: 0 0 8px;
+          font-size: clamp(24px, 6vw, 32px);
+          letter-spacing: -0.035em;
+          font-weight: 700;
         }
         .sl-section-lead {
-          margin: 0 0 28px; color: var(--muted); font-size: 16px; line-height: 1.55; max-width: 52ch;
+          margin: 0 0 22px;
+          color: var(--muted);
+          font-size: 15px;
+          line-height: 1.55;
+          max-width: 52ch;
         }
 
-        .sl-modules {
-          display: grid; gap: 0; border-top: 1px solid var(--line);
-        }
+        .sl-modules { display: grid; gap: 0; border-top: 1px solid var(--line); }
         .sl-mod {
-          display: grid; gap: 6px; padding: 22px 0;
+          display: grid; gap: 6px; padding: 18px 0;
           border-bottom: 1px solid var(--line);
-        }
-        @media (min-width: 720px) {
-          .sl-mod { grid-template-columns: 200px 1fr; gap: 24px; align-items: baseline; }
         }
         .sl-mod h3 {
           margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
         }
-        .sl-mod p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+        .sl-mod p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
-        .sl-steps {
-          display: grid; gap: 18px;
-        }
-        @media (min-width: 800px) {
-          .sl-steps { grid-template-columns: repeat(3, 1fr); gap: 28px; }
+        .sl-steps { display: grid; gap: 16px; }
+        .sl-step {
+          padding: 16px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: rgba(255,255,255,0.02);
         }
         .sl-step-n {
-          font-family: 'DM Mono', monospace; font-size: 12px;
-          letter-spacing: 0.14em; color: var(--accent); margin-bottom: 10px;
+          font-family: 'DM Mono', monospace; font-size: 11px;
+          letter-spacing: 0.14em; color: var(--accent); margin-bottom: 8px;
         }
-        .sl-step h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: -0.02em; }
+        .sl-step h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -0.02em; }
         .sl-step p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
         .sl-faq details {
-          border-bottom: 1px solid var(--line); padding: 16px 0;
+          border-bottom: 1px solid var(--line);
+          padding: 14px 0;
         }
         .sl-faq summary {
-          cursor: pointer; font-weight: 600; letter-spacing: -0.015em; list-style: none;
+          cursor: pointer;
+          font-weight: 600;
+          letter-spacing: -0.015em;
+          list-style: none;
+          font-size: 15px;
+          line-height: 1.35;
+          padding-right: 28px;
+          position: relative;
         }
+        .sl-faq summary::after {
+          content: '+';
+          position: absolute;
+          right: 0;
+          top: 0;
+          color: var(--dim);
+          font-weight: 500;
+        }
+        .sl-faq details[open] summary::after { content: '–'; }
         .sl-faq summary::-webkit-details-marker { display: none; }
         .sl-faq p { margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 
         .sl-bottom-cta {
-          margin-top: 8px; padding: 28px 0 8px;
-          display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+          margin-top: 8px;
+          padding: 22px 0 0;
+          display: grid;
+          gap: 14px;
         }
-        .sl-bottom-cta p { margin: 0; color: var(--muted); max-width: 36ch; line-height: 1.45; }
+        .sl-bottom-cta p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 14px; }
 
         .sl-pwa-card {
-          margin-top: 8px;
-          padding: 22px 20px;
+          margin-top: 4px;
+          padding: 18px 16px;
           border: 1px solid var(--line);
           border-radius: 16px;
           background: linear-gradient(135deg, rgba(232,168,124,0.1), transparent 55%), var(--panel);
           display: grid;
           gap: 14px;
         }
-        @media (min-width: 720px) {
-          .sl-pwa-card {
-            grid-template-columns: 1fr auto;
-            align-items: center;
-            gap: 24px;
-          }
-        }
-        .sl-pwa-card h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.03em; }
-        .sl-pwa-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 52ch; }
+        .sl-pwa-card h2 { margin: 0 0 6px; font-size: 20px; letter-spacing: -0.03em; }
+        .sl-pwa-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
         .sl-pwa-card .sl-pwa-install {
-          display: inline-flex; align-items: center; gap: 8px;
-          border: 0; border-radius: 999px; padding: 11px 16px;
-          background: var(--ink); color: var(--bg); font-weight: 700; font-size: 13px;
-          cursor: pointer; font-family: inherit; white-space: nowrap;
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; min-height: 48px;
+          border: 0; border-radius: 999px; padding: 12px 16px;
+          background: var(--ink); color: var(--bg); font-weight: 700; font-size: 14px;
+          cursor: pointer; font-family: inherit;
         }
         .sl-pwa-card .sl-pwa-install:hover { opacity: 0.92; }
         .sl-pwa-badge {
@@ -371,20 +440,93 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         }
 
         .sl-foot {
-          border-top: 1px solid var(--line); padding: 28px 0 48px;
-          display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between;
-          color: var(--dim); font-size: 13px;
+          border-top: 1px solid var(--line);
+          padding: 24px 0 calc(32px + env(safe-area-inset-bottom, 0px));
+          display: grid;
+          gap: 16px;
+          color: var(--dim);
+          font-size: 13px;
+        }
+        .sl-foot-links {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px 14px;
         }
         .sl-foot a { color: var(--muted); text-decoration: none; }
         .sl-foot a:hover { color: var(--ink); }
+
+        @media (min-width: 640px) {
+          .sl-wrap { padding: 0 24px; }
+          .sl-nav {
+            margin: 0 -24px;
+            padding: 16px 24px;
+          }
+          .sl-logo { font-size: 24px; }
+          .sl-btn { padding: 10px 18px; font-size: 14px; }
+          .sl-hero { padding: 40px 0 48px; gap: 28px; }
+          .sl-hero h1 { font-size: clamp(44px, 7vw, 64px); }
+          .sl-brand-line { font-size: clamp(26px, 4vw, 36px); }
+          .sl-hero-lead { font-size: 16px; }
+          .sl-cta {
+            grid-template-columns: auto auto;
+            justify-content: start;
+          }
+          .sl-cta .sl-btn { width: auto; min-width: 160px; }
+          .sl-note-secondary { display: block; }
+          .sl-preview { min-height: 260px; border-radius: 18px; }
+          .sl-lane { height: 36px; }
+          .sl-section { padding: 48px 0; }
+          .sl-steps { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+          .sl-bottom-cta {
+            grid-template-columns: 1fr auto;
+            align-items: center;
+          }
+          .sl-pwa-card {
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 24px;
+            padding: 22px 20px;
+          }
+          .sl-pwa-card .sl-pwa-install { width: auto; }
+          .sl-foot {
+            grid-template-columns: auto 1fr;
+            align-items: start;
+            justify-content: space-between;
+          }
+          .sl-foot-links { justify-content: flex-end; }
+        }
+
+        @media (min-width: 900px) {
+          .sl-wrap { padding: 0 40px; }
+          .sl-nav {
+            margin: 0 -40px;
+            padding: 18px 40px;
+          }
+          .sl-hero {
+            grid-template-columns: 1.05fr 0.95fr;
+            align-items: end;
+            gap: 40px;
+            padding: 56px 0 64px;
+          }
+          .sl-hero h1 { font-size: clamp(52px, 6vw, 72px); }
+          .sl-brand-line { font-size: clamp(30px, 3.5vw, 44px); }
+          .sl-mod {
+            grid-template-columns: 200px 1fr;
+            gap: 24px;
+            align-items: baseline;
+            padding: 22px 0;
+          }
+          .sl-mod p { font-size: 15px; }
+          .sl-section-lead { font-size: 16px; margin-bottom: 28px; }
+        }
       `}</style>
 
       <div className="sl-wrap">
         <nav className="sl-nav" aria-label="Главная навигация">
           <Link to="/" className="sl-logo">SoundLab</Link>
           <div className="sl-nav-actions">
-            <Link to="/login" className="sl-btn">Войти</Link>
-            <Link to="/register" className="sl-btn sl-btn-primary">Зарегистрироваться</Link>
+            <Link to="/login" className="sl-btn sl-btn-nav-ghost">Войти</Link>
+            <Link to="/register" className="sl-btn sl-btn-primary">Регистрация</Link>
           </div>
         </nav>
 
@@ -401,10 +543,10 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
               <Link to="/login" className="sl-btn">Войти</Link>
             </div>
             <p className="sl-note">
-              Есть PWA: установите SoundLab на компьютер или телефон — ярлык на рабочем столе, как обычное приложение.
+              Студия открывается после входа. Можно установить как приложение на телефон или ПК.
             </p>
-            <p className="sl-note" style={{ marginTop: 8 }}>
-              Это превью проекта. Студия, лента и остальные разделы доступны только авторизованным пользователям.
+            <p className="sl-note sl-note-secondary">
+              Это превью проекта. MIDI, лента и остальные разделы — только для авторизованных пользователей.
             </p>
           </div>
 
@@ -422,7 +564,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
               <div className="sl-lane" />
             </div>
             <div className="sl-preview-lock">
-              <strong>Студия закрыта без входа.</strong> Зарегистрируйтесь или войдите, чтобы открыть MIDI, запись и проекты.
+              <strong>Студия закрыта без входа.</strong> Зарегистрируйтесь, чтобы открыть MIDI, запись и проекты.
             </div>
           </div>
         </header>
@@ -458,7 +600,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
             ))}
           </div>
           <div className="sl-bottom-cta">
-            <p>Готовы начать? Создайте аккаунт или войдите — формы откроются сразу.</p>
+            <p>Готовы начать? Создайте аккаунт или войдите.</p>
             <div className="sl-cta" style={{ marginTop: 0 }}>
               <Link to="/register" className="sl-btn sl-btn-primary">Зарегистрироваться</Link>
               <Link to="/login" className="sl-btn">Войти</Link>
@@ -493,8 +635,8 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         </section>
 
         <footer className="sl-foot">
-          <div>В© {new Date().getFullYear()} SoundLab В· soundlab-studio.ru</div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <div>© {new Date().getFullYear()} SoundLab · soundlab-studio.ru</div>
+          <div className="sl-foot-links">
             <Link to="/">SoundLab</Link>
             <Link to="/offer">Оферта</Link>
             <Link to="/privacy">Конфиденциальность</Link>
