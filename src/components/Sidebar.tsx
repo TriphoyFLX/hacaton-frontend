@@ -535,6 +535,13 @@ const IconShield = () => (
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
 );
+/** Тарифы — отдельная иконка, чтобы не путать с админкой (щит). */
+const IconTariff = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+    <line x1="1" y1="10" x2="23" y2="10" />
+  </svg>
+);
 const IconChevron = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
     <polyline points="6 9 12 15 18 9" />
@@ -627,7 +634,7 @@ export default function Sidebar() {
         <hr className="sb-divider" />
 
         <NavLink to="/pricing" className={linkClass}>
-          <span className="sb-item-icon"><IconShield /></span>
+          <span className="sb-item-icon"><IconTariff /></span>
           <span className="sb-item-label">Тарифы</span>
         </NavLink>
 
@@ -686,6 +693,9 @@ export default function Sidebar() {
               </NavLink>
               <NavLink to="/ai" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
                 <IconAI />AI генерация
+              </NavLink>
+              <NavLink to="/pricing" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <IconTariff />Тарифы
               </NavLink>
               <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
                 <IconUser />Профиль
