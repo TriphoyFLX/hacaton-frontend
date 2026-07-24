@@ -19,8 +19,8 @@ ${FONT_IMPORT}
   --border-hover: #2e2e2e;
   --text-primary: #f0ede8;
   --text-secondary: #c5c0b8;
-  --text-muted: #5a5a5a;
-  --text-faint: #2e2e2e;
+  --text-muted: #85817a;
+  --text-faint: #6f6b65;
   --accent: #f0ede8;
   font-family: 'Syne', sans-serif;
 }
@@ -74,7 +74,7 @@ ${FONT_IMPORT}
 }
 .sb-logo-tag {
   font-family: 'DM Mono', monospace;
-  font-size: 8.5px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -91,7 +91,7 @@ ${FONT_IMPORT}
 
 .sb-section-label {
   font-family: 'DM Mono', monospace;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -175,7 +175,7 @@ ${FONT_IMPORT}
 
 .sb-badge {
   font-family: 'DM Mono', monospace;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   padding: 2px 6px;
   border-radius: 4px;
@@ -184,7 +184,7 @@ ${FONT_IMPORT}
 .sb-badge-new {
   background: var(--accent);
   color: var(--bg);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   padding: 2px 5px;
   border-radius: 3px;
@@ -193,7 +193,7 @@ ${FONT_IMPORT}
 .sb-badge-hot {
   background: linear-gradient(135deg, #ff6b6b, #ff4444);
   color: white;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   padding: 2px 5px;
   border-radius: 3px;
@@ -310,9 +310,10 @@ ${FONT_IMPORT}
 }
 .sb-plan {
   font-family: 'DM Mono', monospace;
-  font-size: 9px;
-  color: var(--text-faint);
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 .sb-chevron {
@@ -417,7 +418,7 @@ ${FONT_IMPORT}
 
   .sb-mobile-label {
     font-family: 'DM Mono', monospace;
-    font-size: 8px;
+    font-size: 10px;
     letter-spacing: 0.02em;
   }
 

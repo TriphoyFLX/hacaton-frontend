@@ -89,8 +89,8 @@ const css = `
 }
 .brc-mark {
   font-family: 'DM Mono', 'IBM Plex Mono', monospace;
-  font-size: 9px;
-  color: var(--text-muted, #3a3a3a);
+  font-size: 11px;
+  color: var(--text-muted, #77736d);
   letter-spacing: 0.02em;
 }
 .brc-mark.active { color: var(--text-secondary, #6b6b6b); }

@@ -19,8 +19,8 @@ ${FONT_IMPORT}
   --border-mid: #2e2e2e;
   --border-hover: #3d3d3d;
   --text-primary: #f0ede8;
-  --text-secondary: #6b6b6b;
-  --text-muted: #3a3a3a;
+  --text-secondary: #aaa59d;
+  --text-muted: #7f7a73;
   --accent: #e8e4dc;
   --accent-dim: #c5c0b8;
   --red: #c0392b;
@@ -220,7 +220,7 @@ ${FONT_IMPORT}
 }
 .form-label {
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -245,13 +245,24 @@ ${FONT_IMPORT}
 .form-textarea::placeholder {
   color: var(--text-muted);
 }
+.form-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.form-hint {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
 .form-textarea {
   resize: vertical;
   min-height: 80px;
 }
 .form-error {
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--red);
   letter-spacing: 0.02em;
 }
@@ -365,7 +376,7 @@ ${FONT_IMPORT}
 }
 .section-heading {
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -554,7 +565,7 @@ const IconLink = () => (
 );
 
 export default function Profile() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -563,6 +574,7 @@ export default function Profile() {
   const [errors, setErrors] = useState<ValidationError[]>([]);
   
   // Form state
+  const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -576,6 +588,7 @@ export default function Profile() {
       try {
         const data = await profileApi.getMyProfile();
         setProfile(data);
+        setUsername(data.username);
         setDisplayName(data.displayName || '');
         setBio(data.bio || '');
         setAvatar(data.avatar || null);
@@ -668,12 +681,19 @@ export default function Profile() {
 
     try {
       const result = await profileApi.updateProfile({
+        username: username.trim(),
         displayName: displayName.trim() || undefined,
         bio: bio.trim() || undefined,
       });
 
       if (result.success && result.user) {
         setProfile(result.user);
+        setUsername(result.user.username);
+        updateUser({
+          username: result.user.username,
+          displayName: result.user.displayName,
+          avatar: result.user.avatar,
+        });
         setSaveStatus('success');
         setIsEditing(false);
       } else {
@@ -693,6 +713,7 @@ export default function Profile() {
     setErrors([]);
     // Reset to current values
     if (profile) {
+      setUsername(profile.username);
       setDisplayName(profile.displayName || '');
       setBio(profile.bio || '');
     }
@@ -731,6 +752,11 @@ export default function Profile() {
   const joinDate = profile.createdAt
     ? new Date(profile.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
     : '—';
+  const usernameChangeAvailableAt = profile.usernameChangeAvailableAt
+    ? new Date(profile.usernameChangeAvailableAt)
+    : null;
+  const canChangeUsername = !usernameChangeAvailableAt
+    || usernameChangeAvailableAt.getTime() <= Date.now();
 
   return (
     <div className="profile-root">
@@ -798,6 +824,30 @@ export default function Profile() {
         {/* Edit Form */}
         {isEditing && (
           <div className="edit-form">
+            <div className="form-group">
+              <label className="form-label">Юзернейм</label>
+              <input
+                type="text"
+                className="form-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="username"
+                minLength={3}
+                maxLength={30}
+                disabled={!canChangeUsername}
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+              <span className="form-hint">
+                {canChangeUsername
+                  ? 'Можно менять один раз в 30 дней · латиница, цифры и _'
+                  : `Следующая смена доступна ${usernameChangeAvailableAt!.toLocaleDateString('ru-RU')}`}
+              </span>
+              {getFieldError('username') && (
+                <span className="form-error">{getFieldError('username')}</span>
+              )}
+            </div>
+
             <div className="form-group">
               <label className="form-label">Имя</label>
               <input

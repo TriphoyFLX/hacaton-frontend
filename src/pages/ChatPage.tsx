@@ -124,7 +124,7 @@ ${FONT_IMPORT}
 }
 .message-time {
   font-family: 'DM Mono', monospace;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.04em;
 }
 .message-status {
@@ -137,7 +137,7 @@ ${FONT_IMPORT}
   stroke-width: 2;
 }
 .message-bubble.own .message-time {
-  color: rgba(11, 11, 11, 0.5);
+  color: rgba(11, 11, 11, 0.68);
 }
 .message-bubble.own .message-status {
   color: rgba(11, 11, 11, 0.5);
@@ -146,7 +146,7 @@ ${FONT_IMPORT}
   color: #2980b9;
 }
 .message-bubble.other .message-time {
-  color: var(--text-muted);
+  color: #8f8a83;
 }
 
 /* ── TYPING INDICATOR ── */

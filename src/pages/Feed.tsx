@@ -848,8 +848,8 @@ ${FONT_IMPORT}
 .post-share-chat { display: block; width: 100%; margin: 6px 0; padding: 11px; cursor: pointer; color: var(--text-primary); text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px 'Syne', sans-serif; }
 .post-share-chat:hover { border-color: var(--border-hover); background: var(--bg-hover); }.post-share-close { float: right; background: transparent; color: var(--text-secondary); border: 0; cursor: pointer; }
 .cp-hashtag-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
-.cp-hashtag-hint { color: var(--text-muted); font: 10px 'DM Mono', monospace; }
-.cp-hashtag-add { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; background: transparent; color: var(--text-secondary); cursor: pointer; font: 10px 'DM Mono', monospace; }
+.cp-hashtag-hint { color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
+.cp-hashtag-add { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; background: transparent; color: var(--text-secondary); cursor: pointer; font: 11px 'DM Mono', monospace; }
 .cp-hashtag-add:hover { border-color: var(--border-hover); color: var(--text-primary); }
 .feed-tag-filter { position: relative; z-index: 10; display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 16px; padding: 7px 10px; border: 1px solid var(--border-mid); border-radius: 7px; color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
 .feed-tag-filter button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }

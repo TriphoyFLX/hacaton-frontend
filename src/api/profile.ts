@@ -7,6 +7,7 @@ export interface UserProfile {
   displayName?: string | null;
   avatar?: string | null;
   bio?: string | null;
+  usernameChangeAvailableAt?: string | null;
   birthDate?: string;
   role?: string;
   createdAt: string;
@@ -32,6 +33,7 @@ export interface UserProfile {
 }
 
 export interface UpdateProfileData {
+  username?: string;
   displayName?: string;
   bio?: string;
 }

@@ -55,8 +55,8 @@ ${FONT_IMPORT}
   --border-mid: #2e2e2e;
   --border-hover: #3d3d3d;
   --text-primary: #f0ede8;
-  --text-secondary: #6b6b6b;
-  --text-muted: #3a3a3a;
+  --text-secondary: #aaa59d;
+  --text-muted: #7f7a73;
   --accent: #e8e4dc;
   --accent-dim: #c5c0b8;
   --red: #c0392b;
@@ -228,6 +228,12 @@ ${FONT_IMPORT}
   color: var(--text-secondary);
   line-height: 1.6;
 }
+.desc-meta {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  opacity: 1;
+}
 
 /* ── FORM CARD ── */
 .form-card {
@@ -244,7 +250,7 @@ ${FONT_IMPORT}
 }
 .section-heading {
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1304,7 +1310,7 @@ export default function AI() {
             Генерируйте уникальные музыкальные композиции с помощью Suno AI.
             Опишите стиль и добавьте текст песни при необходимости.
           </p>
-          <p className="desc-text" style={{ marginTop: 8, opacity: 0.75 }}>
+          <p className="desc-text desc-meta">
             Тариф: {billing?.plan ?? '…'} · токены: {billing?.tokenBalance ?? '…'}
             {' '}({billing?.generationsAvailable ?? 0} ген.) ·{' '}
             <Link to="/pricing" style={{ color: '#e8a87c' }}>купить / апгрейд</Link>

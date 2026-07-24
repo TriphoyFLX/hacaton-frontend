@@ -31,6 +31,7 @@ interface AuthState {
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
   setSession: (user: User, token: string) => void;
+  updateUser: (data: Partial<User>) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
@@ -57,6 +58,12 @@ export const useAuthStore = create<AuthState>()(
       setSession: (user, token) => {
         syncAuthStorage(user, token);
         set({ user, token });
+      },
+
+      updateUser: (data) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, ...data } : null,
+        }));
       },
 
       login: async (email: string, password: string) => {
