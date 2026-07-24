@@ -3,10 +3,11 @@ import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
   Download, Upload, Repeat, Sliders, Activity, Volume2,
   MoreVertical, X, Check, Save, Headphones, Waves, Settings,
-  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff, Pencil, Library
+  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff, Pencil, Library, Share2
 } from 'lucide-react';
 import DesktopOnlyGate from '../components/DesktopOnlyGate';
 import DrumLibraryModal from '../components/DrumLibraryModal';
+import PublishBeatModal from '../components/PublishBeatModal';
 import { getAuthUserId } from '../lib/authToken';
 import { midiProjectsApi, type MidiProjectSummary } from '../api/midiProjects';
 import {
@@ -21,7 +22,13 @@ import {
   isVocalPresetAllowed,
 } from '../lib/vocalFx';
 import { useBilling } from '../hooks/useBilling';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { postsApi } from '../api/posts';
+import {
+  BEAT_POST_TAG,
+  mediaRecorderBlobToWavFile,
+  pickRecorderMime,
+} from '../lib/audioExport';
 
 // ================= TYPES =================
 interface Note {
@@ -1368,6 +1375,7 @@ function projectForStorage(project: MIDIProject): Record<string, unknown> {
 
 // ================= ГЛАВНЫЙ КОМПОНЕНТ =================
 function MIDISequencer() {
+  const navigate = useNavigate();
   const { billing } = useBilling();
   const vocalPresetsUnlocked = Boolean(billing?.vocalPresets);
   const [project, setProject] = useState<MIDIProject | null>(null);
@@ -1388,6 +1396,10 @@ function MIDISequencer() {
   const [quantizeGrid, setQuantizeGrid] = useState(0.5); // 8 cells per bar (1/8 note)
   const [eqPanelOpen, setEqPanelOpen] = useState(false);
   const [drumLibraryOpen, setDrumLibraryOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishProgress, setPublishProgress] = useState('');
+  const [publishError, setPublishError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [vocalPanelClipId, setVocalPanelClipId] = useState<string | null>(null);
   const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
@@ -1422,6 +1434,11 @@ function MIDISequencer() {
   const clipClipboardRef = useRef<PlaylistClip[]>([]);
   const playheadRef = useRef(0);
   const isPlayingRef = useRef(false);
+  /** When set, playback stops after one full pass (used for publish bounce). */
+  const bounceModeRef = useRef<{
+    onEnd: () => void;
+    mutedSpeakers: boolean;
+  } | null>(null);
   const latestProjectRef = useRef<MIDIProject | null>(null);
   const initialLibraryLoadStartedRef = useRef(false);
 
@@ -2181,6 +2198,23 @@ function MIDISequencer() {
       }
 
       if (nextTime >= currentTimelineLength) {
+        if (bounceModeRef.current) {
+          playheadRef.current = currentTimelineLength;
+          setPlayheadTime(currentTimelineLength);
+          const finish = bounceModeRef.current;
+          bounceModeRef.current = null;
+          if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+          }
+          isPlayingRef.current = false;
+          scheduledNotesRef.current.clear();
+          // Let tails ring briefly before stopping sources
+          window.setTimeout(() => {
+            finish.onEnd();
+          }, 350);
+          return;
+        }
         const loops = Math.floor(nextTime / currentTimelineLength);
         nextTime = nextTime % currentTimelineLength;
         loopCycleRef.current += loops;
@@ -2219,6 +2253,141 @@ function MIDISequencer() {
     getEngine().stopAll();
     setProject(prev => prev ? { ...prev, isPlaying: false } : null);
   }, [getEngine]);
+
+  const bounceProjectToWav = useCallback(async (fileName: string): Promise<File> => {
+    if (!project) throw new Error('Нет активного проекта');
+    const eng = await ensureAudio();
+    await Promise.all([
+      ...project.tracks
+        .filter(t => t.customSample)
+        .map(t => eng.ensureSample(t.customSample!)),
+      ...project.arrangement
+        .filter(c => c.type === 'audio' && c.sampleId)
+        .map(c => eng.ensureSample(c.sampleId!)),
+    ]);
+
+    const timelineBeats = getTimelineLength(project);
+    if (timelineBeats <= 0.25) {
+      throw new Error('Добавьте ноты или клипы, прежде чем публиковать');
+    }
+
+    const mime = pickRecorderMime();
+    if (!mime || typeof MediaRecorder === 'undefined') {
+      throw new Error('Браузер не умеет писать аудио. Попробуйте Chrome / Edge.');
+    }
+
+    const dest = eng.ctx.createMediaStreamDestination();
+    eng.masterGain.connect(dest);
+
+    // Mute speakers during bounce (keep graph into MediaStream)
+    try {
+      eng.analyzer.disconnect();
+    } catch {
+      // ignore
+    }
+
+    const chunks: BlobPart[] = [];
+    const recorder = new MediaRecorder(dest.stream, { mimeType: mime, audioBitsPerSecond: 192000 });
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    const recorded = await new Promise<Blob>((resolve, reject) => {
+      const timeoutMs = Math.min(12 * 60 * 1000, Math.ceil((timelineBeats / (project.bpm / 60)) * 1000) + 8000);
+      const failTimer = window.setTimeout(() => {
+        try { recorder.stop(); } catch { /* */ }
+        reject(new Error('Рендер слишком долгий — сократите аранжировку'));
+      }, timeoutMs);
+
+      recorder.onerror = () => {
+        window.clearTimeout(failTimer);
+        reject(new Error('Ошибка записи аудио'));
+      };
+      recorder.onstop = () => {
+        window.clearTimeout(failTimer);
+        resolve(new Blob(chunks, { type: mime }));
+      };
+
+      bounceModeRef.current = {
+        mutedSpeakers: true,
+        onEnd: () => {
+          try {
+            if (recorder.state === 'recording') recorder.stop();
+          } catch {
+            reject(new Error('Не удалось остановить запись'));
+          }
+        },
+      };
+
+      playheadRef.current = 0;
+      setPlayheadTime(0);
+      // Disable metronome for clean bounce
+      const prevMetronome = project.metronomeEnabled;
+      if (prevMetronome) {
+        latestProjectRef.current = { ...project, metronomeEnabled: false };
+      }
+      try {
+        recorder.start(250);
+        startPlayback();
+      } catch (e) {
+        bounceModeRef.current = null;
+        window.clearTimeout(failTimer);
+        reject(e instanceof Error ? e : new Error('Не удалось начать рендер'));
+      }
+    });
+
+    stopPlayback();
+    try {
+      eng.masterGain.disconnect(dest);
+    } catch {
+      // ignore
+    }
+    try {
+      eng.analyzer.connect(eng.ctx.destination);
+    } catch {
+      // ignore
+    }
+
+    if (recorded.size < 1000) {
+      throw new Error('Пустой рендер — проверьте, что в проекте есть звук');
+    }
+
+    return mediaRecorderBlobToWavFile(recorded, eng.ctx, fileName);
+  }, [project, ensureAudio, getTimelineLength, startPlayback, stopPlayback]);
+
+  const handlePublishBeat = useCallback(async (opts: { title: string; cover: File | null }) => {
+    if (!project || publishBusy) return;
+    setPublishBusy(true);
+    setPublishError('');
+    setPublishProgress('Рендер бита… это займёт длину трека');
+    try {
+      stopPlayback();
+      const audioFile = await bounceProjectToWav(opts.title);
+      setPublishProgress('Загрузка на сервер…');
+      const files: File[] = [];
+      if (opts.cover) files.push(opts.cover);
+      files.push(audioFile);
+      const content = `${opts.title}\n#${BEAT_POST_TAG}`;
+      await postsApi.createPost(content, files);
+      setPublishProgress('Готово');
+      setPublishOpen(false);
+      navigate('/projects');
+    } catch (e: unknown) {
+      console.error(e);
+      setPublishError(e instanceof Error ? e.message : 'Не удалось опубликовать');
+    } finally {
+      setPublishBusy(false);
+      setPublishProgress('');
+      // Restore speakers if bounce failed mid-way
+      try {
+        const eng = getEngine();
+        eng.analyzer.disconnect();
+        eng.analyzer.connect(eng.ctx.destination);
+      } catch {
+        // ignore
+      }
+    }
+  }, [project, publishBusy, bounceProjectToWav, stopPlayback, navigate, getEngine]);
 
   const returnToProjects = useCallback(async () => {
     stopPlayback();
@@ -3797,6 +3966,18 @@ function MIDISequencer() {
           >
             <Save size={13} /> Save
           </button>
+          <button
+            type="button"
+            className="st-chip on"
+            onClick={() => {
+              setPublishError('');
+              setPublishOpen(true);
+            }}
+            disabled={publishBusy}
+            title="Рендер и публикация на Projects"
+          >
+            <Share2 size={13} /> Опубликовать
+          </button>
           <span
             className="st-save-dot"
             title={saveStatus === 'error' ? 'Ошибка сохранения' : saveStatus === 'saving' ? 'Сохранение…' : 'Сохранено'}
@@ -5088,6 +5269,17 @@ function MIDISequencer() {
         onPick={async (_sample, file) => {
           await importAudioFile(file, { allowLocalFallback: true });
         }}
+      />
+      <PublishBeatModal
+        open={publishOpen}
+        projectName={project.name}
+        busy={publishBusy}
+        progress={publishProgress}
+        error={publishError}
+        onClose={() => {
+          if (!publishBusy) setPublishOpen(false);
+        }}
+        onPublish={handlePublishBeat}
       />
     </div>
   );

@@ -1,854 +1,403 @@
-import { useState, useEffect, forwardRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Folder, Plus, Music, Film, Image, Play, Clock, Users, Headphones, Download } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Heart,
+  MessageCircle,
+  Music2,
+  RefreshCw,
+  Send,
+  Trash2,
+} from 'lucide-react';
+import { API_ORIGIN } from '../api/client';
+import { postsApi, type Post, type PostComment } from '../api/posts';
+import { BEAT_POST_TAG } from '../lib/audioExport';
+import { useAuthStore } from '../store/authStore';
+import AdminBadge from '../components/AdminBadge';
 
-// ── Styles ──
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');`;
-
-const css = `
-${FONT_IMPORT}
-
-.projects-root {
-  --bg: #0b0b0b;
-  --bg-surface: #111111;
-  --bg-elevated: #181818;
-  --border: #232323;
-  --border-mid: #2e2e2e;
-  --border-hover: #3d3d3d;
-  --text-primary: #f0ede8;
-  --text-secondary: #6b6b6b;
-  --text-muted: #3a3a3a;
-  --accent: #e8e4dc;
-  --accent-dim: #c5c0b8;
-  --red: #c0392b;
-  --red-dim: #1a0f0f;
-  font-family: 'Syne', sans-serif;
-  background: var(--bg);
-  min-height: 100vh;
-  color: var(--text-primary);
+function mediaUrl(url: string) {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return `${API_ORIGIN}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
-.projects-wrapper {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 48px 28px 80px;
+function beatTitle(content: string) {
+  const line = content.split('\n').map((s) => s.trim()).find(Boolean) || 'Untitled beat';
+  return line.replace(new RegExp(`#${BEAT_POST_TAG}\\b`, 'ig'), '').trim() || 'Untitled beat';
 }
 
-/* ── AMBIENT ── */
-.projects-ambient {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-.ambient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.12;
-  animation: orb-float 24s ease-in-out infinite;
-}
-.ambient-orb-1 {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(232, 228, 220, 0.12) 0%, transparent 70%);
-  top: -200px;
-  left: -100px;
-  animation-delay: 0s;
-}
-.ambient-orb-2 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(197, 192, 184, 0.1) 0%, transparent 70%);
-  bottom: -150px;
-  right: -100px;
-  animation-delay: -8s;
-}
-@keyframes orb-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -40px) scale(1.06); }
-  66% { transform: translate(-20px, 25px) scale(0.94); }
-}
-.projects-noise {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px;
-}
-.projects-grid-bg {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.012;
-  background-image: 
-    linear-gradient(rgba(232, 228, 220, 0.2) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232, 228, 220, 0.2) 1px, transparent 1px);
-  background-size: 64px 64px;
+function pickCover(post: Post) {
+  return post.media?.find((m) => m.type === 'IMAGE') || null;
 }
 
-/* ── TOP BAR ── */
-.projects-topbar {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border);
-}
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.brand-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--bg);
-}
-.brand-mark svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 1.5;
-}
-.brand-text {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.03em;
-}
-.project-count {
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
+function pickAudio(post: Post) {
+  return post.media?.find((m) => m.type === 'AUDIO') || null;
 }
 
-/* ── CREATE BUTTON ── */
-.create-btn {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 14px 20px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  color: var(--text-secondary);
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.15s;
-  margin-bottom: 16px;
-}
-.create-btn:hover {
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-  background: var(--bg-elevated);
-}
-.create-btn svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 1.5;
-}
-
-/* ── LOOPERA BUTTON ── */
-.loopera-btn {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 14px 20px;
-  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
-  border: none;
-  border-radius: 14px;
-  color: #ffffff;
-  font-family: 'DM Mono', monospace;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 28px;
-  text-decoration: none;
-  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
-}
-.loopera-btn:hover {
-  background: linear-gradient(135deg, #FF8E53, #FF6B6B);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
-}
-.loopera-btn:active {
-  transform: translateY(0);
-}
-.loopera-btn svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 2;
-}
-
-/* ── TABS ── */
-.projects-tabs {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  gap: 2px;
-  margin-bottom: 28px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  width: fit-content;
-}
-.projects-tab {
-  padding: 8px 20px;
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.projects-tab:hover {
-  color: var(--text-primary);
-}
-.projects-tab.active {
-  color: var(--text-primary);
-  background: var(--bg-surface);
-}
-.projects-tab + .projects-tab {
-  border-left: 1px solid var(--border);
-}
-
-/* ── PROJECT GRID ── */
-.projects-grid {
-  position: relative;
-  z-index: 10;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-/* ── PROJECT CARD ── */
-.project-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.project-card:hover {
-  border-color: var(--border-mid);
-  background: var(--bg-elevated);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-.project-card-preview {
-  height: 140px;
-  background: var(--bg-elevated);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid var(--border);
-  position: relative;
-  overflow: hidden;
-}
-.project-card-icon {
-  opacity: 0.3;
-  color: var(--text-muted);
-}
-.project-card-icon svg {
-  width: 40px;
-  height: 40px;
-  stroke-width: 1;
-}
-.project-card-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.project-card:hover .project-card-overlay {
-  opacity: 1;
-}
-.play-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--bg);
-}
-.play-btn svg {
-  width: 18px;
-  height: 18px;
-  fill: var(--bg);
-  margin-left: 2px;
-}
-.project-card-body {
-  padding: 14px 16px;
-}
-.project-card-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.project-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.project-card-type {
-  font-family: 'DM Mono', monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.project-card-date {
-  font-family: 'DM Mono', monospace;
-  font-size: 9.5px;
-  color: var(--text-muted);
-}
-.project-card-stats {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-.project-stat {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-family: 'DM Mono', monospace;
-  font-size: 9.5px;
-  color: var(--text-muted);
-}
-.project-stat svg {
-  width: 12px;
-  height: 12px;
-}
-
-/* ── EMPTY STATE ── */
-.empty-state {
-  position: relative;
-  z-index: 10;
-  text-align: center;
-  padding: 80px 24px;
-  border: 1px dashed var(--border-mid);
-  border-radius: 14px;
-}
-.empty-icon {
-  font-size: 40px;
-  margin-bottom: 16px;
-  opacity: 0.35;
-  color: var(--text-muted);
-}
-.empty-title {
-  font-family: 'DM Mono', monospace;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-.empty-hint {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-/* ── RESPONSIVE ── */
-@media (max-width: 600px) {
-  .projects-grid {
-    grid-template-columns: 1fr;
-  }
-}
-`;
-
-// ── Types ──
-interface GeneratedTrack {
-  id: string | number;
-  title: string;
-  audioUrl: string;
-  tags?: string;
-  createdAt?: string;
-  images?: string[];
-  originalId?: string | number;
-  variantIndex?: number;
-}
-
-interface Project {
-  id: string;
-  title: string;
-  type: 'music' | 'video' | 'image';
-  tracksCount?: number;
-  clipsCount?: number;
-  imagesCount?: number;
-  collaboratorsCount?: number;
-  updatedAt: string;
-}
-
-// ── Mock Data ──
-const MOCK_PROJECTS: Project[] = [
-  
-];
-
-// ── Utils ──
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (days < 1) return 'сегодня';
-  if (days < 7) return `${days}д`;
-  if (days < 30) return `${Math.floor(days / 7)}нед`;
-  return `${Math.floor(days / 30)}мес`;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'только что';
+  if (mins < 60) return `${mins} мин`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} ч`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} д`;
+  return new Date(dateStr).toLocaleDateString('ru-RU');
 }
 
-// ── Icons ──
-const IconFolder = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-  </svg>
-);
-
-// ── Project Card ──
-const ProjectCard = forwardRef<HTMLDivElement, { 
-  project: Project & { audioUrl?: string; tags?: string; images?: string[]; originalId?: string | number; variantIndex?: number }; 
-  index: number 
-}>(({ project, index }, ref) => {
-  const navigate = useNavigate();
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'music': return <Music size={40} />;
-      case 'video': return <Film size={40} />;
-      case 'image': return <Image size={40} />;
-      default: return <Folder size={40} />;
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'music': return 'Музыка';
-      case 'video': return 'Видео';
-      case 'image': return 'Графика';
-      default: return 'Проект';
-    }
-  };
-
-  const getStats = () => {
-    switch (project.type) {
-      case 'music': return project.tracksCount ? `${project.tracksCount} треков` : '';
-      case 'video': return project.clipsCount ? `${project.clipsCount} клипов` : '';
-      case 'image': return project.imagesCount ? `${project.imagesCount} изображений` : '';
-      default: return '';
-    }
-  };
-
-  const handlePlayClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    // Просто переключаем состояние play/pause
-    setIsPlaying(!isPlaying);
-  };
-
-  const isGeneratedTrack = project.id.toString().startsWith('generated-');
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
-      className="project-card"
-      onClick={() => !project.audioUrl && navigate(`/projects/${project.id}`)}
-    >
-      <div className="project-card-preview">
-        {isGeneratedTrack && project.images && project.images.length > 0 ? (
-          <>
-            <img 
-              src={project.images[0]} 
-              alt={project.title}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                opacity: 0.7
-              }}
-            />
-            <div className="project-card-icon" style={{ position: 'relative', zIndex: 1 }}>
-              {getTypeIcon(project.type)}
-            </div>
-          </>
-        ) : (
-          <div className="project-card-icon">
-            {getTypeIcon(project.type)}
-          </div>
-        )}
-        <div className="project-card-overlay">
-          {project.audioUrl ? (
-            <div style={{ 
-              position: 'absolute', 
-              bottom: '10px', 
-              right: '10px', 
-              background: 'rgba(0,0,0,0.7)', 
-              padding: '4px 8px', 
-              borderRadius: '4px',
-              fontSize: '10px',
-              color: 'white'
-            }}>
-              🎵
-            </div>
-          ) : (
-            <div className="play-btn" onClick={handlePlayClick}>
-              <Play size={18} />
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="project-card-body">
-        <div className="project-card-title">
-          {project.title}
-          {isGeneratedTrack && (
-            <>
-              <span style={{ 
-                marginLeft: '8px', 
-                fontSize: '10px', 
-                color: 'var(--accent)', 
-                background: 'var(--accent-dim)', 
-                padding: '2px 6px', 
-                borderRadius: '4px' 
-              }}>
-                AI
-              </span>
-              {project.variantIndex !== undefined && (
-                <span style={{ 
-                  marginLeft: '4px', 
-                  fontSize: '9px', 
-                  color: '#ffffff', 
-                  background: '#FF6B6B', 
-                  padding: '2px 5px', 
-                  borderRadius: '3px',
-                  fontWeight: 'bold'
-                }}>
-                  {project.variantIndex + 1}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-        <div className="project-card-meta">
-          <span className="project-card-type">{getTypeLabel(project.type)}</span>
-          <span style={{ color: 'var(--border-mid)' }}>·</span>
-          <span className="project-card-date">{timeAgo(project.updatedAt)}</span>
-        </div>
-        {project.tags && (
-          <div style={{ 
-            fontSize: '11px', 
-            color: 'var(--text-secondary)', 
-            margin: '6px 0', 
-            lineHeight: '1.3',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden'
-          }}>
-            {project.tags}
-          </div>
-        )}
-        {project.audioUrl && (
-          <div style={{ marginTop: '8px' }}>
-            {/* HTML Audio элемент как в AI странице */}
-            <audio 
-              controls 
-              style={{ 
-                width: '100%', 
-                height: '32px', 
-                marginBottom: '8px',
-                borderRadius: '4px'
-              }}
-            >
-              <source src={project.audioUrl} type="audio/mpeg" />
-            </audio>
-            
-            <a 
-              href={project.audioUrl} 
-              download 
-              style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                gap: '6px', 
-                fontSize: '11px', 
-                color: 'var(--accent)', 
-                textDecoration: 'none',
-                padding: '4px 8px',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                backgroundColor: 'var(--bg-surface)',
-                transition: 'all 0.2s'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--bg-elevated)';
-                e.currentTarget.style.borderColor = 'var(--border-hover)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
-                e.currentTarget.style.borderColor = 'var(--border)';
-              }}
-            >
-              <Download size={12} />
-              Скачать трек
-            </a>
-          </div>
-        )}
-        <div className="project-card-stats">
-          <span className="project-stat">
-            <Clock size={12} />
-            {getStats()}
-          </span>
-          {project.collaboratorsCount && (
-            <span className="project-stat">
-              <Users size={12} />
-              {project.collaboratorsCount}
-            </span>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-});
-
-// ── Main ──
 export default function Projects() {
-  const [activeTab, setActiveTab] = useState<'all' | 'music' | 'video' | 'image'>('all');
-  const [projects] = useState<Project[]>(MOCK_PROJECTS);
-  const [generatedTracks, setGeneratedTracks] = useState<GeneratedTrack[]>([]);
+  const user = useAuthStore((s) => s.user);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [comments, setComments] = useState<Record<string, PostComment[]>>({});
+  const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Загрузка сгенерированных треков из localStorage
-  useEffect(() => {
-    const loadGeneratedTracks = () => {
-      try {
-        const allTracks: any[] = [];
-        
-        // Загружаем все треки из project-tracks (новый формат)
-        const projectTracks = localStorage.getItem('project-tracks');
-        if (projectTracks) {
-          const tracks = JSON.parse(projectTracks);
-          allTracks.push(...tracks);
-        }
-
-        // Загружаем старый формат для обратной совместимости
-        const projectTrack = localStorage.getItem('project-track');
-        if (projectTrack) {
-          const track = JSON.parse(projectTrack);
-          allTracks.push(track);
-        }
-
-        // Загружаем всю историю генераций
-        const history = localStorage.getItem('ai-generated-tracks');
-        if (history) {
-          const historyTracks = JSON.parse(history);
-          // Добавляем все варианты из истории
-          historyTracks.forEach((item: any) => {
-            if (item.audio_urls && item.audio_urls.length > 0) {
-              item.audio_urls.forEach((audioUrl: string, index: number) => {
-                allTracks.push({
-                  id: `${item.id}-${index}`,
-                  originalId: item.id,
-                  title: `${item.title || 'Сгенерированный трек'} ${index + 1}`,
-                  audioUrl: audioUrl,
-                  tags: item.tags,
-                  createdAt: item.createdAt,
-                  images: item.images || [],
-                  variantIndex: index
-                });
-              });
-            }
-          });
-        }
-        
-        // Убираем дубликаты и устанавливаем состояние
-        const unique = allTracks.filter((track, index, self) => 
-          index === self.findIndex(t => t.id === track.id)
-        );
-        
-        setGeneratedTracks(unique);
-      } catch (error) {
-        console.error('Failed to load generated tracks:', error);
-      }
-    };
-
-    loadGeneratedTracks();
-
-    // Слушаем изменения в localStorage
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'project-track' || e.key === 'project-tracks' || e.key === 'ai-generated-tracks') {
-        loadGeneratedTracks();
-      }
-    };
-
-    // Также слушаем изменения в том же окне (для обновлений внутри той же вкладки)
-    const handleLocalStorageUpdate = () => {
-      loadGeneratedTracks();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('localStorageUpdated', handleLocalStorageUpdate);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('localStorageUpdated', handleLocalStorageUpdate);
-    };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await postsApi.getPosts('latest', BEAT_POST_TAG, { limit: 60, offset: 0 });
+      setPosts(data.items.filter((p) => pickAudio(p)));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить биты');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Создаем проекты из сгенерированных треков
-  const musicProjects = generatedTracks.map((track) => ({
-    id: `generated-${track.id}`,
-    title: track.title,
-    type: 'music' as const,
-    tracksCount: 1,
-    updatedAt: track.createdAt || new Date().toISOString(),
-    audioUrl: track.audioUrl,
-    tags: track.tags,
-    images: track.images || [],
-    originalId: track.originalId,
-    variantIndex: track.variantIndex
-  }));
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const allProjects = [...projects, ...musicProjects];
+  const toggleLike = async (post: Post) => {
+    if (busyId) return;
+    setBusyId(post.id);
+    const prev = post.isLiked;
+    setPosts((list) =>
+      list.map((p) =>
+        p.id === post.id
+          ? { ...p, isLiked: !prev, likes: Math.max(0, p.likes + (prev ? -1 : 1)) }
+          : p,
+      ),
+    );
+    try {
+      const res = prev ? await postsApi.unlikePost(post.id) : await postsApi.likePost(post.id);
+      setPosts((list) =>
+        list.map((p) => (p.id === post.id ? { ...p, isLiked: res.isLiked, likes: res.likes } : p)),
+      );
+    } catch {
+      setPosts((list) =>
+        list.map((p) =>
+          p.id === post.id
+            ? { ...p, isLiked: prev, likes: Math.max(0, p.likes + (prev ? 1 : -1)) }
+            : p,
+        ),
+      );
+    } finally {
+      setBusyId(null);
+    }
+  };
 
-  const filteredProjects = activeTab === 'all' 
-    ? allProjects 
-    : allProjects.filter(p => p.type === activeTab);
+  const openComments = async (postId: string) => {
+    const next = expandedId === postId ? null : postId;
+    setExpandedId(next);
+    if (!next || comments[postId]) return;
+    try {
+      const list = await postsApi.getComments(postId);
+      setComments((c) => ({ ...c, [postId]: list }));
+    } catch {
+      setComments((c) => ({ ...c, [postId]: [] }));
+    }
+  };
+
+  const sendComment = async (postId: string) => {
+    const text = (commentDraft[postId] || '').trim();
+    if (!text || busyId) return;
+    setBusyId(postId);
+    try {
+      const res = await postsApi.createComment(postId, text);
+      setComments((c) => ({ ...c, [postId]: [...(c[postId] || []), res.comment] }));
+      setCommentDraft((d) => ({ ...d, [postId]: '' }));
+      setPosts((list) =>
+        list.map((p) => (p.id === postId ? { ...p, commentsCount: res.commentsCount } : p)),
+      );
+    } catch {
+      // keep draft
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const deletePost = async (post: Post) => {
+    if (!confirm('Удалить этот бит?')) return;
+    try {
+      await postsApi.deletePost(post.id);
+      setPosts((list) => list.filter((p) => p.id !== post.id));
+    } catch {
+      alert('Не удалось удалить');
+    }
+  };
+
+  const empty = useMemo(() => !loading && posts.length === 0, [loading, posts.length]);
 
   return (
-    <div className="projects-root">
-      <style>{css}</style>
-
-      {/* Ambient Background */}
-      <div className="projects-ambient">
-        <div className="ambient-orb ambient-orb-1" />
-        <div className="ambient-orb ambient-orb-2" />
-      </div>
-      <div className="projects-noise" />
-      <div className="projects-grid-bg" />
-
-      <div className="projects-wrapper">
-        {/* Top Bar */}
-        <div className="projects-topbar">
-          <div className="topbar-left">
-            <div className="brand-mark">
-              <IconFolder />
-            </div>
-            <span className="brand-text">Проекты</span>
+    <div style={styles.root}>
+      <div style={styles.wrap}>
+        <header style={styles.head}>
+          <div>
+            <h1 style={styles.h1}>Projects</h1>
+            <p style={styles.sub}>
+              Опубликованные биты из MIDI · лайки и комментарии
+            </p>
           </div>
-          <span className="project-count">
-            {filteredProjects.length} {filteredProjects.length === 1 ? 'проект' : filteredProjects.length < 5 ? 'проекта' : 'проектов'}
-          </span>
-        </div>
-
-        {/* Create Button */}
-        <button className="create-btn">
-          <Plus size={16} />
-          <span>Создать новый проект</span>
-        </button>
-
-        {/* Loopera Button */}
-        <a 
-          href="https://loopera-lpr.vercel.app/auth" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="loopera-btn"
-        >
-          <Headphones size={18} />
-          <span>Loopera</span>
-        </a>
-
-        {/* Tabs */}
-        <div className="projects-tabs">
-          {[
-            { key: 'all', label: 'Все' },
-            { key: 'music', label: 'Музыка' },
-            { key: 'video', label: 'Видео' },
-            { key: 'image', label: 'Графика' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              className={`projects-tab ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-            >
-              {tab.label}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => void load()} style={styles.chip}>
+              <RefreshCw size={14} /> Обновить
             </button>
-          ))}
-        </div>
-
-        {/* Projects Grid */}
-        {filteredProjects.length > 0 ? (
-          <div className="projects-grid">
-            <AnimatePresence mode="popLayout">
-              {filteredProjects.map((project, idx) => (
-                <ProjectCard key={project.id} project={project} index={idx} />
-              ))}
-            </AnimatePresence>
+            <Link to="/midi" style={{ ...styles.chip, ...styles.chipPrimary, textDecoration: 'none' }}>
+              <Music2 size={14} /> Открыть MIDI
+            </Link>
           </div>
-        ) : (
-          /* Empty State */
-          <div className="empty-state">
-            <div className="empty-icon">
-              <Folder size={40} />
-            </div>
-            <div className="empty-title">
-              {activeTab !== 'all' ? 'Нет проектов в этой категории' : 'Нет проектов'}
-            </div>
-            <div className="empty-hint">
-              {activeTab !== 'all' 
-                ? 'Создайте проект в другой категории'
-                : 'Создайте свой первый проект и начните творить'
-              }
-            </div>
+        </header>
+
+        {error && <div style={styles.err}>{error}</div>}
+        {loading && <div style={styles.muted}>Загрузка…</div>}
+        {empty && (
+          <div style={styles.empty}>
+            <Music2 size={28} style={{ opacity: 0.5 }} />
+            <p style={{ margin: '12px 0 4px', fontSize: 18, fontWeight: 600 }}>Пока нет битов</p>
+            <p style={{ margin: 0, color: '#9a948c', fontSize: 14 }}>
+              Соберите трек в MIDI и нажмите «Опубликовать»
+            </p>
+            <Link to="/midi" style={{ ...styles.chip, ...styles.chipPrimary, marginTop: 16, textDecoration: 'none' }}>
+              Создать бит
+            </Link>
           </div>
         )}
+
+        <div style={styles.grid}>
+          {posts.map((post) => {
+            const cover = pickCover(post);
+            const audio = pickAudio(post);
+            const title = beatTitle(post.content);
+            const open = expandedId === post.id;
+            const mine = user?.id === post.authorId;
+            return (
+              <article key={post.id} style={styles.card}>
+                <div style={styles.coverWrap}>
+                  {cover ? (
+                    <img src={mediaUrl(cover.url)} alt="" style={styles.cover} />
+                  ) : (
+                    <div style={styles.coverFallback}>
+                      <Music2 size={36} />
+                    </div>
+                  )}
+                </div>
+                <div style={styles.cardBody}>
+                  <div style={styles.cardTop}>
+                    <div style={{ minWidth: 0 }}>
+                      <h2 style={styles.title}>{title}</h2>
+                      <div style={styles.meta}>
+                        <Link to={`/profile/${post.author.username}`} style={styles.author}>
+                          @{post.author.username}
+                        </Link>
+                        {post.author.role === 'ADMIN' && <AdminBadge />}
+                        <span>· {timeAgo(post.createdAt)}</span>
+                      </div>
+                    </div>
+                    {mine && (
+                      <button type="button" onClick={() => void deletePost(post)} style={styles.iconBtn} title="Удалить">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {audio && (
+                    <audio
+                      controls
+                      preload="none"
+                      src={mediaUrl(audio.url)}
+                      style={{ width: '100%', marginTop: 12, height: 36 }}
+                      onPlay={() => void postsApi.recordView(post.id).catch(() => undefined)}
+                    />
+                  )}
+
+                  <div style={styles.actions}>
+                    <button
+                      type="button"
+                      onClick={() => void toggleLike(post)}
+                      style={{ ...styles.actionBtn, color: post.isLiked ? '#e8a87c' : '#c5c0b8' }}
+                    >
+                      <Heart size={15} fill={post.isLiked ? 'currentColor' : 'none'} />
+                      {post.likes}
+                    </button>
+                    <button type="button" onClick={() => void openComments(post.id)} style={styles.actionBtn}>
+                      <MessageCircle size={15} />
+                      {post.commentsCount}
+                    </button>
+                    <span style={{ ...styles.actionBtn, cursor: 'default' }}>{post.views} просм.</span>
+                  </div>
+
+                  {open && (
+                    <div style={styles.comments}>
+                      {(comments[post.id] || []).map((c) => (
+                        <div key={c.id} style={styles.comment}>
+                          <strong>@{c.author.username}</strong>
+                          <span style={{ color: '#c5c0b8' }}> {c.text}</span>
+                        </div>
+                      ))}
+                      <div style={styles.commentRow}>
+                        <input
+                          value={commentDraft[post.id] || ''}
+                          onChange={(e) =>
+                            setCommentDraft((d) => ({ ...d, [post.id]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') void sendComment(post.id);
+                          }}
+                          placeholder="Комментарий…"
+                          style={styles.commentInput}
+                          maxLength={500}
+                        />
+                        <button type="button" onClick={() => void sendComment(post.id)} style={styles.iconBtn}>
+                          <Send size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  root: {
+    minHeight: '100%',
+    background: 'linear-gradient(180deg, #12100e 0%, #0c0b0a 50%, #0a0908 100%)',
+    color: '#f3efe8',
+    fontFamily: "'Instrument Sans', system-ui, sans-serif",
+  },
+  wrap: { maxWidth: 1100, margin: '0 auto', padding: '28px 20px 72px' },
+  head: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 16,
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    marginBottom: 28,
+  },
+  h1: { margin: 0, fontSize: 'clamp(28px, 4vw, 40px)', letterSpacing: '-0.04em' },
+  sub: { margin: '8px 0 0', color: '#9a948c', fontSize: 14 },
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    height: 36,
+    padding: '0 14px',
+    borderRadius: 999,
+    border: '1px solid rgba(243,239,232,0.14)',
+    background: 'transparent',
+    color: '#f3efe8',
+    fontSize: 13,
+    cursor: 'pointer',
+  },
+  chipPrimary: { background: '#f3efe8', color: '#12100e', borderColor: '#f3efe8' },
+  err: { color: '#ff8a8a', marginBottom: 16, fontSize: 14 },
+  muted: { color: '#9a948c' },
+  empty: {
+    border: '1px solid rgba(243,239,232,0.1)',
+    borderRadius: 16,
+    padding: 40,
+    textAlign: 'center',
+    background: 'rgba(255,255,255,0.02)',
+  },
+  grid: {
+    display: 'grid',
+    gap: 16,
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+  },
+  card: {
+    border: '1px solid rgba(243,239,232,0.1)',
+    borderRadius: 16,
+    overflow: 'hidden',
+    background: '#141210',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  coverWrap: { aspectRatio: '1 / 1', background: '#1a1816' },
+  cover: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
+  coverFallback: {
+    width: '100%',
+    height: '100%',
+    display: 'grid',
+    placeItems: 'center',
+    color: 'rgba(243,239,232,0.25)',
+    background:
+      'radial-gradient(circle at 30% 20%, rgba(232,168,124,0.18), transparent 55%), #1a1816',
+  },
+  cardBody: { padding: 14, display: 'flex', flexDirection: 'column', gap: 4, flex: 1 },
+  cardTop: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' },
+  title: {
+    margin: 0,
+    fontSize: 16,
+    letterSpacing: '-0.02em',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  meta: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, color: '#9a948c', marginTop: 4 },
+  author: { color: '#e8a87c', textDecoration: 'none' },
+  actions: { display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' },
+  actionBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 32,
+    padding: '0 10px',
+    borderRadius: 999,
+    border: '1px solid rgba(243,239,232,0.1)',
+    background: 'transparent',
+    color: '#c5c0b8',
+    fontSize: 12,
+    cursor: 'pointer',
+  },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: '1px solid rgba(243,239,232,0.1)',
+    background: 'transparent',
+    color: '#9a948c',
+    cursor: 'pointer',
+    display: 'grid',
+    placeItems: 'center',
+  },
+  comments: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTop: '1px solid rgba(243,239,232,0.08)',
+    display: 'grid',
+    gap: 8,
+  },
+  comment: { fontSize: 13, lineHeight: 1.4 },
+  commentRow: { display: 'flex', gap: 8 },
+  commentInput: {
+    flex: 1,
+    height: 34,
+    borderRadius: 8,
+    border: '1px solid rgba(243,239,232,0.12)',
+    background: 'rgba(255,255,255,0.03)',
+    color: '#f3efe8',
+    padding: '0 10px',
+    fontSize: 13,
+    outline: 'none',
+  },
+};

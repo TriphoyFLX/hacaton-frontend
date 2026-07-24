@@ -1117,9 +1117,26 @@ function PostCard({
   const renderMedia = () => {
     const mediaList = (post as any).media;
     if (!Array.isArray(mediaList) || mediaList.length === 0) return null;
-    const media = mediaList[0];
+    const image = mediaList.find((m: any) => m?.type === 'IMAGE' && m?.url);
+    const audio = mediaList.find((m: any) => m?.type === 'AUDIO' && m?.url);
+    const video = mediaList.find((m: any) => m?.type === 'VIDEO' && m?.url);
+    const media = image || audio || video || mediaList[0];
     if (!media?.url) return null;
     const fullUrl = media.url.startsWith('http') ? media.url : `${API_ORIGIN}${media.url}`;
+    const audioUrl = audio
+      ? (audio.url.startsWith('http') ? audio.url : `${API_ORIGIN}${audio.url}`)
+      : null;
+
+    if (image && audioUrl) {
+      return (
+        <div className="post-media">
+          <img src={fullUrl} alt="Cover" loading="lazy" />
+          <div className="media-audio" style={{ marginTop: 10 }}>
+            <audio src={audioUrl} controls className="audio-player" />
+          </div>
+        </div>
+      );
+    }
 
     switch (media.type) {
       case 'IMAGE':
