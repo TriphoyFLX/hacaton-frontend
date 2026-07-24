@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import Landing from './pages/Landing';
 import LegalPage from './pages/LegalPage';
+import PwaInstallBanner from './components/PwaInstallBanner';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Studio = lazy(() => import('./pages/Studio'));
@@ -92,6 +93,7 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <PwaInstallBanner />
     </BrowserRouter>
   );
 }

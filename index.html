@@ -2,7 +2,10 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
     <meta name="google-site-verification" content="fNRT0UYEaWu_JsCryWlzvPfzfwtxa7zwHXSUsBxUs9U" />
 
     <title>SoundLab — онлайн студия звукозаписи | Записать трек онлайн бесплатно</title>
@@ -18,17 +21,32 @@
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="googlebot" content="index, follow" />
     <meta name="yandex" content="index, follow" />
-    <meta name="theme-color" content="#050505" />
+    <meta name="theme-color" content="#050505" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#050505" media="(prefers-color-scheme: light)" />
     <meta name="application-name" content="SoundLab" />
     <meta name="format-detection" content="telephone=no" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SoundLab" />
+    <meta name="msapplication-TileColor" content="#050505" />
+    <meta name="msapplication-TileImage" content="/icons/icon-144.png" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
 
     <link rel="canonical" href="https://soundlab-studio.ru/" />
     <link rel="alternate" hreflang="ru" href="https://soundlab-studio.ru/" />
     <link rel="alternate" hreflang="x-default" href="https://soundlab-studio.ru/" />
 
     <link rel="icon" type="image/svg+xml" href="/soundlab.svg" />
-    <link rel="apple-touch-icon" href="/soundlab.svg" />
-    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-48.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167.png" />
+    <link rel="mask-icon" href="/soundlab.svg" color="#050505" />
+    <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -89,7 +107,7 @@
             "@id": "https://soundlab-studio.ru/#app",
             "name": "SoundLab",
             "applicationCategory": "MultimediaApplication",
-            "operatingSystem": "Web",
+            "operatingSystem": "Android, iOS, Windows, macOS, Web",
             "offers": {
               "@type": "Offer",
               "price": "0",
@@ -104,7 +122,8 @@
               "MIDI секвенсор",
               "Запись вокала",
               "Эффекты и пресеты",
-              "SoundTok"
+              "SoundTok",
+              "PWA — установка на телефон"
             ]
           },
           {
@@ -132,7 +151,7 @@
                 "name": "Нужна ли установка программ для студии звукозаписи?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "Нет. SoundLab работает как онлайн студия звукозаписи в браузере — достаточно открыть сайт soundlab-studio.ru."
+                  "text": "Нет. SoundLab работает как онлайн студия звукозаписи в браузере — достаточно открыть сайт soundlab-studio.ru. На телефоне можно установить как приложение (PWA)."
                 }
               }
             ]

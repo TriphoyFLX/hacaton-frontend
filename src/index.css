@@ -31,6 +31,21 @@
     min-height: 100%;
     overflow-x: hidden;
   }
+
+  /* Installed PWA (standalone) — fill notch / home indicator */
+  html.sl-pwa body {
+    min-height: 100dvh;
+    padding:
+      env(safe-area-inset-top, 0px)
+      env(safe-area-inset-right, 0px)
+      0
+      env(safe-area-inset-left, 0px);
+    overscroll-behavior-y: none;
+  }
+
+  html.sl-pwa #root {
+    min-height: 100dvh;
+  }
 }
 
 @layer components {
