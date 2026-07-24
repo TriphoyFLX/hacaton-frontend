@@ -7,6 +7,11 @@ import { API_ORIGIN } from '../api/client';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount, formatRelativeTime, pluralizeComments } from '../lib/format';
 import { useAuthStore } from '../store/authStore';
+import {
+  unlockMediaPlayback,
+  setSoundTokAudioPreference,
+  shouldPreferSoundTokAudio,
+} from '../lib/mediaUnlock';
 import ShareSoundTokModal from './ShareSoundTokModal';
 import AdminBadge from './AdminBadge';
 
@@ -720,10 +725,10 @@ export default function VideoFeed({
 
   const [isPaused, setIsPaused] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => shouldPreferSoundTokAudio());
   const [descExpanded, setDescExpanded] = useState(false);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
-  const soundEnabledRef = useRef(false);
+  const soundEnabledRef = useRef(soundEnabled);
   const commentsOpenRef = useRef(false);
   const isPausedRef = useRef(false);
 
@@ -835,13 +840,22 @@ export default function VideoFeed({
   }, [commentsOpen]);
 
   const enableSound = useCallback(() => {
-    if (soundEnabledRef.current) return;
+    unlockMediaPlayback();
+    setSoundTokAudioPreference(true);
+    if (soundEnabledRef.current) {
+      const video = videoRefs.current[currentIndex];
+      if (video) {
+        video.muted = false;
+        void video.play().catch(() => undefined);
+      }
+      return;
+    }
     soundEnabledRef.current = true;
     setSoundEnabled(true);
     const video = videoRefs.current[currentIndex];
     if (video) {
       video.muted = false;
-      video.play().catch(() => {});
+      void video.play().catch(() => undefined);
     }
   }, [currentIndex]);
 
@@ -863,13 +877,18 @@ export default function VideoFeed({
       setVideoLoading(true);
     }
 
+    const wantSound = soundEnabledRef.current;
     try {
-      video.muted = !soundEnabledRef.current;
+      video.muted = !wantSound;
       await video.play();
       setVideoLoading(false);
+      if (wantSound) setSoundTokAudioPreference(true);
     } catch {
+      // Browser blocked unmuted autoplay — keep video playing muted until next gesture.
       try {
         video.muted = true;
+        soundEnabledRef.current = false;
+        setSoundEnabled(false);
         await video.play();
         setVideoLoading(false);
       } catch {
@@ -892,6 +911,22 @@ export default function VideoFeed({
       playVideoAt(currentIndex);
     }
   }, [isPaused, currentIndex, playVideoAt]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const unlockOnGesture = () => {
+      enableSound();
+    };
+
+    stage.addEventListener('pointerdown', unlockOnGesture, { passive: true });
+    stage.addEventListener('wheel', unlockOnGesture, { passive: true });
+    return () => {
+      stage.removeEventListener('pointerdown', unlockOnGesture);
+      stage.removeEventListener('wheel', unlockOnGesture);
+    };
+  }, [enableSound]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (commentsOpen) return;

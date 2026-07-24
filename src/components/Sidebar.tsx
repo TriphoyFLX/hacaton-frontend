@@ -4,6 +4,7 @@ import { Download } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { unlockMediaPlayback, setSoundTokAudioPreference } from '../lib/mediaUnlock';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import PwaInstallButton from './PwaInstallButton';
 
@@ -648,6 +649,11 @@ export default function Sidebar() {
     return `sb-item${isActive ? ' active' : ''}${extra ? ` ${extra}` : ''}`;
   };
 
+  const prepareSoundTokAudio = () => {
+    unlockMediaPlayback();
+    setSoundTokAudioPreference(true);
+  };
+
   return (
     <aside className="sb-root">
       <style>{css}</style>
@@ -678,7 +684,12 @@ export default function Sidebar() {
         <span className="sb-section-label">Контент</span>
 
         {CONTENT_NAV.map(({ path, label, icon, badge }) => (
-          <NavLink key={path} to={path} className={linkClass}>
+          <NavLink
+            key={path}
+            to={path}
+            className={linkClass}
+            onClick={path === '/soundtok' ? prepareSoundTokAudio : undefined}
+          >
             <span className="sb-item-icon">{icon}</span>
             <span className="sb-item-label">{label}</span>
             {path === '/chats' && totalUnread > 0 ? (
@@ -736,7 +747,11 @@ export default function Sidebar() {
           <span className="sb-mobile-icon"><IconFolder /></span>
           <span className="sb-mobile-label">Проекты</span>
         </NavLink>
-        <NavLink to="/soundtok" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+        <NavLink
+          to="/soundtok"
+          className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}
+          onClick={prepareSoundTokAudio}
+        >
           <span className="sb-mobile-icon"><IconVideo /></span>
           <span className="sb-mobile-label">SoundTok</span>
         </NavLink>
