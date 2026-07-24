@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Users,
   FileText,
@@ -21,6 +21,7 @@ import { REPORT_REASON_OPTIONS } from '../api/reports';
 
 const ADMIN_API = `${API_ORIGIN}/api/admin`;
 const PAGE_SIZE = 40;
+const ADMIN_CACHE_TTL = 30_000;
 
 const ADMIN_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
@@ -471,14 +472,15 @@ export default function AdminPanel() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const loadedAtRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQuery(userQuery.trim()), 300);
     return () => window.clearTimeout(t);
   }, [userQuery]);
 
-  const loadOverview = useCallback(async () => {
-    const data = await adminFetch<AdminStats>('/stats');
+  const loadOverview = useCallback(async (force = false) => {
+    const data = await adminFetch<AdminStats>(force ? '/stats?refresh=1' : '/stats');
     setStats(data);
   }, []);
 
@@ -520,14 +522,18 @@ export default function AdminPanel() {
       status,
     });
     if (filter === 'subscriptions' || filter === 'tokens') qs.set('kind', filter);
-    const data = await adminFetch<Paged<PaymentRow>>(`/payments?${qs}`);
+    const [data, presets] = await Promise.all([
+      adminFetch<Paged<PaymentRow>>(`/payments?${qs}`),
+      filter === 'all'
+        ? adminFetch<Paged<PresetPurchaseRow>>(
+            `/preset-purchases?limit=${PAGE_SIZE}&offset=0`,
+          )
+        : Promise.resolve(null),
+    ]);
     setPayments(data.items);
     setPaymentsTotal(data.total);
 
-    if (filter === 'all') {
-      const presets = await adminFetch<Paged<PresetPurchaseRow>>(
-        `/preset-purchases?limit=${PAGE_SIZE}&offset=0`,
-      );
+    if (presets) {
       setPresetPurchases(presets.items);
       setPresetPurchasesTotal(presets.total);
     } else {
@@ -548,13 +554,26 @@ export default function AdminPanel() {
     setReportsOpenCount(data.openCount ?? 0);
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
+    const cacheKey = [
+      activeTab,
+      activeTab === 'purchases' ? `${purchaseFilter}:${paymentStatusFilter}` : '',
+      activeTab === 'reports' ? reportStatusFilter : '',
+      activeTab === 'users' ? debouncedQuery : '',
+    ].join(':');
+
+    const loadedAt = loadedAtRef.current.get(cacheKey) ?? 0;
+    if (!force && Date.now() - loadedAt < ADMIN_CACHE_TTL) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       switch (activeTab) {
         case 'overview':
-          await loadOverview();
+          await loadOverview(force);
           break;
         case 'purchases':
           await loadPurchases(purchaseFilter, paymentStatusFilter);
@@ -572,6 +591,7 @@ export default function AdminPanel() {
           await loadSoundToks();
           break;
       }
+      loadedAtRef.current.set(cacheKey, Date.now());
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Ошибка загрузки';
       setError(message);
@@ -666,7 +686,7 @@ export default function AdminPanel() {
       if (!res.ok) throw new Error('Не удалось обновить');
       await loadReports(reportStatusFilter);
       if (stats) {
-        void loadOverview();
+        void loadOverview(true);
       }
     } catch {
       alert('Не удалось обновить жалобу');
@@ -718,7 +738,7 @@ export default function AdminPanel() {
         </h1>
         <button
           type="button"
-          onClick={() => void fetchData()}
+          onClick={() => void fetchData(true)}
           className="admin-refresh inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm"
           title="Обновить"
         >
