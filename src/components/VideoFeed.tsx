@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2, MoreVertical, Repeat2, Download } from 'lucide-react';
+import { Heart, MessageCircle, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2, MoreVertical, Repeat2, Download } from 'lucide-react';
 import { SoundTok, SoundTokAuthor, soundTokApi, Comment } from '../api/soundtok';
 import { soundsApi } from '../api/sounds';
 import { followsApi } from '../api/follows';
@@ -457,8 +457,29 @@ const css = `
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: transform 0.15s, background 0.15s;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+.vf-action-btn.vf-share-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
+}
+
+.vf-action-btn.vf-share-btn:hover {
+  background: transparent;
+  transform: scale(1.04);
+}
+
+.vf-share-icon {
+  display: block;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .vf-action-btn:active {
@@ -1126,6 +1147,19 @@ interface VideoFeedProps {
   onNearEnd?: () => void;
   guestMode?: boolean;
   onNeedAuth?: () => void;
+}
+
+function ShareCurvedIcon({ size = 44 }: { size?: number }) {
+  return (
+    <img
+      className="vf-share-icon"
+      src="/icons/share-curved.png"
+      width={size}
+      height={size}
+      alt=""
+      draggable={false}
+    />
+  );
 }
 
 function CommentAvatar({
@@ -2442,7 +2476,7 @@ export default function VideoFeed({
                     <div className="vf-action-group">
                       <button
                         type="button"
-                        className="vf-action-btn"
+                        className="vf-action-btn vf-share-btn"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (guestMode) {
@@ -2453,7 +2487,7 @@ export default function VideoFeed({
                         }}
                         aria-label="Поделиться"
                       >
-                        <Share2 size={26} strokeWidth={1.8} />
+                        <ShareCurvedIcon size={44} />
                       </button>
                       <span className="vf-action-count vf-share-label">Поделиться</span>
                     </div>

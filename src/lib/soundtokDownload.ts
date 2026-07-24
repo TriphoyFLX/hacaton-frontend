@@ -48,30 +48,87 @@ function waitForEvent(target: EventTarget, event: string, timeoutMs = 20000): Pr
   });
 }
 
+type WatermarkCorner =
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'mid-left'
+  | 'mid-right';
+
+function shuffleCorners(): WatermarkCorner[] {
+  const corners: WatermarkCorner[] = [
+    'top-left',
+    'top-right',
+    'bottom-left',
+    'bottom-right',
+    'mid-left',
+    'mid-right',
+  ];
+  for (let i = corners.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [corners[i], corners[j]] = [corners[j], corners[i]];
+  }
+  return corners;
+}
+
 function drawWatermark(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  logo: HTMLImageElement
+  logo: HTMLImageElement,
+  corner: WatermarkCorner
 ) {
   const pad = Math.max(12, Math.round(Math.min(width, height) * 0.035));
   const logoSize = Math.max(28, Math.round(Math.min(width, height) * 0.075));
   const gap = Math.max(8, Math.round(logoSize * 0.22));
   const fontSize = Math.max(13, Math.round(logoSize * 0.42));
-  const x = pad;
-  const y = height - pad - logoSize;
+  const label = 'SoundLab Studio';
 
   ctx.save();
+  ctx.font = `700 ${fontSize}px Syne, system-ui, sans-serif`;
+  const textWidth = ctx.measureText(label).width;
+  const blockWidth = logoSize + gap + textWidth;
+  const blockHeight = logoSize;
+
+  let x = pad;
+  let y = height - pad - blockHeight;
+
+  switch (corner) {
+    case 'top-left':
+      x = pad;
+      y = pad;
+      break;
+    case 'top-right':
+      x = width - pad - blockWidth;
+      y = pad;
+      break;
+    case 'bottom-left':
+      x = pad;
+      y = height - pad - blockHeight;
+      break;
+    case 'bottom-right':
+      x = width - pad - blockWidth;
+      y = height - pad - blockHeight;
+      break;
+    case 'mid-left':
+      x = pad;
+      y = Math.round((height - blockHeight) / 2);
+      break;
+    case 'mid-right':
+      x = width - pad - blockWidth;
+      y = Math.round((height - blockHeight) / 2);
+      break;
+  }
+
   ctx.globalAlpha = 0.92;
   ctx.shadowColor = 'rgba(0,0,0,0.55)';
   ctx.shadowBlur = 8;
   ctx.drawImage(logo, x, y, logoSize, logoSize);
-
-  ctx.font = `700 ${fontSize}px Syne, system-ui, sans-serif`;
   ctx.fillStyle = '#ffffff';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.fillText('SoundLab Studio', x + logoSize + gap, y + logoSize / 2);
+  ctx.fillText(label, x + logoSize + gap, y + logoSize / 2);
   ctx.restore();
 }
 
@@ -84,7 +141,8 @@ export type SoundTokDownloadOptions = {
 };
 
 /**
- * Re-encodes a SoundTok with a bottom-left SoundLab watermark (logo + "SoundLab Studio").
+ * Re-encodes a SoundTok with a SoundLab watermark (logo + "SoundLab Studio").
+ * Watermark position is randomized and moves between corners during the clip.
  * Must be called from a user gesture.
  */
 export async function downloadSoundTokWithWatermark(
@@ -135,6 +193,15 @@ export async function downloadSoundTokWithWatermark(
   if (!ctx) throw new Error('Canvas unavailable');
 
   const logo = await loadImage('/icons/icon-192.png');
+  const watermarkPath = shuffleCorners();
+  // Change corner every ~2.4s (or sooner on short clips)
+  const hopSeconds = Math.max(
+    1.6,
+    Math.min(
+      3.2,
+      Number.isFinite(video.duration) && video.duration > 0 ? video.duration / 4 : 2.4
+    )
+  );
   const canvasStream = canvas.captureStream(30);
 
   const AudioCtx =
@@ -193,7 +260,8 @@ export async function downloadSoundTokWithWatermark(
   const tick = () => {
     if (finished) return;
     ctx.drawImage(video, 0, 0, width, height);
-    drawWatermark(ctx, width, height, logo);
+    const hopIndex = Math.floor(video.currentTime / hopSeconds) % watermarkPath.length;
+    drawWatermark(ctx, width, height, logo, watermarkPath[hopIndex]);
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
     if (duration > 0) opts.onProgress?.(Math.min(1, video.currentTime / duration));
     if (video.ended) {
