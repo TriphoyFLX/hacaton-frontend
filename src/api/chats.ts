@@ -40,6 +40,7 @@ export interface Chat {
     status: 'SENT' | 'DELIVERED' | 'READ';
     readAt?: string | null;
     deletedAt?: string | null;
+    editedAt?: string | null;
     createdAt: string;
     sender: {
       id: string;
@@ -87,6 +88,7 @@ export interface Message {
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: string | null;
   deletedAt?: string | null;
+  editedAt?: string | null;
   createdAt: string;
   sender: {
     id: string;
@@ -183,6 +185,11 @@ export const chatsApi = {
 
   deleteMessage: async (chatId: string, messageId: string): Promise<Message> => {
     const response = await api.delete(`/chats/${chatId}/messages/${messageId}`);
+    return response.data;
+  },
+
+  editMessage: async (chatId: string, messageId: string, content: string): Promise<Message> => {
+    const response = await api.patch(`/chats/${chatId}/messages/${messageId}`, { content });
     return response.data;
   },
 

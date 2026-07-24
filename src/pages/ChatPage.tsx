@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus } from 'lucide-react';
+import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy } from 'lucide-react';
 import { chatsApi, Chat, Message, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
 import { blocksApi, BlockStatus } from '../api/blocks';
 import { usersApi } from '../api/users';
@@ -508,6 +508,73 @@ ${FONT_IMPORT}
   font-size: 13px;
   color: inherit;
   opacity: 0.75;
+}
+.message-edited-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  margin-right: 6px;
+}
+.message-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+.message-edit-input {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  color: inherit;
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  outline: none;
+}
+.message-bubble.own .message-edit-input {
+  background: rgba(11, 11, 11, 0.12);
+  border-color: rgba(11, 11, 11, 0.2);
+}
+.message-edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.message-edit-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.message-bubble.own .message-edit-btn {
+  background: rgba(11, 11, 11, 0.12);
+  border-color: rgba(11, 11, 11, 0.2);
+  color: inherit;
+}
+.message-edit-btn.primary {
+  background: var(--text-primary);
+  color: var(--bg);
+  border-color: var(--text-primary);
+}
+.message-bubble.own .message-edit-btn.primary {
+  background: rgba(11, 11, 11, 0.85);
+  color: #f0ede8;
+  border-color: transparent;
+}
+.message-edit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .message-actions {
   display: flex;
@@ -1070,6 +1137,10 @@ export default function ChatPage() {
   const [pinning, setPinning] = useState(false);
   const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<Array<{
     id: string;
     username: string;
@@ -1165,6 +1236,13 @@ export default function ChatPage() {
     const updated = normalizeIncomingMessage(data.message);
     setMessages(prev => prev.map(m => (m.id === updated.id ? updated : m)));
     setReactionPickerId(prev => (prev === updated.id ? null : prev));
+    setEditingId(prev => (prev === updated.id ? null : prev));
+  };
+
+  const handleMessageEdited = (data: { chatId: string; message: SocketMessage }) => {
+    const updated = normalizeIncomingMessage(data.message);
+    setMessages(prev => prev.map(m => (m.id === updated.id ? updated : m)));
+    setEditingId(prev => (prev === updated.id ? null : prev));
   };
 
   const handleMessageReaction = (data: { chatId: string; message: SocketMessage }) => {
@@ -1181,10 +1259,54 @@ export default function ChatPage() {
         prev.map(m => (m.id === messageId ? { ...m, ...updated } as Message : m))
       );
       setReactionPickerId(prev => (prev === messageId ? null : prev));
+      setEditingId(prev => (prev === messageId ? null : prev));
     } catch {
       setSendError('Не удалось удалить сообщение');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const startEditMessage = (message: DisplayMessage) => {
+    if (!('content' in message) || message.status === 'PENDING') return;
+    if ('deletedAt' in message && message.deletedAt) return;
+    setReactionPickerId(null);
+    setEditingId(message.id);
+    setEditDraft(message.content || '');
+  };
+
+  const cancelEditMessage = () => {
+    setEditingId(null);
+    setEditDraft('');
+    setEditSaving(false);
+  };
+
+  const saveEditMessage = async () => {
+    if (!chatId || !editingId || editSaving) return;
+    const content = editDraft.trim();
+    setEditSaving(true);
+    try {
+      const updated = await chatsApi.editMessage(chatId, editingId, content);
+      setMessages(prev =>
+        prev.map(m => (m.id === editingId ? { ...m, ...updated } as Message : m))
+      );
+      cancelEditMessage();
+    } catch {
+      setSendError('Не удалось изменить сообщение');
+      setEditSaving(false);
+    }
+  };
+
+  const handleCopyMessage = async (message: DisplayMessage) => {
+    if (!('content' in message) || !message.content?.trim()) return;
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedId(message.id);
+      window.setTimeout(() => {
+        setCopiedId((prev) => (prev === message.id ? null : prev));
+      }, 1500);
+    } catch {
+      setSendError('Не удалось скопировать сообщение');
     }
   };
 
@@ -1294,6 +1416,7 @@ export default function ChatPage() {
   } = useChatSocket(chatId, token, otherUser?.id, {
     onMessage: handleNewMessage,
     onMessageDeleted: handleMessageDeleted,
+    onMessageEdited: handleMessageEdited,
     onMessageReaction: handleMessageReaction,
     onMessageDelivered: handleMessageDelivered,
     onMessageRead: handleMessageRead,
@@ -1882,6 +2005,34 @@ export default function ChatPage() {
                       )}
                       {isDeleted ? (
                         <p className="message-deleted-text">Сообщение удалено</p>
+                      ) : editingId === message.id ? (
+                        <div className="message-edit-box">
+                          <textarea
+                            className="message-edit-input"
+                            value={editDraft}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            maxLength={4000}
+                            autoFocus
+                          />
+                          <div className="message-edit-actions">
+                            <button
+                              type="button"
+                              className="message-edit-btn"
+                              onClick={cancelEditMessage}
+                              disabled={editSaving}
+                            >
+                              Отмена
+                            </button>
+                            <button
+                              type="button"
+                              className="message-edit-btn primary"
+                              onClick={() => void saveEditMessage()}
+                              disabled={editSaving || (!editDraft.trim() && !sharedTok)}
+                            >
+                              {editSaving ? 'Сохранение…' : 'Сохранить'}
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <>
                           {sharedTok && (
@@ -1950,7 +2101,7 @@ export default function ChatPage() {
                           )}
                         </>
                       )}
-                      {reactionSummary.length > 0 && !isDeleted && (
+                      {reactionSummary.length > 0 && !isDeleted && editingId !== message.id && (
                         <div className="message-reactions">
                           {reactionSummary.map((reaction) => (
                             <button
@@ -1967,12 +2118,24 @@ export default function ChatPage() {
                         </div>
                       )}
                       <div className="message-meta">
+                        {'editedAt' in message && message.editedAt && !isDeleted && (
+                          <span className="message-edited-label">изм.</span>
+                        )}
                         <span className="message-time">{formatTime(message.createdAt)}</span>
                         {!isDeleted && <span className="message-status">{renderStatus(message)}</span>}
                       </div>
                     </div>
-                    {!isPending && !isDeleted && (
+                    {!isPending && !isDeleted && editingId !== message.id && (
                       <div className="message-actions">
+                        <button
+                          type="button"
+                          className="message-action-btn"
+                          title={copiedId === message.id ? 'Скопировано' : 'Копировать'}
+                          onClick={() => void handleCopyMessage(message)}
+                          disabled={!message.content?.trim()}
+                        >
+                          {copiedId === message.id ? <Check /> : <Copy />}
+                        </button>
                         <button
                           type="button"
                           className="message-action-btn"
@@ -1984,19 +2147,29 @@ export default function ChatPage() {
                           <SmilePlus />
                         </button>
                         {isOwn && (
-                          <button
-                            type="button"
-                            className="message-action-btn danger"
-                            title="Удалить"
-                            disabled={deletingId === message.id}
-                            onClick={() => handleDeleteMessage(message.id)}
-                          >
-                            {deletingId === message.id ? (
-                              <Loader2 className="loader" />
-                            ) : (
-                              <Trash2 />
-                            )}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="message-action-btn"
+                              title="Редактировать"
+                              onClick={() => startEditMessage(message)}
+                            >
+                              <Pencil />
+                            </button>
+                            <button
+                              type="button"
+                              className="message-action-btn danger"
+                              title="Удалить"
+                              disabled={deletingId === message.id}
+                              onClick={() => handleDeleteMessage(message.id)}
+                            >
+                              {deletingId === message.id ? (
+                                <Loader2 className="loader" />
+                              ) : (
+                                <Trash2 />
+                              )}
+                            </button>
+                          </>
                         )}
                       </div>
                     )}

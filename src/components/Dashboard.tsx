@@ -1,6 +1,10 @@
 import { useAuthStore } from '../store/authStore';
+<<<<<<< HEAD
 import PwaInstallButton from './PwaInstallButton';
 import { usePwaInstall } from '../hooks/usePwaInstall';
+=======
+import { resolveMediaUrl } from '../lib/mediaUrl';
+>>>>>>> f211425 (Show avatars in dashboard and recent search, add chat edit and copy.)
 
 // ─────────────────────────────────────────────────────────
 // DESIGN SYSTEM — matches Sidebar & Profile exactly
@@ -121,9 +125,13 @@ ${FONT_IMPORT}
 .db-hero-icon {
   width:64px; height:64px; border:1px solid var(--b2); border-radius:16px;
   background:var(--elev); display:inline-flex; align-items:center; justify-content:center;
-  margin-bottom:24px;
+  margin-bottom:24px; overflow:hidden;
 }
 .db-hero-icon svg { width:28px; height:28px; color:var(--t3); stroke-width:1.4; }
+.db-hero-icon img { width:100%; height:100%; object-fit:cover; }
+.db-hero-icon-letter {
+  font-family:'Syne',sans-serif; font-size:24px; font-weight:700; color:var(--t1);
+}
 .db-hero-title { font-size:28px; font-weight:700; letter-spacing:-.03em; margin-bottom:8px; color:var(--t1); }
 .db-hero-desc  { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:.06em;
                  color:var(--t3); margin-bottom:36px; }
@@ -203,9 +211,15 @@ export default function Dashboard() {
         {/* Hero welcome */}
         <div className="db-hero">
           <div className="db-hero-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
-            </svg>
+            {resolveMediaUrl(user?.avatar) ? (
+              <img src={resolveMediaUrl(user?.avatar)!} alt={user?.username || 'avatar'} />
+            ) : user?.username ? (
+              <span className="db-hero-icon-letter">{user.username[0].toUpperCase()}</span>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
+              </svg>
+            )}
           </div>
           <div className="db-hero-title">Добро пожаловать, @{user?.username}!</div>
           <div className="db-hero-desc">Ваш личный кабинет и управление профилем</div>

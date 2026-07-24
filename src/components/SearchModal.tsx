@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { searchApi, SearchResult } from '../api/search';
 import { chatsApi } from '../api/chats';
 import { resolveMediaUrl } from '../lib/mediaUrl';
-import { getRecentProfiles, RecentProfile } from '../lib/recentProfiles';
+import { getRecentProfiles, RecentProfile, refreshRecentProfiles } from '../lib/recentProfiles';
 import { useAuthStore } from '../store/authStore';
 import { Search, X, Users, FileText, Video, MessageCircle } from 'lucide-react';
 
@@ -456,7 +456,9 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (isOpen) setRecentProfiles(getRecentProfiles());
+    if (!isOpen) return;
+    setRecentProfiles(getRecentProfiles());
+    void refreshRecentProfiles().then(setRecentProfiles);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -538,7 +540,11 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                       }}
                     >
                       <div className="user-avatar">
-                        {user.avatar ? <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} /> : user.username[0].toUpperCase()}
+                        {resolveMediaUrl(user.avatar) ? (
+                          <img src={resolveMediaUrl(user.avatar)!} alt={user.username} />
+                        ) : (
+                          user.username[0].toUpperCase()
+                        )}
                       </div>
                       <div className="user-info">
                         <div className="user-username">@{user.username}</div>
@@ -583,8 +589,8 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
                         }}
                       >
                         <div className="user-avatar">
-                          {user.avatar ? (
-                            <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} />
+                          {resolveMediaUrl(user.avatar) ? (
+                            <img src={resolveMediaUrl(user.avatar)!} alt={user.username} />
                           ) : (
                             user.username[0].toUpperCase()
                           )}

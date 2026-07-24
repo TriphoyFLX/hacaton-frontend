@@ -25,6 +25,7 @@ export interface Message {
   status: 'SENT' | 'DELIVERED' | 'READ';
   readAt?: Date | null;
   deletedAt?: Date | string | null;
+  editedAt?: Date | string | null;
   createdAt: Date;
   updatedAt: Date;
   sender: {
@@ -58,6 +59,7 @@ export interface SocketMessageResponse {
 interface ServerToClientEvents {
   'message:new': (message: Message) => void;
   'message:deleted': (data: { chatId: string; message: Message }) => void;
+  'message:edited': (data: { chatId: string; message: Message }) => void;
   'message:reaction': (data: { chatId: string; message: Message }) => void;
   'message:status': (data: { messageId: string; status: string; readAt?: Date }) => void;
   'message:delivered': (data: { clientMessageId: string; messageId: string }) => void;
@@ -95,6 +97,7 @@ interface ClientToServerEvents {
 interface UseSocketOptions {
   onMessage?: (message: Message) => void;
   onMessageDeleted?: (data: { chatId: string; message: Message }) => void;
+  onMessageEdited?: (data: { chatId: string; message: Message }) => void;
   onMessageReaction?: (data: { chatId: string; message: Message }) => void;
   onMessageDelivered?: (data: { clientMessageId: string; messageId: string }) => void;
   onMessageRead?: (data: { messageId: string; status: string; readAt?: Date }) => void;
@@ -198,6 +201,10 @@ export function useSocket(token: string | null, options: UseSocketOptions = {}):
 
     socket.on('message:deleted', (data) => {
       optionsRef.current.onMessageDeleted?.(data);
+    });
+
+    socket.on('message:edited', (data) => {
+      optionsRef.current.onMessageEdited?.(data);
     });
 
     socket.on('message:reaction', (data) => {
@@ -323,6 +330,7 @@ export function useChatSocket(
   options: {
     onMessage?: (message: Message) => void;
     onMessageDeleted?: (data: { chatId: string; message: Message }) => void;
+    onMessageEdited?: (data: { chatId: string; message: Message }) => void;
     onMessageReaction?: (data: { chatId: string; message: Message }) => void;
     onMessageDelivered?: (data: { clientMessageId: string; messageId: string }) => void;
     onMessageRead?: (data: { messageId: string; status: string; readAt?: Date }) => void;
@@ -349,6 +357,11 @@ export function useChatSocket(
       onMessageDeleted: (data) => {
         if (data.chatId === chatId) {
           options.onMessageDeleted?.(data);
+        }
+      },
+      onMessageEdited: (data) => {
+        if (data.chatId === chatId) {
+          options.onMessageEdited?.(data);
         }
       },
       onMessageReaction: (data) => {

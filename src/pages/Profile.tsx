@@ -645,6 +645,10 @@ export default function Profile() {
       if (profile) {
         setProfile({ ...profile, avatar: result.avatar });
       }
+      updateUser({ avatar: result.avatar });
+      if (user?.id || profile?.id) {
+        syncRecentProfile(user?.id || profile!.id, { avatar: result.avatar });
+      }
       setSaveStatus('success');
       setErrors([]);
     } catch (error) {
