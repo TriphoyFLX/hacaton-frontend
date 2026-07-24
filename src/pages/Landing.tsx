@@ -381,11 +381,13 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         .sl-step h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -0.02em; }
         .sl-step p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
+        .sl-faq.sl-section { padding-bottom: 8px; }
         .sl-faq details {
           border-top: 1px solid var(--line);
           padding: 14px 0;
         }
         .sl-faq details:first-of-type { border-top: none; margin-top: 8px; }
+        .sl-faq details:last-of-type { padding-bottom: 0; border-bottom: none; }
         .sl-faq summary {
           cursor: pointer;
           font-weight: 600;
@@ -442,8 +444,8 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         }
 
         .sl-foot {
-          border-top: 1px solid var(--line);
-          padding: 24px 0 calc(32px + env(safe-area-inset-bottom, 0px));
+          border-top: none;
+          padding: 20px 0 calc(28px + env(safe-area-inset-bottom, 0px));
           display: grid;
           gap: 16px;
           color: var(--dim);
@@ -640,7 +642,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
         </section>
 
         <footer className="sl-foot">
-          <div>© {new Date().getFullYear()} SoundLab · soundlab-studio.ru</div>
+          <div>{`\u00A9 ${new Date().getFullYear()} SoundLab \u00B7 soundlab-studio.ru`}</div>
           <div className="sl-foot-links">
             <Link to="/">SoundLab</Link>
             <Link to="/offer">Оферта</Link>
