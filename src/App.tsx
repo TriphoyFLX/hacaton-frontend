@@ -16,6 +16,8 @@ const Studio = lazy(() => import('./pages/Studio'));
 const Feed = lazy(() => import('./pages/Feed'));
 const Projects = lazy(() => import('./pages/Projects'));
 const SoundTok = lazy(() => import('./pages/SoundTok'));
+const SoundPage = lazy(() => import('./pages/SoundPage'));
+const SoundRecordPage = lazy(() => import('./pages/SoundRecordPage'));
 const Profile = lazy(() => import('./pages/Profile'));
 const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const Chats = lazy(() => import('./pages/Chats'));
@@ -73,6 +75,8 @@ function App() {
           <Route path="feed" element={<Lazy><Feed /></Lazy>} />
           <Route path="projects" element={<Lazy><Projects /></Lazy>} />
           <Route path="soundtok" element={<Lazy><SoundTok /></Lazy>} />
+          <Route path="soundtok/sound/:id" element={<Lazy><SoundPage /></Lazy>} />
+          <Route path="soundtok/sound/:id/record" element={<Lazy><SoundRecordPage /></Lazy>} />
           <Route path="profile" element={<Lazy><Profile /></Lazy>} />
           <Route path="profile/:username" element={<Lazy><PublicProfile /></Lazy>} />
           <Route path="chats" element={<Lazy><Chats /></Lazy>} />

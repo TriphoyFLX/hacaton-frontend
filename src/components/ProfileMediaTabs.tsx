@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, Lock, Play, Video } from 'lucide-react';
+import { Bookmark, Heart, Lock, Music2, Play, Video } from 'lucide-react';
 import { profileApi } from '../api/profile';
+import { soundsApi, type Sound } from '../api/sounds';
 import type { SoundTok } from '../api/soundtok';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { formatCount } from '../lib/format';
 
-type TabKey = 'soundtoks' | 'likes';
+type TabKey = 'soundtoks' | 'likes' | 'sounds';
 
 interface ProfileMediaTabsProps {
   identifier: string;
@@ -199,6 +201,55 @@ const styles = `
   opacity: 0.5;
   cursor: wait;
 }
+.pmt-sound-cell {
+  appearance: none;
+  border: 1px solid #232323;
+  border-radius: 10px;
+  background: #151515;
+  color: inherit;
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pmt-sound-cell:hover {
+  border-color: #3a3a3a;
+  background: #1a1a1a;
+}
+.pmt-sound-disc {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #9b7fd4, #e8b4d8);
+  color: #f0ede8;
+}
+.pmt-sound-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0ede8;
+  line-height: 1.25;
+}
+.pmt-sound-meta {
+  margin-top: 4px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+}
+.pmt-sounds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 `;
 
 function emptyCopy(tab: TabKey, isOwner: boolean, privateLikes: boolean) {
@@ -206,6 +257,14 @@ function emptyCopy(tab: TabKey, isOwner: boolean, privateLikes: boolean) {
     return {
       label: 'Нет SoundTok',
       hint: isOwner ? 'Загрузите первое видео в SoundTok' : 'У пользователя пока нет видео',
+    };
+  }
+  if (tab === 'sounds') {
+    return {
+      label: 'Нет избранных звуков',
+      hint: isOwner
+        ? 'Откройте звук в видео и нажмите «В избранное»'
+        : 'Пока пусто',
     };
   }
   if (privateLikes && !isOwner) {
@@ -232,6 +291,7 @@ export default function ProfileMediaTabs({
   const showLikesTab = isOwner || likedSoundToksPublic;
   const [tab, setTab] = useState<TabKey>('soundtoks');
   const [items, setItems] = useState<SoundTok[]>([]);
+  const [sounds, setSounds] = useState<Sound[]>([]);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -244,15 +304,27 @@ export default function ProfileMediaTabs({
     if (!showLikesTab && tab === 'likes') {
       setTab('soundtoks');
     }
-  }, [showLikesTab, tab]);
+    if (!isOwner && tab === 'sounds') {
+      setTab('soundtoks');
+    }
+  }, [showLikesTab, tab, isOwner]);
 
   const load = useCallback(
     async (nextTab: TabKey, offset = 0, append = false) => {
       if (nextTab === 'likes' && !showLikesTab) {
         setItems([]);
+        setSounds([]);
         setTotal(0);
         setHasMore(false);
         setPrivateBlocked(true);
+        setLoading(false);
+        return;
+      }
+      if (nextTab === 'sounds' && !isOwner) {
+        setItems([]);
+        setSounds([]);
+        setTotal(0);
+        setHasMore(false);
         setLoading(false);
         return;
       }
@@ -265,31 +337,44 @@ export default function ProfileMediaTabs({
       }
 
       try {
-        const fetcher =
-          nextTab === 'soundtoks'
-            ? profileApi.getUserSoundToks
-            : profileApi.getUserLikedSoundToks;
-        const data = await fetcher(identifier, { limit: 24, offset });
-        setItems((prev) => (append ? [...prev, ...data.items] : data.items));
-        setTotal(data.total);
-        setHasMore(Boolean(data.hasMore));
+        if (nextTab === 'sounds') {
+          const data = await soundsApi.getFavorites({ limit: 24, offset });
+          setSounds((prev) => (append ? [...prev, ...data.items] : data.items));
+          setItems([]);
+          setTotal(data.total);
+          setHasMore(Boolean(data.hasMore));
+        } else {
+          const fetcher =
+            nextTab === 'soundtoks'
+              ? profileApi.getUserSoundToks
+              : profileApi.getUserLikedSoundToks;
+          const data = await fetcher(identifier, { limit: 24, offset });
+          setItems((prev) => (append ? [...prev, ...data.items] : data.items));
+          setSounds([]);
+          setTotal(data.total);
+          setHasMore(Boolean(data.hasMore));
+        }
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 403) {
           setPrivateBlocked(true);
           setItems([]);
+          setSounds([]);
           setTotal(0);
           setHasMore(false);
         } else {
-          setError('Не удалось загрузить видео');
-          if (!append) setItems([]);
+          setError(nextTab === 'sounds' ? 'Не удалось загрузить звуки' : 'Не удалось загрузить видео');
+          if (!append) {
+            setItems([]);
+            setSounds([]);
+          }
         }
       } finally {
         setLoading(false);
         setLoadingMore(false);
       }
     },
-    [identifier, showLikesTab]
+    [identifier, showLikesTab, isOwner]
   );
 
   useEffect(() => {
@@ -310,9 +395,14 @@ export default function ProfileMediaTabs({
     navigate(`/soundtok?v=${encodeURIComponent(id)}`);
   };
 
+  const openSound = (id: string) => {
+    navigate(`/soundtok/sound/${id}`);
+  };
+
   const copy = emptyCopy(tab, isOwner, privateBlocked || (!likedSoundToksPublic && !isOwner));
   const displayLikedCount =
     likedSoundToksCount ?? (tab === 'likes' && !privateBlocked ? total : undefined);
+  const listOffset = tab === 'sounds' ? sounds.length : items.length;
 
   return (
     <div className="pmt-root">
@@ -338,6 +428,17 @@ export default function ProfileMediaTabs({
             {displayLikedCount !== undefined && (
               <span className="pmt-count">{displayLikedCount}</span>
             )}
+          </button>
+        )}
+        {isOwner && (
+          <button
+            type="button"
+            className={`pmt-tab ${tab === 'sounds' ? 'active' : ''}`}
+            onClick={() => setTab('sounds')}
+          >
+            <Bookmark />
+            Звуки
+            {tab === 'sounds' && <span className="pmt-count">{total}</span>}
           </button>
         )}
         {isOwner && (
@@ -372,11 +473,44 @@ export default function ProfileMediaTabs({
         <div className="pmt-empty">
           <div className="pmt-empty-label">{error}</div>
         </div>
-      ) : items.length === 0 ? (
+      ) : (tab === 'sounds' ? sounds.length === 0 : items.length === 0) ? (
         <div className="pmt-empty">
           <div className="pmt-empty-label">{copy.label}</div>
           <div className="pmt-empty-hint">{copy.hint}</div>
         </div>
+      ) : tab === 'sounds' ? (
+        <>
+          <div className="pmt-sounds-list">
+            {sounds.map((sound) => (
+              <button
+                key={sound.id}
+                type="button"
+                className="pmt-sound-cell"
+                onClick={() => openSound(sound.id)}
+              >
+                <div className="pmt-sound-disc" aria-hidden>
+                  <Music2 size={18} />
+                </div>
+                <div>
+                  <div className="pmt-sound-title">{sound.title}</div>
+                  <div className="pmt-sound-meta">
+                    @{sound.author.username} · {formatCount(sound.useCount)} видео
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          {hasMore && (
+            <button
+              type="button"
+              className="pmt-more"
+              disabled={loadingMore}
+              onClick={() => void load(tab, listOffset, true)}
+            >
+              {loadingMore ? 'Загрузка…' : 'Ещё'}
+            </button>
+          )}
+        </>
       ) : (
         <>
           <div className="pmt-grid">
@@ -410,7 +544,7 @@ export default function ProfileMediaTabs({
               type="button"
               className="pmt-more"
               disabled={loadingMore}
-              onClick={() => void load(tab, items.length, true)}
+              onClick={() => void load(tab, listOffset, true)}
             >
               {loadingMore ? 'Загрузка…' : 'Ещё'}
             </button>

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, Share2, X, Send, Play, Music2, Plus, Check, ThumbsDown, Trash2 } from 'lucide-react';
 import { SoundTok, soundTokApi, Comment } from '../api/soundtok';
+import { soundsApi } from '../api/sounds';
 import { followsApi } from '../api/follows';
 import { API_ORIGIN } from '../api/client';
 import { resolveMediaUrl } from '../lib/mediaUrl';
@@ -98,6 +99,10 @@ const css = `
   display: flex;
   align-items: center;
   justify-content: center;
+  appearance: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
 }
 
 .vf-music-disc img {
@@ -237,6 +242,18 @@ const css = `
   font-size: 13px;
   opacity: 0.9;
   max-width: 100%;
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.vf-music-row:hover span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .vf-music-row span {
@@ -830,9 +847,30 @@ export default function VideoFeed({
   const [soundEnabled, setSoundEnabled] = useState(() => shouldPreferSoundTokAudio());
   const [descExpanded, setDescExpanded] = useState(false);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const bedAudioRefs = useRef<(HTMLAudioElement | null)[]>([]);
   const soundEnabledRef = useRef(soundEnabled);
   const commentsOpenRef = useRef(false);
   const isPausedRef = useRef(false);
+  const soundToksRef = useRef(soundToks);
+  soundToksRef.current = soundToks;
+
+  const usesExternalSound = (tok: SoundTok | undefined) =>
+    Boolean(tok?.sound?.audioUrl && tok.sound.audioUrl !== tok.videoUrl);
+
+  const openSoundPage = async (tok: SoundTok, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const existingId = tok.sound?.id || tok.soundId;
+      if (existingId) {
+        navigate(`/soundtok/sound/${existingId}`);
+        return;
+      }
+      const sound = await soundsApi.fromVideo(tok.id);
+      navigate(`/soundtok/sound/${sound.id}`);
+    } catch (err) {
+      console.error('Failed to open sound page:', err);
+    }
+  };
 
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -944,20 +982,30 @@ export default function VideoFeed({
   const enableSound = useCallback(() => {
     unlockMediaPlayback();
     setSoundTokAudioPreference(true);
+    const tok = soundToksRef.current[currentIndex];
+    const external = usesExternalSound(tok);
+    const video = videoRefs.current[currentIndex];
+    const bed = bedAudioRefs.current[currentIndex];
     if (soundEnabledRef.current) {
-      const video = videoRefs.current[currentIndex];
       if (video) {
-        video.muted = false;
+        video.muted = external ? true : false;
         void video.play().catch(() => undefined);
+      }
+      if (external && bed) {
+        bed.muted = false;
+        void bed.play().catch(() => undefined);
       }
       return;
     }
     soundEnabledRef.current = true;
     setSoundEnabled(true);
-    const video = videoRefs.current[currentIndex];
     if (video) {
-      video.muted = false;
+      video.muted = external ? true : false;
       void video.play().catch(() => undefined);
+    }
+    if (external && bed) {
+      bed.muted = false;
+      void bed.play().catch(() => undefined);
     }
   }, [currentIndex]);
 
@@ -969,9 +1017,17 @@ export default function VideoFeed({
       video.pause();
       video.muted = true;
     });
+    bedAudioRefs.current.forEach((audio, i) => {
+      if (!audio || i === index) return;
+      audio.pause();
+      audio.muted = true;
+    });
 
     const video = videoRefs.current[index];
     if (!video) return;
+    const tok = soundToksRef.current[index];
+    const external = usesExternalSound(tok);
+    const bed = bedAudioRefs.current[index];
 
     if (video.readyState >= 2) {
       setVideoLoading(false);
@@ -981,7 +1037,17 @@ export default function VideoFeed({
 
     const wantSound = soundEnabledRef.current;
     try {
-      video.muted = !wantSound;
+      video.muted = external ? true : !wantSound;
+      if (external && bed) {
+        try {
+          bed.currentTime = video.currentTime || 0;
+        } catch {
+          /* ignore seek errors */
+        }
+        bed.muted = !wantSound;
+        if (wantSound) void bed.play().catch(() => undefined);
+        else bed.pause();
+      }
       await video.play();
       setVideoLoading(false);
       if (wantSound) setSoundTokAudioPreference(true);
@@ -991,6 +1057,10 @@ export default function VideoFeed({
         video.muted = true;
         soundEnabledRef.current = false;
         setSoundEnabled(false);
+        if (bed) {
+          bed.muted = true;
+          bed.pause();
+        }
         await video.play();
         setVideoLoading(false);
       } catch {
@@ -1367,7 +1437,11 @@ export default function VideoFeed({
                 loop
                 playsInline
                 preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'metadata'}
-                muted={index !== currentIndex || !soundEnabled}
+                muted={
+                  index !== currentIndex ||
+                  !soundEnabled ||
+                  usesExternalSound(soundTok)
+                }
                 onLoadedData={() => {
                   if (index === currentIndex && !commentsOpenRef.current && !isPausedRef.current) {
                     playVideoAt(index);
@@ -1386,20 +1460,49 @@ export default function VideoFeed({
                 onPlaying={() => {
                   if (index === currentIndex) setVideoLoading(false);
                 }}
+                onTimeUpdate={() => {
+                  if (index !== currentIndex || !usesExternalSound(soundTok)) return;
+                  const bed = bedAudioRefs.current[index];
+                  const video = videoRefs.current[index];
+                  if (!bed || !video || bed.paused) return;
+                  if (Math.abs((bed.currentTime || 0) - (video.currentTime || 0)) > 0.35) {
+                    try {
+                      bed.currentTime = video.currentTime;
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                }}
                 onClick={() => {
                   if (!isActive) return;
                   const video = videoRefs.current[index];
                   if (!video) return;
                   enableSound();
+                  const bed = bedAudioRefs.current[index];
                   if (isPaused) {
                     video.play().catch(() => {});
+                    if (usesExternalSound(soundTok) && bed && soundEnabledRef.current) {
+                      bed.muted = false;
+                      void bed.play().catch(() => {});
+                    }
                     setIsPaused(false);
                   } else {
                     video.pause();
+                    bed?.pause();
                     setIsPaused(true);
                   }
                 }}
               />
+              {usesExternalSound(soundTok) && soundTok.sound?.audioUrl && (
+                <audio
+                  ref={(el) => {
+                    bedAudioRefs.current[index] = el;
+                  }}
+                  src={`${API_ORIGIN}${soundTok.sound.audioUrl}`}
+                  loop
+                  preload={Math.abs(index - currentIndex) <= 1 ? 'auto' : 'metadata'}
+                />
+              )}
 
               {isActive && videoLoading && !isPaused && !commentsOpen && (
                 <div className="vf-video-loading" aria-hidden />
@@ -1439,10 +1542,17 @@ export default function VideoFeed({
                         )}
                       </>
                     )}
-                    <div className="vf-music-row">
+                    <button
+                      type="button"
+                      className="vf-music-row"
+                      onClick={(e) => void openSoundPage(soundTok, e)}
+                    >
                       <Music2 size={14} className="vf-music-icon" />
-                      <span>Оригинальный звук — {soundTok.author?.username}</span>
-                    </div>
+                      <span>
+                        {soundTok.sound?.title ||
+                          `Оригинальный звук — ${soundTok.author?.username || 'user'}`}
+                      </span>
+                    </button>
                   </div>
 
                   <div className="vf-actions">
@@ -1542,7 +1652,12 @@ export default function VideoFeed({
                       </div>
                     )}
 
-                    <div className="vf-music-disc" aria-hidden>
+                    <button
+                      type="button"
+                      className="vf-music-disc"
+                      onClick={(e) => void openSoundPage(soundTok, e)}
+                      aria-label="Открыть звук"
+                    >
                       {authorAvatar ? (
                         <img src={authorAvatar} alt="" />
                       ) : (
@@ -1550,7 +1665,7 @@ export default function VideoFeed({
                           {(soundTok.author?.username?.[0] ?? 'S').toUpperCase()}
                         </span>
                       )}
-                    </div>
+                    </button>
                   </div>
                 </>
               )}

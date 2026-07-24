@@ -26,6 +26,7 @@ export interface SoundTok {
   description: string;
   videoUrl: string;
   authorId: string;
+  soundId?: string | null;
   likes: number;
   commentsCount: number;
   createdAt: string;
@@ -39,6 +40,19 @@ export interface SoundTok {
     avatar?: string | null;
     role?: string;
   };
+  sound?: {
+    id: string;
+    title: string;
+    audioUrl: string;
+    useCount: number;
+    authorId: string;
+    author?: {
+      id: string;
+      username: string;
+      displayName?: string | null;
+      avatar?: string | null;
+    };
+  } | null;
   comments?: Comment[];
 }
 
@@ -48,10 +62,17 @@ export interface CreateCommentResponse {
 }
 
 export const soundTokApi = {
-  createSoundTok: async (description: string, videoFile: File) => {
+  createSoundTok: async (
+    description: string,
+    videoFile: File,
+    opts?: { soundId?: string }
+  ) => {
     const formData = new FormData();
     formData.append('description', description);
     formData.append('video', videoFile);
+    if (opts?.soundId) {
+      formData.append('soundId', opts.soundId);
+    }
 
     const response = await api.post('/soundtok', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

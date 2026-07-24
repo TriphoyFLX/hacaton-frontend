@@ -9,6 +9,8 @@ function isImmersiveRoute(pathname: string): boolean {
 
   if (pathname === '/soundtok') return true;
 
+  if (pathname.startsWith('/soundtok/sound/') && pathname.endsWith('/record')) return true;
+
   if (pathname.startsWith('/chats/') && pathname !== '/chats') return true;
 
   if (pathname === '/studio' || pathname === '/midi') return true;
