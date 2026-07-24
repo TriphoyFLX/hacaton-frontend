@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { billingApi, type PaymentKind } from '../api/billing';
 import { useBilling } from '../hooks/useBilling';
@@ -13,9 +13,9 @@ const TOKEN_PACK_UI: Array<{
   highlight?: boolean;
 }> = [
   { kind: 'TOKENS_400', tokens: 400, gens: 4, price: 299, badge: null },
-  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 549, badge: '−8%' },
-  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 799, badge: '−11%', highlight: true },
-  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 1399, badge: '−22%' },
+  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 549, badge: '-8%' },
+  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 799, badge: '-11%', highlight: true },
+  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 1399, badge: '-22%' },
 ];
 
 const css = `
@@ -158,9 +158,9 @@ export default function Pricing() {
           </div>
           <div className="pr-meta">
             Токены: {billing?.tokenBalance ?? (user as any)?.tokenBalance ?? 0}
-            {' В· '}
+            {' · '}
             Генераций: {billing?.generationsAvailable ?? 0}
-            {' В· '}
+            {' · '}
             Проекты: {billing?.cloudProjectCount ?? 0}
             {billing?.maxCloudProjects != null ? `/${billing.maxCloudProjects}` : ''}
           </div>
@@ -230,11 +230,11 @@ export default function Pricing() {
                 {pack.saveRub > 0 && <span className="pr-pack-old">{pack.compareAt} ₽</span>}
               </div>
               <div className="pr-pack-unit">
-                в‰€ {pack.gens} генераций · {pack.perGen} ₽ / генерация
+                {pack.gens} генераций · {pack.perGen} ₽ за генерацию
               </div>
               {pack.saveRub > 0 ? (
                 <div className="pr-pack-save">
-                  Экономия {pack.saveRub} ₽ (в€’{pack.savePercent}%) vs маленький пакет
+                  Экономия {pack.saveRub} ₽ (-{pack.savePercent}%) к базовому пакету
                 </div>
               ) : (
                 <div className="pr-pack-unit">Базовая цена за генерацию</div>
@@ -250,13 +250,13 @@ export default function Pricing() {
           Оплата через ЮKassa. После оплаты вернётесь на эту страницу.
           {' '}
           <Link to="/offer">Оферта</Link>
-          {' В· '}
+          {' · '}
           <Link to="/privacy">Конфиденциальность</Link>
-          {' В· '}
+          {' · '}
           <Link to="/refunds">Возвраты</Link>
-          {' В· '}
+          {' · '}
           <Link to="/delivery">Получение услуги</Link>
-          {' В· '}
+          {' · '}
           <Link to="/contacts">Контакты</Link>
         </p>
       </div>
