@@ -12,37 +12,28 @@ import '@fontsource/dm-mono/latin-500.css'
 import './index.css'
 import './styles/responsive.css'
 import { installDisablePictureInPicture } from './lib/disablePictureInPicture'
+import { bindPwaInstallCapture } from './lib/pwa'
 import App from './App.tsx'
 
 installDisablePictureInPicture()
 
-function registerServiceWorker() {
-  // Auto-update service worker: new deploys activate without sticky stale shells
+// Capture beforeinstallprompt ASAP — Android only offers a real WebAPK install
+// after SW + BIP are ready. Late listeners miss the event → "Add shortcut" only.
+if (typeof window !== 'undefined') {
+  bindPwaInstallCapture()
+}
+
+// Register SW immediately so Chrome Android can install as standalone app, not a bookmark
+if (typeof window !== 'undefined') {
   registerSW({
-    immediate: false,
+    immediate: true,
     onRegisteredSW(_swUrl, registration) {
       if (!registration) return
-      // Check for updates periodically while the tab is open
       window.setInterval(() => {
         void registration.update()
       }, 60 * 60 * 1000)
     },
-    onNeedRefresh() {
-      // autoUpdate + skipWaiting already handles this; soft reload if preload fails
-    },
   })
-}
-
-// Defer SW off the critical first-paint path
-const scheduleIdle =
-  typeof window !== 'undefined' && 'requestIdleCallback' in window
-    ? (cb: () => void) => window.requestIdleCallback(() => cb(), { timeout: 4000 })
-    : (cb: () => void) => window.setTimeout(cb, 1500)
-
-if (typeof window !== 'undefined') {
-  const startSw = () => scheduleIdle(registerServiceWorker)
-  if (document.readyState === 'complete') startSw()
-  else window.addEventListener('load', startSw, { once: true })
 }
 
 // After a deploy, old lazy chunks 404 — reload once to pick up the new index.html

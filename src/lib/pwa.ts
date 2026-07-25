@@ -223,6 +223,7 @@ export function handlePwaUninstalledOnDevice() {
 
 /** Shared deferred install event captured once for the whole app. */
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
+let installCaptureBound = false;
 
 export function getDeferredInstallPrompt() {
   return deferredPrompt;
@@ -230,6 +231,8 @@ export function getDeferredInstallPrompt() {
 
 export function bindPwaInstallCapture() {
   if (typeof window === 'undefined') return () => undefined;
+  if (installCaptureBound) return () => undefined;
+  installCaptureBound = true;
 
   const onBip = (event: Event) => {
     event.preventDefault();
@@ -284,6 +287,7 @@ export function bindPwaInstallCapture() {
       if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onDisplayMode);
       else mq.removeListener(onDisplayMode);
     });
+    installCaptureBound = false;
   };
 }
 

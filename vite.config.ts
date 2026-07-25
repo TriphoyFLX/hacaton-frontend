@@ -24,19 +24,15 @@ export default defineConfig({
         dir: 'ltr',
         start_url: '/?source=pwa',
         scope: '/',
+        // Android Chrome installs a real WebAPK only with standalone/fullscreen/minimal-ui.
+        // Do NOT list "browser" in display_override — that leads to bookmark-style shortcuts.
         display: 'standalone',
-        display_override: ['window-controls-overlay', 'standalone', 'minimal-ui', 'browser'],
+        display_override: ['standalone', 'minimal-ui'],
         orientation: 'any',
         background_color: '#050505',
         theme_color: '#050505',
         categories: ['music', 'entertainment', 'productivity'],
         prefer_related_applications: false,
-        related_applications: [
-          {
-            platform: 'webapp',
-            url: 'https://soundlab-studio.ru/manifest.webmanifest',
-          },
-        ],
         launch_handler: {
           client_mode: ['navigate-existing', 'auto'],
         },

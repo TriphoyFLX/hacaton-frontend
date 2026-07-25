@@ -158,15 +158,25 @@ export default function PwaInstallBanner() {
 
   const onInstall = async () => {
     if (canNativeInstall) {
-      await install();
-      setVisible(false);
+      const result = await install();
+      if (result === 'accepted') setVisible(false);
       return;
     }
     if (iosSafari) {
       window.alert(
         'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
       );
+      return;
     }
+    // Android without BIP yet — guide to real Install, not bookmark shortcut
+    window.alert(
+      'Чтобы поставить как приложение (не ссылку):\n\n' +
+        '1. Открой сайт в Google Chrome\n' +
+        '2. Подожди 2–3 секунды и обнови страницу\n' +
+        '3. Меню ⋮ → «Установить приложение»\n\n' +
+        'Важно: не выбирай «Добавить на главный экран» / «Создать ярлык» — это просто ссылка в браузере.\n' +
+        'После установки открывай SoundLab только с новой иконки.',
+    );
   };
 
   if (!visible || immersive || standalone || installedOnDevice || !canOfferInstall) return null;
@@ -186,15 +196,20 @@ export default function PwaInstallBanner() {
               <Share size={12} style={{ display: 'inline', verticalAlign: '-2px' }} />
               {' '}→ <strong>«На экран Домой»</strong>.
             </p>
+          ) : canNativeInstall ? (
+            <p className="pwa-banner-text">
+              Поставьте как настоящее приложение: без адресной строки Chrome, со своими уведомлениями.
+            </p>
           ) : (
             <p className="pwa-banner-text">
-              Поставьте как приложение: ярлык на рабочем столе и в «Пуск», отдельное окно без панели браузера.
+              Нужно <strong>«Установить приложение»</strong>, а не ярлык-ссылку.
+              Если кнопка ещё не готова — обнови страницу в Chrome и нажми снова.
             </p>
           )}
           <div className="pwa-banner-actions">
             <button type="button" className="pwa-banner-btn primary" onClick={() => void onInstall()}>
               <Download size={14} />
-              Установить
+              {canNativeInstall ? 'Установить' : 'Как установить'}
             </button>
             <button type="button" className="pwa-banner-btn ghost" onClick={onDismiss}>
               Позже
