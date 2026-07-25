@@ -1,12 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, type ReactNode } from 'react';
 import AuthCallback from './components/AuthCallback';
-import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import SoundTokGate from './components/SoundTokGate';
 import PwaInstallBanner from './components/PwaInstallBanner';
-import PwaUninstallFeedbackModal from './components/PwaUninstallFeedbackModal';
+
+const Layout = lazy(() => import('./components/Layout'));
+const PwaUninstallFeedbackModal = lazy(() => import('./components/PwaUninstallFeedbackModal'));
 
 const Landing = lazy(() => import('./pages/Landing'));
 const LegalPage = lazy(() => import('./pages/LegalPage'));
@@ -74,7 +75,7 @@ function App() {
         <Route
           element={
             <ProtectedRoute>
-              <Layout />
+              <Lazy><Layout /></Lazy>
             </ProtectedRoute>
           }
         >
@@ -106,7 +107,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <PwaInstallBanner />
-      <PwaUninstallFeedbackModal />
+      <Lazy><PwaUninstallFeedbackModal /></Lazy>
     </BrowserRouter>
   );
 }

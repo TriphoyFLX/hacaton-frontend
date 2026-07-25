@@ -94,8 +94,18 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2,webmanifest}'],
-        // Large drumkits / media stay network-only
-        globIgnores: ['**/drumkits/**', '**/og-image.jpg'],
+        // Heavy lazy routes load on demand; runtime caching still applies after visit
+        globIgnores: [
+          '**/drumkits/**',
+          '**/og-image.jpg',
+          '**/MIDI-*.js',
+          '**/ChatPage-*.js',
+          '**/RapBattleNew-*.js',
+          '**/SoundTok-*.js',
+          '**/AdminPanel-*.js',
+          '**/vendor-motion-*.js',
+        ],
+        maximumFileSizeToCacheInBytes: 400_000,
         runtimeCaching: [
           // Prefer network for navigations so installed PWA picks up new index.html quickly
           {
@@ -194,15 +204,13 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
-          if (id.includes('tone')) return 'vendor-tone';
           if (id.includes('framer-motion') || id.includes('/motion/')) return 'vendor-motion';
           if (id.includes('socket.io')) return 'vendor-socket';
-          if (id.includes('@dnd-kit')) return 'vendor-dnd';
           if (id.includes('lucide-react')) return 'vendor-icons';
           if (id.includes('react-dom') || id.includes('/react/') || id.includes('react-router')) {
             return 'vendor-react';
           }
-          if (id.includes('axios') || id.includes('zustand') || id.includes('@tanstack')) {
+          if (id.includes('axios') || id.includes('zustand')) {
             return 'vendor-data';
           }
         },

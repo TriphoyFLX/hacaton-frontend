@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom';
-import Layout from './Layout';
 import ProtectedRoute from './ProtectedRoute';
 import { useAuthStore } from '../store/authStore';
+
+const Layout = lazy(() => import('./Layout'));
 
 function Loading() {
   return (
@@ -43,7 +44,9 @@ export default function SoundTokGate({ children }: { children?: ReactNode }) {
 
   return (
     <ProtectedRoute>
-      <Layout />
+      <Suspense fallback={<Loading />}>
+        <Layout />
+      </Suspense>
     </ProtectedRoute>
   );
 }

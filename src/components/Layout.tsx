@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { ensureWebPushSubscription, getNotificationPermission } from '../lib/webPush';
 import { warmAppRoutes, prefetchRoute } from '../lib/routePrefetch';
 import { setCachedPageData, isPageDataFresh } from '../lib/pageDataCache';
+import { loadAppFonts } from '../lib/loadAppFonts';
 
 function isImmersiveRoute(pathname: string): boolean {
   if (pathname === '/soundtok') return true;
@@ -66,6 +67,10 @@ export default function Layout() {
 
   const immersive = isImmersiveRoute(pathname);
   const contentRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    loadAppFonts();
+  }, []);
 
   useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0 });

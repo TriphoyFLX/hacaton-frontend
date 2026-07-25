@@ -23,9 +23,20 @@ const EXTRA_LOADERS: Loader[] = [
   () => import('../pages/ChatPage'),
   () => import('../pages/PublicProfile'),
   () => import('../pages/SoundPage'),
+  () => import('../pages/SoundRecordPage'),
 ];
 
 const warmed = new Set<string>();
+
+function shouldWarmRoutes(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  const conn = (navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string };
+  }).connection;
+  if (conn?.saveData) return false;
+  if (conn?.effectiveType === 'slow-2g' || conn?.effectiveType === '2g') return false;
+  return true;
+}
 
 function normalizePath(path: string): string {
   if (!path) return '';
@@ -121,7 +132,7 @@ function cancelScheduled(handle: WarmHandle | undefined) {
  * blocking the UI. Heavy pages (MIDI / RapBattle) come last.
  */
 export function warmAppRoutes(): () => void {
-  if (typeof window === 'undefined') return () => undefined;
+  if (typeof window === 'undefined' || !shouldWarmRoutes()) return () => undefined;
 
   const priority = [
     '/feed',
@@ -129,11 +140,10 @@ export function warmAppRoutes(): () => void {
     '/chats',
     '/projects',
     '/profile',
+    '/dashboard',
     '/ai',
     '/presets',
     '/pricing',
-    '/rap-battle',
-    '/midi',
   ];
 
   let cancelled = false;
