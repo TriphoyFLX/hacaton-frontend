@@ -89,27 +89,31 @@ export function routePrefetchHandlers(path: string) {
 type WarmHandle = { kind: 'idle'; id: number } | { kind: 'timeout'; id: ReturnType<typeof setTimeout> };
 
 function schedule(cb: () => void, timeout: number): WarmHandle {
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+  const ric = typeof window !== 'undefined'
+    ? (window as Window & { requestIdleCallback?: typeof window.requestIdleCallback }).requestIdleCallback
+    : undefined;
+  if (typeof ric === 'function') {
     return {
       kind: 'idle',
-      id: window.requestIdleCallback(() => cb(), { timeout }),
+      id: ric(() => cb(), { timeout }),
     };
   }
   return {
     kind: 'timeout',
-    id: window.setTimeout(cb, Math.min(timeout, 800)),
+    id: setTimeout(cb, Math.min(timeout, 800)),
   };
 }
 
 function cancelScheduled(handle: WarmHandle | undefined) {
-  if (!handle || typeof window === 'undefined') return;
-  if (handle.kind === 'idle' && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(handle.id);
+  if (!handle) return;
+  if (handle.kind === 'idle') {
+    const cancel = typeof window !== 'undefined'
+      ? (window as Window & { cancelIdleCallback?: typeof window.cancelIdleCallback }).cancelIdleCallback
+      : undefined;
+    if (typeof cancel === 'function') cancel(handle.id);
     return;
   }
-  if (handle.kind === 'timeout') {
-    window.clearTimeout(handle.id);
-  }
+  clearTimeout(handle.id);
 }
 
 /**
