@@ -36,5 +36,8 @@ export const billingApi = {
       '/billing/create-payment',
       { kind, returnUrl },
     ).then((r) => r.data),
-  syncPayment: (id: string) => api.get(`/billing/payments/${id}`).then((r) => r.data),
+  syncPayment: (id: string) =>
+    api
+      .get<{ id: string; status: string; kind?: string; amountRub?: number }>(`/billing/payments/${id}`)
+      .then((r) => r.data),
 };

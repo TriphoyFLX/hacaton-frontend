@@ -147,18 +147,46 @@ export default function Pricing() {
   );
 
   useEffect(() => {
+    // Only after YooKassa return (or explicit paymentId) — never on a plain /pricing visit
+    const isReturn = params.get('payment') === 'return' || Boolean(params.get('paymentId'));
+    if (!isReturn) return;
+
     const paymentId = params.get('paymentId') || localStorage.getItem('sl_pending_payment');
     if (!paymentId) return;
+
+    let cancelled = false;
     void (async () => {
       try {
-        await billingApi.syncPayment(paymentId);
-        localStorage.removeItem('sl_pending_payment');
-        setMsg('Платёж обработан. Тариф и токены обновлены.');
-        await refresh();
+        const payment = await billingApi.syncPayment(paymentId);
+        if (cancelled) return;
+
+        const status = String(payment?.status || '').toUpperCase();
+        if (status === 'SUCCEEDED') {
+          localStorage.removeItem('sl_pending_payment');
+          setErr('');
+          setMsg('Платёж обработан. Тариф и токены обновлены.');
+          await refresh();
+          return;
+        }
+
+        if (status === 'CANCELED') {
+          localStorage.removeItem('sl_pending_payment');
+          setMsg('');
+          setErr('Оплата отменена. Токены и тариф не изменились.');
+          return;
+        }
+
+        // pending / waiting_for_capture — do not claim success
+        setMsg('');
+        setErr('Оплата ещё не подтверждена. Если вы уже заплатили — обновите страницу через минуту.');
       } catch {
-        /* webhook may still complete */
+        /* webhook may still complete — don't show a fake success */
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [params, refresh]);
 
   const pay = async (kind: PaymentKind) => {
