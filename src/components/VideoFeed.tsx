@@ -700,17 +700,17 @@ button.vf-repost-attr:hover {
 .vf-sheet {
   position: fixed;
   left: 50%;
-  bottom: 0;
+  bottom: var(--vf-keyboard-inset, 0px);
   transform: translateX(-50%);
   width: min(100%, 480px);
-  max-height: min(75dvh, 640px);
+  max-height: min(88dvh, calc(100dvh - var(--vf-keyboard-inset, 0px) - 8px), 720px);
   background: #121212;
-  border-radius: 12px 12px 0 0;
+  border-radius: 16px 16px 0 0;
   z-index: 1101;
   display: flex;
   flex-direction: column;
   animation: vf-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
 }
 
 @keyframes vf-slide-up {
@@ -780,12 +780,21 @@ button.vf-repost-attr:hover {
   display: flex;
   gap: 12px;
   padding: 12px 0;
+  border-radius: 10px;
+  transition: background 0.15s ease;
 }
 
 .vf-comment-item.reply {
   margin-left: 28px;
   padding-left: 10px;
   border-left: 2px solid rgba(255,255,255,0.08);
+}
+
+.vf-comment-item.is-reply-target {
+  background: rgba(110, 168, 254, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.22);
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .vf-comment-avatar {
@@ -904,7 +913,8 @@ button.vf-repost-attr:hover {
   background: transparent;
   color: rgba(255,255,255,0.45);
   cursor: pointer;
-  padding: 0;
+  padding: 8px 4px;
+  min-height: 36px;
   font-size: 12px;
   font-weight: 600;
 }
@@ -933,41 +943,50 @@ button.vf-repost-attr:hover {
   cursor: not-allowed;
 }
 
+.vf-sheet-composer {
+  flex-shrink: 0;
+  background: #161616;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
+
 .vf-reply-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 16px 0;
-  color: rgba(255,255,255,0.55);
-  font-size: 12px;
-  background: #121212;
-  border-top: 1px solid rgba(110, 168, 254, 0.18);
+  padding: 10px 14px 0;
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
 }
 
 .vf-reply-chip {
   display: inline-flex;
   align-items: center;
-  margin-left: 4px;
-  padding: 1px 7px;
+  margin-left: 6px;
+  padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(110, 168, 254, 0.2);
-  color: #8eb8ff;
+  background: rgba(110, 168, 254, 0.22);
+  color: #9ec4ff;
   font-weight: 700;
 }
 
 .vf-reply-cancel {
   border: 0;
-  background: transparent;
-  color: rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
   cursor: pointer;
   display: grid;
   place-items: center;
-  padding: 2px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .vf-reply-cancel:hover {
   color: #fff;
+  background: rgba(255,255,255,0.14);
 }
 
 .vf-empty-comments {
@@ -986,27 +1005,30 @@ button.vf-repost-attr:hover {
 
 .vf-sheet-input {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
-  padding: 10px 16px 14px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  padding: 10px 14px 0;
   flex-shrink: 0;
-  background: #121212;
+  background: transparent;
 }
 
 .vf-comment-input-wrap {
   position: relative;
   flex: 1;
   min-width: 0;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 22px;
+  padding: 2px;
 }
 
 .vf-comment-input-backdrop {
   position: absolute;
-  inset: 0;
-  padding: 10px 16px;
+  inset: 2px;
+  padding: 11px 14px;
   border-radius: 20px;
-  font: 14px/1.35 inherit;
-  white-space: pre;
+  font: 16px/1.4 inherit;
+  white-space: pre-wrap;
   overflow: hidden;
   color: #fff;
   pointer-events: none;
@@ -1020,23 +1042,29 @@ button.vf-repost-attr:hover {
   border-radius: 4px;
 }
 
-.vf-sheet-input input {
+.vf-sheet-input textarea {
   position: relative;
   z-index: 1;
+  display: block;
   width: 100%;
-  background: rgba(255,255,255,0.08);
+  min-height: 44px;
+  max-height: 120px;
+  resize: none;
+  background: transparent;
   border: none;
   border-radius: 20px;
-  padding: 10px 16px;
+  padding: 11px 14px;
   color: transparent;
   caret-color: #fff;
-  font-size: 14px;
-  line-height: 1.35;
+  font-size: 16px;
+  line-height: 1.4;
   outline: none;
+  overflow-y: auto;
+  field-sizing: content;
 }
 
-.vf-sheet-input input::placeholder {
-  color: rgba(255,255,255,0.35);
+.vf-sheet-input textarea::placeholder {
+  color: rgba(255,255,255,0.38);
   opacity: 1;
 }
 
@@ -1058,8 +1086,8 @@ button.vf-repost-attr:hover {
 }
 
 .vf-send-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: #fe2c55;
@@ -1069,12 +1097,23 @@ button.vf-repost-attr:hover {
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, transform 0.12s;
+}
+
+.vf-send-btn:not(:disabled):active {
+  transform: scale(0.96);
 }
 
 .vf-send-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.vf-composer-hint {
+  margin: 6px 16px 0;
+  font-size: 11px;
+  color: rgba(255,255,255,0.32);
+  font-family: 'DM Mono', monospace;
 }
 
 @media (max-width: 768px) {
@@ -1313,7 +1352,13 @@ export default function VideoFeed({
   const wheelIdleTimer = useRef<number | null>(null);
   const isSeekingRef = useRef(false);
   const isAnimatingRef = useRef(false);
-  const commentInputRef = useRef<HTMLInputElement>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const resizeCommentField = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  };
   const stageRef = useRef<HTMLDivElement>(null);
   const seekRef = useRef<HTMLDivElement>(null);
   const seekTimeRef = useRef<HTMLDivElement>(null);
@@ -1536,9 +1581,24 @@ export default function VideoFeed({
   }, [isPaused]);
 
   useEffect(() => {
-    if (commentsOpen) {
-      setTimeout(() => commentInputRef.current?.focus(), 350);
+    if (!commentsOpen) {
+      document.documentElement.style.removeProperty('--vf-keyboard-inset');
+      return;
     }
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty('--vf-keyboard-inset', `${inset}px`);
+    };
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      document.documentElement.style.removeProperty('--vf-keyboard-inset');
+    };
   }, [commentsOpen]);
 
   const enableSound = useCallback(() => {
@@ -2003,6 +2063,7 @@ export default function VideoFeed({
       if (!input) return;
       input.focus();
       input.setSelectionRange(mention.length, mention.length);
+      resizeCommentField(input);
     }, 0);
   };
 
@@ -2019,8 +2080,8 @@ export default function VideoFeed({
     navigate(`/profile/${username}`);
   };
 
-  const handleSubmitComment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitComment = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    e?.preventDefault();
     if (!currentSoundTokId || !newComment.trim() || submittingComment) return;
 
     setSubmittingComment(true);
@@ -2029,6 +2090,7 @@ export default function VideoFeed({
     const parentUsername = replyTo?.username;
     setNewComment('');
     setReplyTo(null);
+    window.setTimeout(() => resizeCommentField(commentInputRef.current), 0);
 
     try {
       const { comment, commentsCount } = await soundTokApi.createComment(
@@ -2045,6 +2107,7 @@ export default function VideoFeed({
       if (parentId && parentUsername) {
         setReplyTo({ id: parentId, username: parentUsername });
       }
+      window.setTimeout(() => resizeCommentField(commentInputRef.current), 0);
     } finally {
       setSubmittingComment(false);
     }
@@ -2649,7 +2712,12 @@ export default function VideoFeed({
                   const renderComment = (comment: Comment, isReply = false) => (
                     <div
                       key={comment.id}
-                      className={`vf-comment-item${isReply ? ' reply' : ''}`}
+                      className={`vf-comment-item${isReply ? ' reply' : ''}${
+                        replyTo?.id === (comment.parentId || comment.id) &&
+                        replyTo?.username === comment.author.username
+                          ? ' is-reply-target'
+                          : ''
+                      }`}
                     >
                       <CommentAvatar
                         author={comment.author}
@@ -2736,60 +2804,76 @@ export default function VideoFeed({
               )}
             </div>
 
-            {replyTo && (
-              <div className="vf-reply-bar">
-                <span>
-                  Ответ для
-                  <span className="vf-reply-chip">@{replyTo.username}</span>
-                </span>
-                <button
-                  type="button"
-                  className="vf-reply-cancel"
-                  aria-label="Отменить ответ"
-                  onClick={cancelReply}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
+            <div className="vf-sheet-composer">
+              {replyTo && (
+                <div className="vf-reply-bar">
+                  <span>
+                    Ответ для
+                    <span className="vf-reply-chip">@{replyTo.username}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="vf-reply-cancel"
+                    aria-label="Отменить ответ"
+                    onClick={cancelReply}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
 
-            <form className="vf-sheet-input" onSubmit={handleSubmitComment}>
-              <div className="vf-comment-input-wrap">
-                {newComment && (
-                  <div className="vf-comment-input-backdrop" aria-hidden>
-                    {replyTo && newComment.startsWith(`@${replyTo.username}`) ? (
-                      <>
-                        <span className="vf-comment-input-mention">
-                          @{replyTo.username}
-                        </span>
-                        {newComment.slice(`@${replyTo.username}`.length)}
-                      </>
-                    ) : (
-                      newComment
-                    )}
-                  </div>
-                )}
-                <input
-                  ref={commentInputRef}
-                  type="text"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder={
-                    replyTo ? `Ответ @${replyTo.username}…` : 'Добавить комментарий...'
-                  }
-                  maxLength={500}
-                  disabled={submittingComment}
-                />
-              </div>
-              <button
-                type="submit"
-                className="vf-send-btn"
-                disabled={submittingComment || !newComment.trim()}
-                aria-label="Отправить"
-              >
-                <Send size={18} />
-              </button>
-            </form>
+              <form className="vf-sheet-input" onSubmit={handleSubmitComment}>
+                <div className="vf-comment-input-wrap">
+                  {newComment && (
+                    <div className="vf-comment-input-backdrop" aria-hidden>
+                      {replyTo && newComment.startsWith(`@${replyTo.username}`) ? (
+                        <>
+                          <span className="vf-comment-input-mention">
+                            @{replyTo.username}
+                          </span>
+                          {newComment.slice(`@${replyTo.username}`.length)}
+                        </>
+                      ) : (
+                        newComment
+                      )}
+                    </div>
+                  )}
+                  <textarea
+                    ref={commentInputRef}
+                    value={newComment}
+                    rows={1}
+                    onChange={(e) => {
+                      setNewComment(e.target.value);
+                      resizeCommentField(e.target);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!submittingComment && newComment.trim()) {
+                          void handleSubmitComment(e);
+                        }
+                      }
+                    }}
+                    placeholder={
+                      replyTo ? `Ответ @${replyTo.username}…` : 'Добавить комментарий...'
+                    }
+                    maxLength={500}
+                    disabled={submittingComment}
+                    enterKeyHint="send"
+                    aria-label="Текст комментария"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="vf-send-btn"
+                  disabled={submittingComment || !newComment.trim()}
+                  aria-label="Отправить"
+                >
+                  <Send size={18} />
+                </button>
+              </form>
+              <div className="vf-composer-hint">Enter — отправить · Shift+Enter — новая строка</div>
+            </div>
           </div>
         </>
       )}

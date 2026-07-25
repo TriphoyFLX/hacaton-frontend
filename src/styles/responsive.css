@@ -420,8 +420,13 @@ select {
   }
 
   .vf-sheet {
-    max-height: min(78dvh, 620px) !important;
+    max-height: min(88dvh, calc(100dvh - var(--vf-keyboard-inset, 0px) - 8px), 720px) !important;
     border-radius: 18px 18px 0 0 !important;
+  }
+
+  .vf-composer-hint,
+  .post-composer-hint {
+    display: none;
   }
 
   .vf-actions {
@@ -609,8 +614,15 @@ select {
   }
 
   .message-input,
-  .post-comment-form input {
+  .post-comment-form input,
+  .post-comment-form textarea,
+  .vf-sheet-input textarea {
     font-size: 16px !important;
+  }
+
+  .post-comments-panel {
+    margin-left: 12px !important;
+    margin-right: 12px !important;
   }
 
   .mention-suggest {

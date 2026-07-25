@@ -791,55 +791,99 @@ ${FONT_IMPORT}
   font-size: 13px;
   color: var(--text-secondary);
 }
-.post-comments-panel { margin: 0 18px 16px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: rgba(0,0,0,.16); }
-.post-comment-list { display: grid; gap: 10px; max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
-.post-comment-form { display: flex; gap: 8px; }
-.post-comment-form > button { border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer; background: var(--text-primary); color: var(--bg); font-weight: 700; }
+.post-comments-panel {
+  display: flex;
+  flex-direction: column;
+  margin: 0 18px 16px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(0,0,0,.16);
+  overflow: hidden;
+}
+.post-comment-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(42dvh, 360px);
+  overflow-y: auto;
+  padding: 14px;
+  margin: 0;
+}
+.post-comment-composer {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated, var(--bg-surface, #1a1a1a));
+}
+.post-comment-form { display: flex; align-items: flex-end; gap: 8px; }
+.post-comment-form > button {
+  border: 0;
+  border-radius: 22px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: pointer;
+  background: var(--text-primary);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.post-comment-form > button:disabled { opacity: 0.4; cursor: not-allowed; }
 .post-comment-reply-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
-  padding: 7px 9px;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid rgba(110, 168, 254, 0.28);
-  background: rgba(110, 168, 254, 0.08);
-  font-size: 11px;
+  background: rgba(110, 168, 254, 0.1);
+  font-size: 13px;
   color: var(--text-secondary);
 }
 .post-comment-reply-chip {
   display: inline-flex;
   align-items: center;
-  margin-left: 4px;
-  padding: 1px 7px;
+  margin-left: 6px;
+  padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(110, 168, 254, 0.18);
+  background: rgba(110, 168, 254, 0.2);
   color: #8eb8ff;
   font-weight: 700;
 }
 .post-comment-reply-cancel {
   border: 0;
-  background: transparent;
+  background: rgba(255,255,255,0.06);
   color: var(--text-muted);
   cursor: pointer;
   display: grid;
   place-items: center;
-  padding: 2px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 .post-comment-reply-cancel:hover { color: var(--text-primary); }
 .post-comment-input-wrap {
   position: relative;
   flex: 1;
   min-width: 0;
+  border: 1px solid var(--border-mid);
+  border-radius: 22px;
+  background: var(--bg);
+  padding: 2px;
 }
 .post-comment-input-backdrop {
   position: absolute;
-  inset: 0;
-  padding: 8px 10px;
-  border-radius: 7px;
-  font: 12px/1.35 'Syne', sans-serif;
-  white-space: pre;
+  inset: 2px;
+  padding: 11px 14px;
+  border-radius: 20px;
+  font: 16px/1.4 'Syne', sans-serif;
+  white-space: pre-wrap;
   overflow: hidden;
   color: var(--text-primary);
   pointer-events: none;
@@ -851,27 +895,43 @@ ${FONT_IMPORT}
   background: rgba(110, 168, 254, 0.18);
   border-radius: 4px;
 }
-.post-comment-form input {
+.post-comment-form textarea {
   position: relative;
   z-index: 1;
-  flex: 1;
+  display: block;
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--border-mid);
-  border-radius: 7px;
-  padding: 8px 10px;
+  min-height: 44px;
+  max-height: 120px;
+  resize: none;
+  border: none;
+  border-radius: 20px;
+  padding: 11px 14px;
   color: transparent;
   caret-color: var(--text-primary);
-  background: var(--bg);
-  font: 12px/1.35 'Syne', sans-serif;
+  background: transparent;
+  font: 16px/1.4 'Syne', sans-serif;
+  outline: none;
+  overflow-y: auto;
+  field-sizing: content;
 }
-.post-comment-form input::placeholder {
+.post-comment-form textarea::placeholder {
   color: var(--text-secondary);
   opacity: 1;
 }
-.post-comment-form input:not(:placeholder-shown) {
-  /* keep typed text transparent so backdrop highlight shows */
+.post-comment-form textarea:not(:placeholder-shown) {
   color: transparent;
+}
+.post-composer-hint {
+  margin-top: 6px;
+  font: 11px 'DM Mono', monospace;
+  color: var(--text-muted);
+}
+.post-comment.is-reply-target {
+  background: rgba(110, 168, 254, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.22);
+  border-radius: 8px;
+  padding: 6px 8px;
 }
 .post-comment-mention {
   display: inline;
@@ -943,7 +1003,8 @@ ${FONT_IMPORT}
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0;
+  min-height: 36px;
+  padding: 8px 4px;
   font: 11px 'DM Mono', monospace;
 }
 .post-comment-vote:hover { color: var(--text-secondary); }
@@ -954,8 +1015,9 @@ ${FONT_IMPORT}
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0;
-  font: 11px 'Syne', sans-serif;
+  padding: 8px 4px;
+  min-height: 36px;
+  font: 12px 'Syne', sans-serif;
   font-weight: 600;
 }
 .post-comment-reply-btn:hover { color: var(--text-primary); }
@@ -1247,7 +1309,13 @@ function PostCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [votingCommentId, setVotingCommentId] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null);
-  const commentInputRef = useRef<HTMLInputElement>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const resizeCommentField = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  };
   const isOwnPost = Boolean(currentUserId && currentUserId === post.authorId);
 
   useEffect(() => {
@@ -1366,8 +1434,8 @@ function PostCard({
     if (!nextOpen) return;
     try { setComments(await postsApi.getComments(post.id)); } catch { setCommentError('Не удалось загрузить комментарии'); }
   };
-  const submitComment = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submitComment = async (event?: React.FormEvent | React.KeyboardEvent) => {
+    event?.preventDefault();
     const text = commentText.trim();
     if (!text) return;
     setCommentError('');
@@ -1377,6 +1445,7 @@ function PostCard({
       setCommentsCount(result.commentsCount);
       setCommentText('');
       setReplyTo(null);
+      window.setTimeout(() => resizeCommentField(commentInputRef.current), 0);
     } catch (error: any) {
       setCommentError(error?.response?.data?.error || 'Не удалось отправить комментарий');
     }
@@ -1395,6 +1464,7 @@ function PostCard({
       if (!input) return;
       input.focus();
       input.setSelectionRange(mention.length, mention.length);
+      resizeCommentField(input);
     }, 0);
   };
   const cancelReply = () => {
@@ -1666,7 +1736,15 @@ function PostCard({
               const repliesOf = (rootId: string) =>
                 comments.filter((c) => c.parentId === rootId);
               const renderRow = (comment: PostComment, isReply = false) => (
-                <div className={`post-comment${isReply ? ' reply' : ''}`} key={comment.id}>
+                <div
+                  className={`post-comment${isReply ? ' reply' : ''}${
+                    replyTo?.id === (comment.parentId || comment.id) &&
+                    replyTo?.username === comment.author.username
+                      ? ' is-reply-target'
+                      : ''
+                  }`}
+                  key={comment.id}
+                >
                   <div className="post-comment-main">
                     <div>
                       <button
@@ -1740,49 +1818,64 @@ function PostCard({
             <div className="post-comment">Комментариев пока нет.</div>
           )}
         </div>
-        {replyTo && (
-          <div className="post-comment-reply-bar">
-            <span>
-              Ответ для
-              <span className="post-comment-reply-chip">@{replyTo.username}</span>
-            </span>
-            <button
-              type="button"
-              className="post-comment-reply-cancel"
-              aria-label="Отменить ответ"
-              onClick={cancelReply}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-        <form className="post-comment-form" onSubmit={submitComment}>
-          <div className="post-comment-input-wrap">
-            {commentText && (
-              <div className="post-comment-input-backdrop" aria-hidden>
-                {replyTo && commentText.startsWith(`@${replyTo.username}`) ? (
-                  <>
-                    <span className="post-comment-input-mention">
-                      @{replyTo.username}
-                    </span>
-                    {commentText.slice(`@${replyTo.username}`.length)}
-                  </>
-                ) : (
-                  commentText
-                )}
-              </div>
-            )}
-            <input
-              ref={commentInputRef}
-              value={commentText}
-              onChange={(event) => setCommentText(event.target.value)}
-              maxLength={1000}
-              placeholder={replyTo ? `Ответ @${replyTo.username}…` : 'Написать комментарий…'}
-            />
-          </div>
-          <button type="submit">Отправить</button>
-        </form>
-        {commentError && <div className="post-comment">{commentError}</div>}
+        <div className="post-comment-composer">
+          {replyTo && (
+            <div className="post-comment-reply-bar">
+              <span>
+                Ответ для
+                <span className="post-comment-reply-chip">@{replyTo.username}</span>
+              </span>
+              <button
+                type="button"
+                className="post-comment-reply-cancel"
+                aria-label="Отменить ответ"
+                onClick={cancelReply}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          <form className="post-comment-form" onSubmit={submitComment}>
+            <div className="post-comment-input-wrap">
+              {commentText && (
+                <div className="post-comment-input-backdrop" aria-hidden>
+                  {replyTo && commentText.startsWith(`@${replyTo.username}`) ? (
+                    <>
+                      <span className="post-comment-input-mention">
+                        @{replyTo.username}
+                      </span>
+                      {commentText.slice(`@${replyTo.username}`.length)}
+                    </>
+                  ) : (
+                    commentText
+                  )}
+                </div>
+              )}
+              <textarea
+                ref={commentInputRef}
+                value={commentText}
+                rows={1}
+                onChange={(event) => {
+                  setCommentText(event.target.value);
+                  resizeCommentField(event.target);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    if (commentText.trim()) void submitComment(event);
+                  }
+                }}
+                maxLength={1000}
+                placeholder={replyTo ? `Ответ @${replyTo.username}…` : 'Написать комментарий…'}
+                enterKeyHint="send"
+                aria-label="Текст комментария"
+              />
+            </div>
+            <button type="submit" disabled={!commentText.trim()}>Отправить</button>
+          </form>
+          <div className="post-composer-hint">Enter — отправить · Shift+Enter — новая строка</div>
+          {commentError && <div className="post-comment" role="alert">{commentError}</div>}
+        </div>
       </div>}
       {shareOpen && <div className="post-share-overlay" role="dialog" aria-modal="true">
         <div className="post-share-dialog">
