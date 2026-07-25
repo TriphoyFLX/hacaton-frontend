@@ -83,7 +83,10 @@ ${FONT_IMPORT}
   display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;
   justify-content:space-between;
 }
-.db-pwa-copy { flex:1; min-width:200px; }
+.db-pwa-copy { flex:1; min-width:0; }
+@media (min-width: 480px) {
+  .db-pwa-copy { min-width:200px; }
+}
 .db-pwa-copy p {
   margin:8px 0 0; color:var(--t2); font-size:13px; line-height:1.5;
 }
@@ -101,7 +104,7 @@ ${FONT_IMPORT}
 .db-pwa-install:hover { opacity:.92; }
 
 /* ── INFO GRID ── */
-.db-info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; }
+.db-info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap:16px; }
 .db-info-item {
   background:var(--elev); border:1px solid var(--b2);
   border-radius:10px; padding:16px;

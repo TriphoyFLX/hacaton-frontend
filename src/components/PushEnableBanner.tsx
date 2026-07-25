@@ -16,7 +16,7 @@ const css = `
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(12px + var(--app-bottom-nav, 0px) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(12px + var(--app-bottom-nav, 0px));
   z-index: 121;
   display: flex;
   gap: 12px;

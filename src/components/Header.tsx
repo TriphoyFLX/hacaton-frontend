@@ -159,11 +159,11 @@ ${FONT_IMPORT}
   z-index: 5000;
   top: 67px;
   right: 20px;
-  width: min(380px, calc(100vw - 24px));
+  width: min(380px, calc(100% - 24px));
+  max-width: calc(100dvw - 24px);
   max-height: min(520px, calc(100dvh - 83px - var(--app-bottom-nav, 0px)));
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   padding: 8px;
   border: 1px solid var(--border-mid);
   border-radius: 10px;

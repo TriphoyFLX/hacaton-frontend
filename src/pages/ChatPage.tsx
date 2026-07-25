@@ -364,6 +364,13 @@ ${FONT_IMPORT}
   opacity: 0.55;
   cursor: not-allowed;
 }
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
 .header-group-btn {
   display: flex;
   align-items: center;
@@ -396,9 +403,11 @@ ${FONT_IMPORT}
   }
   .chat-header {
     padding: 10px 12px;
+    gap: 8px;
   }
   .chat-input-area {
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    /* Layout already reserves bottom nav + safe-area */
+    padding: 10px 12px;
   }
   .message-input {
     font-size: 16px;
@@ -411,6 +420,11 @@ ${FONT_IMPORT}
     height: 100%;
     min-height: 0;
     max-height: 100%;
+    overflow-x: clip;
+  }
+  .chat-ambient,
+  .ambient-orb {
+    display: none !important;
   }
   .messages-container,
   .chat-messages {
@@ -3034,27 +3048,31 @@ export default function ChatPage() {
                 </div>
               </button>
             ) : otherUser ? (
-              <>
-                <button type="button" className="header-profile-btn" onClick={openProfile}>
-                  <div className="header-avatar">
-                    {resolveMediaUrl(otherUser.avatar) ? (
-                      <img src={resolveMediaUrl(otherUser.avatar)!} alt={otherUser.username} />
-                    ) : (
-                      otherUser.username[0].toUpperCase()
-                    )}
-                    {presenceStatus === 'online' && <span className="online-indicator" />}
-                    {presenceStatus === 'offline' && <span className="offline-indicator" />}
+              <button type="button" className="header-profile-btn" onClick={openProfile}>
+                <div className="header-avatar">
+                  {resolveMediaUrl(otherUser.avatar) ? (
+                    <img src={resolveMediaUrl(otherUser.avatar)!} alt={otherUser.username} />
+                  ) : (
+                    otherUser.username[0].toUpperCase()
+                  )}
+                  {presenceStatus === 'online' && <span className="online-indicator" />}
+                  {presenceStatus === 'offline' && <span className="offline-indicator" />}
+                </div>
+                <div className="header-info">
+                  <div className="header-username">
+                    {otherUser.displayName || `@${otherUser.username}`}
                   </div>
-                  <div className="header-info">
-                    <div className="header-username">
-                      {otherUser.displayName || `@${otherUser.username}`}
-                    </div>
-                    <div className={`header-status ${presenceStatus}`}>
-                      {getPresenceLabel()}
-                    </div>
+                  <div className={`header-status ${presenceStatus}`}>
+                    {getPresenceLabel()}
                   </div>
-                </button>
+                </div>
+              </button>
+            ) : (
+              <div />
+            )}
 
+            <div className="chat-header-actions">
+              {!isGroupChat && otherUser ? (
                 <button
                   type="button"
                   className={`header-block-btn ${blockStatus?.blockedByMe ? 'unblock' : ''}`}
@@ -3067,24 +3085,24 @@ export default function ChatPage() {
                     {blockStatus?.blockedByMe ? 'Разблокировать' : 'Заблокировать'}
                   </span>
                 </button>
-              </>
-            ) : null}
+              ) : null}
 
-            <button
-              type="button"
-              className={`header-pin-btn ${pinState.isPinned ? 'active' : ''}`}
-              onClick={handleTogglePin}
-              disabled={pinning}
-              title={pinState.isPinned ? 'Открепить' : 'Закрепить'}
-            >
-              {pinning ? (
-                <Loader2 size={17} className="loader" />
-              ) : pinState.isPinned ? (
-                <PinOff size={17} />
-              ) : (
-                <Pin size={17} />
-              )}
-            </button>
+              <button
+                type="button"
+                className={`header-pin-btn ${pinState.isPinned ? 'active' : ''}`}
+                onClick={handleTogglePin}
+                disabled={pinning}
+                title={pinState.isPinned ? 'Открепить' : 'Закрепить'}
+              >
+                {pinning ? (
+                  <Loader2 size={17} className="loader" />
+                ) : pinState.isPinned ? (
+                  <PinOff size={17} />
+                ) : (
+                  <Pin size={17} />
+                )}
+              </button>
+            </div>
           </header>
 
           {isMessagingBlocked && (

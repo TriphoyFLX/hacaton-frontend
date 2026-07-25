@@ -48,8 +48,10 @@ ${FONT_IMPORT}
   --red-dim: #1a0f0f;
   font-family: 'Syne', sans-serif;
   background: var(--bg);
-  min-height: 100vh;
+  min-height: 100%;
   color: var(--text-primary);
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .st-wrapper {
@@ -606,7 +608,9 @@ ${FONT_IMPORT}
   height: 100%;
   max-height: 100%;
   min-height: 0;
+  max-width: 100%;
   overflow: hidden;
+  overflow-x: clip;
   overscroll-behavior: none;
   contain: size layout paint;
   background: #0a0a0a;
@@ -629,9 +633,10 @@ ${FONT_IMPORT}
 
 .st-fab {
   position: absolute;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
+  max-width: calc(100% - 24px);
   width: 52px;
   height: 52px;
   background: var(--text-primary);
@@ -698,8 +703,8 @@ ${FONT_IMPORT}
 
   .st-fab {
     left: auto;
-    right: max(14px, env(safe-area-inset-right, 0px));
-    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    right: 14px;
+    bottom: 18px;
     transform: none;
     width: 52px;
     height: 52px;
@@ -707,11 +712,16 @@ ${FONT_IMPORT}
     background: linear-gradient(135deg, var(--purple), var(--pink));
     border-color: transparent;
     color: #fff;
-    z-index: 6;
+    z-index: 30;
   }
 
   .st-fab:hover {
     transform: scale(1.06);
+  }
+
+  .st-root--guest .st-fab {
+    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   }
 
   .st-overlay {

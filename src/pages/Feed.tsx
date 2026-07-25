@@ -1008,10 +1008,10 @@ ${FONT_IMPORT}
   .feed-tag-filter {
     width: 100%;
   }
+  .ambient-orb,
   .ambient-orb-1,
   .ambient-orb-2 {
-    width: 280px;
-    height: 280px;
+    display: none !important;
   }
 }
 

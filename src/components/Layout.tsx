@@ -106,10 +106,10 @@ export default function Layout() {
 
         <main
           ref={contentRef}
-          className={`app-main flex-1 min-h-0 min-w-0 ${
+          className={`app-main flex-1 min-h-0 min-w-0 max-w-full ${
             immersive
               ? 'app-main--immersive overflow-hidden'
-              : 'overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]'
+              : 'overflow-y-auto overflow-x-clip overscroll-contain md:[scrollbar-gutter:stable]'
           }`}
         >
           <Outlet />

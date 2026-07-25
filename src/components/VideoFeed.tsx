@@ -196,9 +196,10 @@ const css = `
   left: 0;
   right: 72px;
   bottom: 14px;
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding: 16px;
   z-index: 8;
   color: #fff;
+  min-width: 0;
 }
 
 .vf-seek {
@@ -207,7 +208,7 @@ const css = `
   right: 0;
   bottom: 0;
   z-index: 14;
-  padding: 10px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 12px 8px;
   touch-action: none;
   cursor: pointer;
 }
@@ -253,7 +254,7 @@ const css = `
 .vf-seek-time {
   position: absolute;
   left: 12px;
-  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  bottom: 22px;
   font-family: 'DM Mono', monospace;
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -359,7 +360,7 @@ const css = `
 .vf-actions {
   position: absolute;
   right: 10px;
-  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  bottom: 88px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1079,26 +1080,55 @@ button.vf-repost-attr:hover {
 @media (max-width: 768px) {
   .vf-phone {
     width: 100%;
+    max-width: 100%;
     height: 100%;
     border-radius: 0;
   }
 
   .vf-actions {
-    right: max(8px, env(safe-area-inset-right, 0px));
-    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
-    z-index: 5;
+    right: 8px;
+    /* Above caption + seek — Layout already reserves bottom nav */
+    bottom: 108px;
+    z-index: 9;
   }
 
   .vf-bottom-info {
-    left: max(12px, env(safe-area-inset-left, 0px));
+    left: 12px;
     right: 78px;
-    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    bottom: 10px;
+    padding: 12px 10px 14px;
+  }
+
+  .vf-seek {
+    padding-bottom: 8px;
   }
 
   .vf-action-btn {
     width: 48px;
     height: 48px;
   }
+
+  .vf-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+}
+
+/* Guest fullscreen (outside Layout) — restore home-indicator padding */
+.st-root--guest .vf-bottom-info {
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+}
+.st-root--guest .vf-actions {
+  bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+}
+.st-root--guest .vf-seek {
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.st-root--guest .vf-seek-time {
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 769px) {
@@ -1115,11 +1145,11 @@ button.vf-repost-attr:hover {
 
   .vf-actions {
     right: 12px;
-    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    bottom: 96px;
   }
 
   .vf-bottom-info {
-    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 20px;
   }
 }
 

@@ -425,12 +425,12 @@ select {
   }
 
   .vf-actions {
-    right: max(8px, env(safe-area-inset-right)) !important;
+    right: 8px !important;
   }
 
   .vf-bottom-info {
-    left: max(14px, env(safe-area-inset-left)) !important;
-    right: 84px !important;
+    left: 12px !important;
+    right: 78px !important;
   }
 }
 
@@ -529,7 +529,7 @@ select {
 
 @media (max-width: 900px) and (orientation: landscape) {
   .vf-phone {
-    width: min(100vw, calc((100dvh - 18px) * 0.5625)) !important;
+    width: min(100%, calc((100dvh - 18px) * 0.5625)) !important;
     height: calc(100dvh - 18px) !important;
     border-radius: 14px !important;
   }
@@ -722,7 +722,70 @@ select {
 .ai-root,
 .chats-root,
 .projects-root,
+.st-root,
+.chat-root,
 .pr {
   max-width: 100%;
   overflow-x: clip;
 }
+
+/* Mobile polish: kill horizontal shake + keep chrome fully visible */
+@media (max-width: 768px) {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: clip;
+    overscroll-behavior-x: none;
+  }
+
+  /* Blur orbs expand document width on iOS/Android */
+  .ambient-orb,
+  .feed-ambient,
+  .chats-ambient,
+  .chat-ambient,
+  .ai-ambient,
+  .profile-ambient {
+    display: none !important;
+  }
+
+  .app-shell,
+  .app-main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overscroll-behavior-x: none;
+  }
+
+  /* Nested horizontal scroll stays local */
+  .projects-tabs,
+  .feed-tabs {
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .db-pwa-copy {
+    min-width: 0 !important;
+  }
+
+  .db-info-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* SoundTok / VideoFeed: never use 100vw inside shell */
+  .vf-phone {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .vf-bottom-info,
+  .vf-description,
+  .vf-music-row,
+  .post-content,
+  .chat-item-preview,
+  .header-username {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
