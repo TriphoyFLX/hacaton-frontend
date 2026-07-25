@@ -8,6 +8,7 @@ import { usePwaInstall } from '../hooks/usePwaInstall';
 import PwaInstallButton from './PwaInstallButton';
 import { appSocket } from '../lib/appSocket';
 import { isChatNotificationEntity, notificationText as formatNotificationText } from '../lib/notificationCopy';
+import { playNotificationSound, unlockNotificationSound } from '../lib/notificationSound';
 
 const SearchModal = lazy(() => import('./SearchModal'));
 
@@ -355,6 +356,7 @@ export default function Header() {
         return [notification, ...current.filter((item) => item.id !== notification.id)];
       });
       setUnreadCount((current) => current + 1);
+      playNotificationSound();
     };
     socket.on('notification:new', onNotification);
     return () => {
@@ -362,6 +364,17 @@ export default function Header() {
       appSocket.release();
     };
   }, [token]);
+
+  // Unlock AudioContext after first click so chimes can play later
+  useEffect(() => {
+    const unlock = () => unlockNotificationSound();
+    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isNotificationsOpen) return;
