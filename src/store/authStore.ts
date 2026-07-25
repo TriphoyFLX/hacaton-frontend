@@ -116,6 +116,9 @@ export const useAuthStore = create<AuthState>()(
         const authToken = getAuthToken();
         clearAuthSession();
         set({ user: null, token: null });
+        void import('../lib/pageDataCache').then(({ invalidatePageData }) => {
+          invalidatePageData();
+        });
 
         // Drop server + browser push subscription after logout (token captured above)
         if (pushEndpoint && authToken) {

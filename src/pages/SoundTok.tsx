@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import VideoFeed from '../components/VideoFeed';
 import { SoundTok, soundTokApi } from '../api/soundtok';
 import { useAuthStore } from '../store/authStore';
+import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
 
 const GUEST_KEY_STORAGE = 'sl_guest_key';
 
@@ -864,10 +865,15 @@ export default function SoundTok() {
   const navigate = useNavigate();
   const token = useAuthStore((s) => s.token);
   const guestMode = !token;
-  const [soundToks, setSoundToks] = useState<SoundTok[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [soundToks, setSoundToks] = useState<SoundTok[]>(() => {
+    const stale = getStalePageData<{ items: SoundTok[]; hasMore: boolean }>('soundtok:feed');
+    return stale?.items ?? [];
+  });
+  const [loading, setLoading] = useState(() => !getStalePageData('soundtok:feed'));
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(() =>
+    Boolean(getStalePageData<{ hasMore: boolean }>('soundtok:feed')?.hasMore),
+  );
   const [showUpload, setShowUpload] = useState(false);
   const [description, setDescription] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -921,6 +927,9 @@ export default function SoundTok() {
         return;
       }
 
+      const stale = getStalePageData<{ items: SoundTok[]; hasMore: boolean }>('soundtok:feed');
+      if (!stale && !sharedVideoId) setLoading(true);
+
       const data = await soundTokApi.getSoundToks({ limit: PAGE_SIZE, offset: 0 });
       let items = data.items;
       if (sharedVideoId && !items.some((tok) => tok.id === sharedVideoId)) {
@@ -933,6 +942,9 @@ export default function SoundTok() {
       }
       setSoundToks(items);
       setHasMore(Boolean(data.hasMore));
+      if (!sharedVideoId) {
+        setCachedPageData('soundtok:feed', { items, hasMore: Boolean(data.hasMore) });
+      }
     } catch (error) {
       console.error('Failed to fetch SoundToks:', error);
       if (guestMode && sharedVideoId) {
@@ -966,7 +978,18 @@ export default function SoundTok() {
   }, [guestMode, loadingMore, hasMore, soundToks.length]);
 
   useEffect(() => {
-    setLoading(true);
+    if (!guestMode && !sharedVideoId) {
+      const stale = getStalePageData<{ items: SoundTok[]; hasMore: boolean }>('soundtok:feed');
+      if (stale) {
+        setSoundToks(stale.items);
+        setHasMore(stale.hasMore);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    } else {
+      setLoading(true);
+    }
     fetchSoundToks();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once / when deep-link id or auth changes
   }, [sharedVideoId, guestMode]);

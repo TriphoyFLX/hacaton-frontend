@@ -6,55 +6,83 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { useAuthStore } from '../store/authStore';
 import { ensureWebPushSubscription } from '../lib/webPush';
+import { warmAppRoutes, prefetchRoute } from '../lib/routePrefetch';
+import { setCachedPageData, isPageDataFresh } from '../lib/pageDataCache';
 
 function isImmersiveRoute(pathname: string): boolean {
-
   if (pathname === '/soundtok') return true;
-
   if (pathname.startsWith('/soundtok/sound/') && pathname.endsWith('/record')) return true;
-
   if (pathname.startsWith('/chats/') && pathname !== '/chats') return true;
-
   if (pathname === '/studio' || pathname === '/midi') return true;
-
   return false;
-
 }
 
+/** Quietly warm API payloads for the hottest tabs after chunks load. */
+function warmHotApiData() {
+  void import('../api/posts').then(({ postsApi }) => {
+    if (isPageDataFresh('feed:trending:')) return;
+    void postsApi
+      .getPosts('trending', '', { limit: 12, offset: 0 })
+      .then((data) => {
+        setCachedPageData('feed:trending:', {
+          items: data.items ?? [],
+          hasMore: Boolean(data.hasMore),
+        });
+      })
+      .catch(() => undefined);
+  });
 
+  void import('../api/chats').then(({ chatsApi }) => {
+    if (isPageDataFresh('chats:list')) return;
+    void chatsApi
+      .getChats({ limit: 25, offset: 0 })
+      .then((data) => {
+        setCachedPageData('chats:list', {
+          items: data.items ?? [],
+          hasMore: Boolean(data.hasMore),
+        });
+      })
+      .catch(() => undefined);
+  });
+
+  void import('../api/soundtok').then(({ soundTokApi }) => {
+    if (isPageDataFresh('soundtok:feed')) return;
+    void soundTokApi
+      .getSoundToks({ limit: 8, offset: 0 })
+      .then((data) => {
+        setCachedPageData('soundtok:feed', {
+          items: data.items ?? [],
+          hasMore: Boolean(data.hasMore),
+        });
+      })
+      .catch(() => undefined);
+  });
+}
 
 export default function Layout() {
-
   const { pathname } = useLocation();
   const token = useAuthStore((s) => s.token);
 
   const immersive = isImmersiveRoute(pathname);
   const contentRef = useRef<HTMLElement>(null);
-  const prefetchedRef = useRef(false);
 
   useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0 });
   }, [pathname]);
 
-  // Warm common route chunks after first paint
+  // Prefetch the current route's siblings when navigating (e.g. open chats → warm ChatPage)
   useEffect(() => {
-    if (!token || prefetchedRef.current) return;
-    const schedule =
-      typeof window !== 'undefined' && 'requestIdleCallback' in window
-        ? (cb: () => void) => window.requestIdleCallback(() => cb(), { timeout: 4000 })
-        : (cb: () => void) => window.setTimeout(cb, 2000);
-    const id = schedule(() => {
-      prefetchedRef.current = true;
-      void import('../pages/Feed');
-      void import('../pages/Chats');
-      void import('../pages/SoundTok');
-    });
+    prefetchRoute(pathname);
+  }, [pathname]);
+
+  // Warm all common route chunks + hot API data after login
+  useEffect(() => {
+    if (!token) return;
+    const stopWarm = warmAppRoutes();
+    const apiTimer = window.setTimeout(() => warmHotApiData(), 1800);
     return () => {
-      if (typeof id === 'number' && 'cancelIdleCallback' in window) {
-        window.cancelIdleCallback(id);
-      } else {
-        window.clearTimeout(id as number);
-      }
+      stopWarm();
+      window.clearTimeout(apiTimer);
     };
   }, [token]);
 
@@ -66,7 +94,6 @@ export default function Layout() {
     }, 2500);
     return () => window.clearTimeout(timer);
   }, [token]);
-
 
   return (
     <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-[#0a0a0a]">
@@ -88,6 +115,4 @@ export default function Layout() {
       </div>
     </div>
   );
-
 }
-

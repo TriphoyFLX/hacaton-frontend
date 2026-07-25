@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AdminBadge from '../components/AdminBadge';
 import PlatinumBadge from '../components/PlatinumBadge';
 import { renderTextWithMentions } from '../utils/messageMentions';
+import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
 
 // ── Styles ──
 const FONT_IMPORT = '';
@@ -1805,23 +1806,36 @@ export default function Feed() {
   const navigate = useNavigate();
   const currentUserId = useAuthStore((state) => state.user?.id);
   const selectedTag = new URLSearchParams(location.search).get('tag')?.replace(/^#/, '').trim() || '';
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
   const [activeTab, setActiveTab] = useState<'trending' | 'latest'>('trending');
+  const [posts, setPosts] = useState<Post[]>(() => {
+    const stale = getStalePageData<{ items: Post[]; hasMore: boolean }>('feed:trending:');
+    return stale?.items ?? [];
+  });
+  const [loading, setLoading] = useState(() => !getStalePageData('feed:trending:'));
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(() =>
+    Boolean(getStalePageData<{ hasMore: boolean }>('feed:trending:')?.hasMore),
+  );
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const PAGE_SIZE = 12;
 
   const fetchPosts = useCallback(async () => {
-    setLoading(true);
+    const key = `feed:${activeTab}:${selectedTag}`;
+    const stale = getStalePageData<{ items: Post[]; hasMore: boolean }>(key);
+    // Instant paint from cache; only show spinner on cold load
+    if (!stale) setLoading(true);
     try {
       const data = await postsApi.getPosts(activeTab, selectedTag, { limit: PAGE_SIZE, offset: 0 });
-      setPosts(data.items ?? []);
-      setHasMore(Boolean(data.hasMore));
+      const items = data.items ?? [];
+      const more = Boolean(data.hasMore);
+      setPosts(items);
+      setHasMore(more);
+      setCachedPageData(key, { items, hasMore: more });
     } catch {
-      setPosts([]);
-      setHasMore(false);
+      if (!stale) {
+        setPosts([]);
+        setHasMore(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -1848,6 +1862,13 @@ export default function Feed() {
   }, [activeTab, selectedTag, posts.length, loadingMore, hasMore]);
 
   useEffect(() => {
+    const key = `feed:${activeTab}:${selectedTag}`;
+    const stale = getStalePageData<{ items: Post[]; hasMore: boolean }>(key);
+    if (stale) {
+      setPosts(stale.items);
+      setHasMore(stale.hasMore);
+      setLoading(false);
+    }
     void fetchPosts();
   }, [fetchPosts]);
 

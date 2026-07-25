@@ -32,8 +32,14 @@ const Pricing = lazy(() => import('./pages/Pricing'));
 
 function RouteFallback() {
   return (
-    <div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">
-      Загрузка…
+    <div className="min-h-[40vh] flex items-center justify-center text-gray-500 text-sm" aria-busy="true">
+      <span className="inline-flex items-center gap-2">
+        <span
+          className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300"
+          aria-hidden
+        />
+        Загрузка…
+      </span>
     </div>
   );
 }

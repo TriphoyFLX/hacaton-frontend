@@ -7,6 +7,7 @@ import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { useSocket } from '../hooks/useSocket';
 import { Search, MessageCircle, Pin, PinOff, Users, Plus, X } from 'lucide-react';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
 
 type GroupCandidate = {
   id: string;
@@ -724,10 +725,15 @@ export default function Chats() {
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
   const refreshUnread = useChatUnreadStore((s) => s.refresh);
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [chats, setChats] = useState<Chat[]>(() => {
+    const stale = getStalePageData<{ items: Chat[]; hasMore: boolean }>('chats:list');
+    return stale?.items ?? [];
+  });
+  const [loading, setLoading] = useState(() => !getStalePageData('chats:list'));
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(() =>
+    Boolean(getStalePageData<{ hasMore: boolean }>('chats:list')?.hasMore),
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const CHAT_PAGE_SIZE = 25;
   const [pinningId, setPinningId] = useState<string | null>(null);
@@ -754,10 +760,13 @@ export default function Chats() {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchChats = async () => {
+    const stale = getStalePageData<{ items: Chat[]; hasMore: boolean }>('chats:list');
+    if (!stale) setLoading(true);
     try {
       const data = await chatsApi.getChats({ limit: CHAT_PAGE_SIZE, offset: 0 });
       setChats(data.items);
       setHasMore(data.hasMore);
+      setCachedPageData('chats:list', { items: data.items, hasMore: data.hasMore });
       refreshUnread();
     } catch (error) {
       console.error('Failed to fetch chats:', error);

@@ -6,6 +6,7 @@ import { useChatUnreadStore } from '../store/chatUnreadStore';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { unlockMediaPlayback, setSoundTokAudioPreference } from '../lib/mediaUnlock';
 import { usePwaInstall } from '../hooks/usePwaInstall';
+import { prefetchRoute, routePrefetchHandlers } from '../lib/routePrefetch';
 import PwaInstallButton from './PwaInstallButton';
 import PlatinumBadge, { isPlatinumUser } from './PlatinumBadge';
 
@@ -739,7 +740,7 @@ export default function Sidebar() {
         <span className="sb-section-label">Главное</span>
 
         {MAIN_NAV.map(({ path, label, icon }) => (
-          <NavLink key={path} to={path} className={linkClass}>
+          <NavLink key={path} to={path} className={linkClass} {...routePrefetchHandlers(path)}>
             <span className="sb-item-icon">{icon}</span>
             <span className="sb-item-label">{label}</span>
           </NavLink>
@@ -753,6 +754,7 @@ export default function Sidebar() {
             key={path}
             to={path}
             className={linkClass}
+            {...routePrefetchHandlers(path)}
             onClick={path === '/soundtok' ? prepareSoundTokAudio : undefined}
           >
             <span className="sb-item-icon">{icon}</span>
@@ -769,7 +771,7 @@ export default function Sidebar() {
 
         <hr className="sb-divider" />
 
-        <NavLink to="/ai" className={(s) => linkClass(s, 'sb-ai')}>
+        <NavLink to="/ai" className={(s) => linkClass(s, 'sb-ai')} {...routePrefetchHandlers('/ai')}>
           <span className="sb-item-icon"><IconAI /></span>
           <span className="sb-item-label">AI генерация</span>
           <span className="sb-badge sb-badge-beta">β</span>
@@ -777,18 +779,18 @@ export default function Sidebar() {
 
         <hr className="sb-divider" />
 
-        <NavLink to="/pricing" className={linkClass}>
+        <NavLink to="/pricing" className={linkClass} {...routePrefetchHandlers('/pricing')}>
           <span className="sb-item-icon"><IconTariff /></span>
           <span className="sb-item-label">Тарифы</span>
         </NavLink>
 
-        <NavLink to="/profile" className={linkClass}>
+        <NavLink to="/profile" className={linkClass} {...routePrefetchHandlers('/profile')}>
           <span className="sb-item-icon"><IconUser /></span>
           <span className="sb-item-label">Профиль</span>
         </NavLink>
 
         {isAdmin && (
-          <NavLink to="/admin" className={(s) => linkClass(s, 'sb-admin')}>
+          <NavLink to="/admin" className={(s) => linkClass(s, 'sb-admin')} {...routePrefetchHandlers('/admin')}>
             <span className="sb-item-icon"><IconShield /></span>
             <span className="sb-item-label">Админ</span>
           </NavLink>
@@ -804,30 +806,45 @@ export default function Sidebar() {
       </nav>
 
       <nav className="sb-mobile-nav" aria-label="Основная навигация">
-        <NavLink to="/feed" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+        <NavLink to="/feed" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/feed')}>
           <span className="sb-mobile-icon"><IconHome /></span>
           <span className="sb-mobile-label">Лента</span>
         </NavLink>
-        <NavLink to="/projects" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+        <NavLink to="/projects" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/projects')}>
           <span className="sb-mobile-icon"><IconFolder /></span>
           <span className="sb-mobile-label">Проекты</span>
         </NavLink>
         <NavLink
           to="/soundtok"
           className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}
+          {...routePrefetchHandlers('/soundtok')}
           onClick={prepareSoundTokAudio}
         >
           <span className="sb-mobile-icon"><IconVideo /></span>
           <span className="sb-mobile-label">SoundTok</span>
         </NavLink>
-        <NavLink to="/chats" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}>
+        <NavLink to="/chats" className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/chats')}>
           <span className="sb-mobile-icon"><IconChat /></span>
           <span className="sb-mobile-label">Чаты</span>
         </NavLink>
         <button
           type="button"
           className={`sb-mobile-item${isMoreOpen ? ' active' : ''}`}
-          onClick={() => setIsMoreOpen((open) => !open)}
+          onClick={() => {
+            setIsMoreOpen((open) => {
+              const next = !open;
+              if (next) {
+                prefetchRoute('/rap-battle');
+                prefetchRoute('/midi');
+                prefetchRoute('/presets');
+                prefetchRoute('/ai');
+                prefetchRoute('/pricing');
+                prefetchRoute('/profile');
+                if (isAdmin) prefetchRoute('/admin');
+              }
+              return next;
+            });
+          }}
           aria-expanded={isMoreOpen}
           aria-controls="mobile-more-menu"
         >
@@ -838,22 +855,22 @@ export default function Sidebar() {
           <>
             <button type="button" className="sb-mobile-more-backdrop" onClick={() => setIsMoreOpen(false)} aria-label="Закрыть меню" />
             <div id="mobile-more-menu" className="sb-mobile-more-menu">
-              <NavLink to="/rap-battle" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <NavLink to="/rap-battle" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/rap-battle')} onClick={() => setIsMoreOpen(false)}>
                 <IconMusic />Rap Battle
               </NavLink>
-              <NavLink to="/midi" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <NavLink to="/midi" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/midi')} onClick={() => setIsMoreOpen(false)}>
                 <IconWaveform />MIDI<span className="sb-mobile-more-meta">ПК</span>
               </NavLink>
-              <NavLink to="/presets" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <NavLink to="/presets" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/presets')} onClick={() => setIsMoreOpen(false)}>
                 <IconBag />Пресеты
               </NavLink>
-              <NavLink to="/ai" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <NavLink to="/ai" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/ai')} onClick={() => setIsMoreOpen(false)}>
                 <IconAI />AI генерация
               </NavLink>
-              <NavLink to="/pricing" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <NavLink to="/pricing" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/pricing')} onClick={() => setIsMoreOpen(false)}>
                 <IconTariff />Тарифы
               </NavLink>
-              <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+              <NavLink to="/profile" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/profile')} onClick={() => setIsMoreOpen(false)}>
                 <IconUser />Профиль
               </NavLink>
               {ready && canOfferInstall && (
@@ -864,7 +881,7 @@ export default function Sidebar() {
                 />
               )}
               {isAdmin && (
-                <NavLink to="/admin" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} onClick={() => setIsMoreOpen(false)}>
+                <NavLink to="/admin" className={({ isActive }) => `sb-mobile-more-link${isActive ? ' active' : ''}`} {...routePrefetchHandlers('/admin')} onClick={() => setIsMoreOpen(false)}>
                   <IconShield />Админ
                 </NavLink>
               )}
