@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent, type ClipboardEvent as ReactClipboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, SmilePlus, Pencil, Copy, ImagePlus, X, Reply } from 'lucide-react';
+import { ArrowLeft, Send, Check, CheckCheck, Loader2, Ban, ShieldOff, Pin, PinOff, Users, Trash2, Pencil, Copy, ImagePlus, X, Reply } from 'lucide-react';
 import { chatsApi, Chat, Message, MessageReplyPreview, REACTION_EMOJIS, resolveChatPinState } from '../api/chats';
 import { blocksApi, BlockStatus } from '../api/blocks';
 import { usersApi } from '../api/users';
@@ -566,59 +566,6 @@ ${FONT_IMPORT}
   opacity: 0.62;
   margin-right: 6px;
 }
-.message-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-.message-row:hover .message-actions,
-.message-row.picker-open .message-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-@media (hover: none) {
-  .message-actions {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-.message-row.own .message-actions {
-  order: -1;
-  margin-right: 6px;
-}
-.message-row.other .message-actions {
-  margin-left: 6px;
-}
-.message-action-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.message-action-btn:hover {
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  border-color: var(--border-hover);
-}
-.message-action-btn.danger:hover {
-  color: #f5a9a3;
-  border-color: rgba(192, 57, 43, 0.45);
-  background: var(--red-dim);
-}
-.message-action-btn svg {
-  width: 14px;
-  height: 14px;
-}
 .msg-ctx-menu {
   position: fixed;
   z-index: 200;
@@ -684,39 +631,6 @@ ${FONT_IMPORT}
   width: 15px;
   height: 15px;
   flex-shrink: 0;
-}
-.reaction-picker {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  z-index: 5;
-  display: flex;
-  gap: 2px;
-  padding: 6px;
-  border-radius: 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-mid);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-.message-row.own .reaction-picker {
-  right: 0;
-}
-.message-row.other .reaction-picker {
-  left: 0;
-}
-.reaction-picker-emoji {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  transition: background 0.12s ease, transform 0.12s ease;
-}
-.reaction-picker-emoji:hover {
-  background: rgba(255, 255, 255, 0.06);
-  transform: scale(1.12);
 }
 .message-reactions {
   display: flex;
@@ -1897,7 +1811,6 @@ export default function ChatPage() {
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockConfirm, setBlockConfirm] = useState<'block' | 'unblock' | null>(null);
   const [pinning, setPinning] = useState(false);
-  const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -2014,7 +1927,6 @@ export default function ChatPage() {
   const handleMessageDeleted = (data: { chatId: string; message: SocketMessage }) => {
     const updated = normalizeIncomingMessage(data.message);
     setMessages(prev => prev.map(m => (m.id === updated.id ? updated : m)));
-    setReactionPickerId(prev => (prev === updated.id ? null : prev));
     setEditingId(prev => (prev === updated.id ? null : prev));
   };
 
@@ -2037,7 +1949,6 @@ export default function ChatPage() {
       setMessages(prev =>
         prev.map(m => (m.id === messageId ? { ...m, ...updated } as Message : m))
       );
-      setReactionPickerId(prev => (prev === messageId ? null : prev));
       setEditingId(prev => (prev === messageId ? null : prev));
     } catch {
       setSendError('Не удалось удалить сообщение');
@@ -2057,7 +1968,6 @@ export default function ChatPage() {
   const startEditMessage = (message: DisplayMessage) => {
     if (!('content' in message) || message.status === 'PENDING') return;
     if ('deletedAt' in message && message.deletedAt) return;
-    setReactionPickerId(null);
     setContextMenu(null);
     setReplyingTo(null);
     if (!editingId) {
@@ -2107,7 +2017,6 @@ export default function ChatPage() {
   const startReplyMessage = (message: DisplayMessage) => {
     if (message.status === 'PENDING') return;
     if ('deletedAt' in message && message.deletedAt) return;
-    setReactionPickerId(null);
     setContextMenu(null);
     if (editingId) {
       setEditingId(null);
@@ -2213,7 +2122,6 @@ export default function ChatPage() {
     if (editingId === message.id) return;
     event.preventDefault();
     event.stopPropagation();
-    setReactionPickerId(null);
 
     const menuWidth = 220;
     const menuHeight = isOwn ? 220 : 160;
@@ -2289,7 +2197,6 @@ export default function ChatPage() {
 
   const handleToggleReaction = async (messageId: string, emoji: string) => {
     if (!chatId) return;
-    setReactionPickerId(null);
     closeContextMenu();
     try {
       const result = await chatsApi.toggleReaction(chatId, messageId, emoji);
@@ -3143,7 +3050,6 @@ export default function ChatPage() {
                         : resolveMediaUrl(message.imageUrl))
                     : null;
                 const reactionSummary = getReactionSummary(message);
-                const pickerOpen = reactionPickerId === message.id;
 
                 const isEditing = editingId === message.id;
 
@@ -3151,26 +3057,12 @@ export default function ChatPage() {
                   <div
                     key={message.id}
                     data-message-id={message.id}
-                    className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''} ${pickerOpen ? 'picker-open' : ''} ${flashMessageId === message.id ? 'reply-flash' : ''}`}
+                    className={`message-row ${isOwn ? 'own' : 'other'} ${isPending ? 'pending' : ''} ${flashMessageId === message.id ? 'reply-flash' : ''}`}
                   >
                     <div
                       className={`message-bubble ${isOwn ? 'own' : 'other'} ${isDeleted ? 'deleted' : ''} ${isEditing ? 'editing' : ''}`}
                       onContextMenu={(event) => openMessageContextMenu(event, message, isOwn)}
                     >
-                      {pickerOpen && (
-                        <div className="reaction-picker" role="listbox">
-                          {REACTION_EMOJIS.map((emoji) => (
-                            <button
-                              key={emoji}
-                              type="button"
-                              className="reaction-picker-emoji"
-                              onClick={() => handleToggleReaction(message.id, emoji)}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                       {isGroupChat && !isOwn && senderName && (
                         <button
                           type="button"
@@ -3257,62 +3149,6 @@ export default function ChatPage() {
                         {!isDeleted && <span className="message-status">{renderStatus(message)}</span>}
                       </div>
                     </div>
-                    {!isPending && !isDeleted && (
-                      <div className="message-actions">
-                        <button
-                          type="button"
-                          className="message-action-btn"
-                          title="Ответить"
-                          onClick={() => startReplyMessage(message)}
-                        >
-                          <Reply />
-                        </button>
-                        <button
-                          type="button"
-                          className="message-action-btn"
-                          title={copiedId === message.id ? 'Скопировано' : 'Копировать'}
-                          onClick={() => void handleCopyMessage(message)}
-                          disabled={!message.content?.trim()}
-                        >
-                          {copiedId === message.id ? <Check /> : <Copy />}
-                        </button>
-                        <button
-                          type="button"
-                          className="message-action-btn"
-                          title="Реакция"
-                          onClick={() =>
-                            setReactionPickerId(pickerOpen ? null : message.id)
-                          }
-                        >
-                          <SmilePlus />
-                        </button>
-                        {isOwn && (
-                          <>
-                            <button
-                              type="button"
-                              className="message-action-btn"
-                              title="Редактировать"
-                              onClick={() => startEditMessage(message)}
-                            >
-                              <Pencil />
-                            </button>
-                            <button
-                              type="button"
-                              className="message-action-btn danger"
-                              title="Удалить"
-                              disabled={deletingId === message.id}
-                              onClick={() => handleDeleteMessage(message.id)}
-                            >
-                              {deletingId === message.id ? (
-                                <Loader2 className="loader" />
-                              ) : (
-                                <Trash2 />
-                              )}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })
