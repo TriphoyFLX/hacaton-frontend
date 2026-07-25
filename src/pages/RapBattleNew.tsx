@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save, Headphones, Sliders, Swords, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, getMyBattleRating, joinBattleQueue, getBattleQueueStatus, leaveBattleQueue, BattleRatingResult, BattleRatingSnapshot, User, Battle, BattleRecording } from '../api/battles';
+import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, getMyBattleRating, joinBattleQueue, getBattleQueueStatus, leaveBattleQueue, listJudgingBattles, castBattleVote, BattleRatingResult, BattleRatingSnapshot, JudgingFeedBattle, User, Battle, BattleRecording } from '../api/battles';
 import BattleRatingCard from '../components/BattleRatingCard';
 import { useAuthStore } from '../store/authStore';
 import { API_ORIGIN } from '../api/client';
@@ -20,6 +20,22 @@ import { Link } from 'react-router-dom';
 
 const VOICE_FX_STORAGE_KEY = 'soundlab_rap_battle_voice_fx';
 const DEFAULT_VOICE_FX = normalizeClipFx(VOCAL_FX_PRESETS.find(p => p.id === 'clean'));
+
+function formatCountdown(endsAt: string | null | undefined, nowMs: number): string {
+  if (!endsAt) return '—';
+  const left = Math.max(0, new Date(endsAt).getTime() - nowMs);
+  const m = Math.floor(left / 60000);
+  const s = Math.floor((left % 60000) / 1000);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function judgedByLabel(judgedBy?: string | null): string {
+  if (judgedBy === 'community') return 'Голоса зрителей';
+  if (judgedBy === 'peer') return 'Оценка участников';
+  if (judgedBy === 'timeout') return 'Таймаут (ничья)';
+  if (judgedBy === 'ai-judge') return 'AI-судья';
+  return judgedBy || 'Судейство';
+}
 
 /** Absolute URL for /uploads/... beats & recordings (relative paths break on SPA origin). */
 function resolveMediaUrl(url?: string | null): string {
@@ -966,6 +982,18 @@ export default function RapBattleNew() {
   const [lastVoicePresetName, setLastVoicePresetName] = useState(() => presetNameForFx(DEFAULT_VOICE_FX));
 
   const [judgeResult, setJudgeResult] = useState<any>(null);
+  const [votingEndsAt, setVotingEndsAt] = useState<string | null>(null);
+  const [peerGraceEndsAt, setPeerGraceEndsAt] = useState<string | null>(null);
+  const [spectatorVoteCount, setSpectatorVoteCount] = useState(0);
+  const [judgingPhase, setJudgingPhase] = useState<'voting' | 'peer_grace' | 'finished' | 'recording'>('recording');
+  const [judgedBy, setJudgedBy] = useState<string | null>(null);
+  const [spectatorTally, setSpectatorTally] = useState<{ user1: number; user2: number; total: number } | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [waitingTab, setWaitingTab] = useState<'home' | 'vote'>('home');
+  const [judgingFeed, setJudgingFeed] = useState<JudgingFeedBattle[]>([]);
+  const [judgingFeedLoading, setJudgingFeedLoading] = useState(false);
+  const [votingBusyId, setVotingBusyId] = useState<string | null>(null);
+  const [mySpectatorVotes, setMySpectatorVotes] = useState<Record<string, 'USER1' | 'USER2'>>({});
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef   = useRef<Blob[]>([]);
@@ -1258,27 +1286,46 @@ export default function RapBattleNew() {
     if (data.creatorRating != null) setUser1Rating(data.creatorRating);
     if (data.opponentRating != null) setUser2Rating(data.opponentRating);
     if (data.hasRated) setHasRated(true);
-    if (data.bothRated) {
-      setOpponentHasRated(true);
+    if (data.bothRated) setOpponentHasRated(true);
+    if (data.votingEndsAt !== undefined) setVotingEndsAt(data.votingEndsAt ?? null);
+    if (data.peerGraceEndsAt !== undefined) setPeerGraceEndsAt(data.peerGraceEndsAt ?? null);
+    if (typeof data.voteCount === 'number') setSpectatorVoteCount(data.voteCount);
+    if (data.phase) setJudgingPhase(data.phase);
+    if (data.judgedBy !== undefined) setJudgedBy(data.judgedBy ?? null);
+    if (data.tally) setSpectatorTally(data.tally);
+
+    if (data.status === 'FINISHED') {
       setJudgeResult({
         winner: data.winner,
-        user1Total: data.creatorReceived ?? data.user1Score ?? 0,
-        user2Total: data.opponentReceived ?? data.user2Score ?? 0,
+        user1Total: data.creatorReceived ?? data.user1Score ?? data.tally?.user1 ?? 0,
+        user2Total: data.opponentReceived ?? data.user2Score ?? data.tally?.user2 ?? 0,
+        judgedBy: data.judgedBy,
+        tally: data.tally,
       });
-      if (data.status === 'FINISHED' && currentBattle) {
-        setCurrentBattle({ ...currentBattle, status: 'FINISHED', winner: data.winner });
-      }
+      setCurrentBattle((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'FINISHED',
+              winner: data.winner ?? prev.winner,
+              judgedBy: data.judgedBy ?? prev.judgedBy,
+              votingEndsAt: data.votingEndsAt ?? prev.votingEndsAt,
+            }
+          : prev,
+      );
+      setCurrentPhase('finished');
     }
-  }, [currentBattle]);
+  }, []);
 
   const syncBattleRatings = useCallback(async () => {
     if (!currentBattle) return;
     try {
       const data = await getBattleRatings(currentBattle.id);
       applyRatingsFromServer(data);
+      if (data.status === 'FINISHED') return;
       if (data.hasRated && !data.bothRated) {
         setCurrentPhase('waiting_for_opponent_rating');
-      } else if (data.bothRated) {
+      } else {
         setCurrentPhase('mutual_judging');
       }
     } catch {}
@@ -1505,14 +1552,42 @@ export default function RapBattleNew() {
       const result = await submitRating(currentBattle.id, rating);
       if (role === 'CREATOR') setUser1Rating(rating);
       else setUser2Rating(rating);
+      setHasRated(true);
       applyRatingsFromServer(result);
-      if (result.bothRated) {
-        setCurrentPhase('mutual_judging');
-      } else {
-        setHasRated(true);
-        setCurrentPhase('waiting_for_opponent_rating');
+      if (result.status !== 'FINISHED') {
+        setCurrentPhase(result.bothRated ? 'mutual_judging' : 'waiting_for_opponent_rating');
       }
     } catch(e:any) { setError(e.message||'Не удалось сохранить оценку'); }
+  };
+
+  const loadJudgingFeed = useCallback(async () => {
+    setJudgingFeedLoading(true);
+    try {
+      const items = await listJudgingBattles();
+      setJudgingFeed(items);
+    } catch {
+      /* ignore */
+    } finally {
+      setJudgingFeedLoading(false);
+    }
+  }, []);
+
+  const handleSpectatorVote = async (battleId: string, choice: 'USER1' | 'USER2') => {
+    setVotingBusyId(battleId);
+    setError('');
+    try {
+      const result = await castBattleVote(battleId, choice);
+      setMySpectatorVotes((prev) => ({ ...prev, [battleId]: result.myVote }));
+      setJudgingFeed((prev) =>
+        prev.map((b) =>
+          b.id === battleId ? { ...b, spectatorVoteCount: result.voteCount } : b,
+        ),
+      );
+    } catch (e: any) {
+      setError(e.message || 'Не удалось проголосовать');
+    } finally {
+      setVotingBusyId(null);
+    }
   };
 
   const startNewBattle = () => {
@@ -1534,6 +1609,10 @@ export default function RapBattleNew() {
     setHasRated(false); setOpponentHasRated(false);
     setUser1Rating(null); setUser2Rating(null);
     setVoiceReady(false); setIsPlayingBeat(false); setIsRecording(false);
+    setVotingEndsAt(null); setPeerGraceEndsAt(null);
+    setSpectatorVoteCount(0); setJudgingPhase('recording');
+    setJudgedBy(null); setSpectatorTally(null);
+    setWaitingTab('home');
   };
 
   useEffect(() => {
@@ -1544,7 +1623,7 @@ export default function RapBattleNew() {
       const i=setInterval(checkBattleStatus,1500); return ()=>clearInterval(i);
     } else if (currentPhase==='user1_turn'||currentPhase==='user2_turn') {
       const i=setInterval(checkBattleStatus,1000); return ()=>clearInterval(i);
-    } else if (currentPhase==='mutual_judging' || currentPhase==='waiting_for_opponent_rating') {
+    } else if (currentPhase==='mutual_judging' || currentPhase==='waiting_for_opponent_rating' || currentPhase==='finished') {
       const i=setInterval(syncBattleRatings,2000); return ()=>clearInterval(i);
     }
   }, [currentPhase, syncBattleRatings]);
@@ -1555,6 +1634,25 @@ export default function RapBattleNew() {
       syncBattleRatings();
     }
   }, [currentPhase, currentBattle?.id]);
+
+  useEffect(() => {
+    if (
+      currentPhase === 'mutual_judging' ||
+      currentPhase === 'waiting_for_opponent_rating' ||
+      (currentPhase === 'waiting' && waitingTab === 'vote')
+    ) {
+      const t = window.setInterval(() => setNowTick(Date.now()), 1000);
+      return () => clearInterval(t);
+    }
+  }, [currentPhase, waitingTab]);
+
+  useEffect(() => {
+    if (currentPhase === 'waiting' && waitingTab === 'vote') {
+      void loadJudgingFeed();
+      const i = window.setInterval(() => void loadJudgingFeed(), 5000);
+      return () => clearInterval(i);
+    }
+  }, [currentPhase, waitingTab, loadJudgingFeed]);
 
   useEffect(() => {
     const el = beatAudioRef.current;
@@ -1638,26 +1736,130 @@ export default function RapBattleNew() {
 
   // ── WAITING ──
   const renderWaitingPhase = () => (
-    <div className="rb-hero">
-      <div className="rb-hero-icon"><Users/></div>
-      <div className="rb-hero-title">Рэп Баттл</div>
-      <div className="rb-hero-desc">Пригласи соперника или встань в очередь по рейтингу</div>
-      {myRating && (
-        <div style={{ width: '100%', maxWidth: 420, margin: '0 auto 18px', textAlign: 'left' }}>
-          <BattleRatingCard rating={myRating} compact />
-        </div>
-      )}
-      <div className="rb-hero-actions">
-        <button onClick={()=>setCurrentPhase('creating')} className="rb-btn rb-btn-primary tall full">
-          <Send/> Пригласить в баттл
+    <div>
+      <div className="rb-row" style={{ gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className={`rb-btn ${waitingTab === 'home' ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
+          onClick={() => setWaitingTab('home')}
+        >
+          Баттл
         </button>
-        <button onClick={()=>setCurrentPhase('queue_setup')} className="rb-btn rb-btn-primary tall full">
-          <Search/> Найти по рейтингу
-        </button>
-        <button onClick={()=>setCurrentPhase('history')} className="rb-btn rb-btn-ghost tall full">
-          <Trophy/> История баттлов
+        <button
+          type="button"
+          className={`rb-btn ${waitingTab === 'vote' ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
+          onClick={() => setWaitingTab('vote')}
+        >
+          <Headphones /> Слушать и голосовать
         </button>
       </div>
+
+      {waitingTab === 'home' ? (
+        <div className="rb-hero">
+          <div className="rb-hero-icon"><Users/></div>
+          <div className="rb-hero-title">Рэп Баттл</div>
+          <div className="rb-hero-desc">Пригласи соперника или встань в очередь по рейтингу</div>
+          {myRating && (
+            <div style={{ width: '100%', maxWidth: 420, margin: '0 auto 18px', textAlign: 'left' }}>
+              <BattleRatingCard rating={myRating} compact />
+            </div>
+          )}
+          <div className="rb-hero-actions">
+            <button onClick={()=>setCurrentPhase('creating')} className="rb-btn rb-btn-primary tall full">
+              <Send/> Пригласить в баттл
+            </button>
+            <button onClick={()=>setCurrentPhase('queue_setup')} className="rb-btn rb-btn-primary tall full">
+              <Search/> Найти по рейтингу
+            </button>
+            <button onClick={()=>setCurrentPhase('history')} className="rb-btn rb-btn-ghost tall full">
+              <Trophy/> История баттлов
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="rb-card-hd">
+            <div>
+              <div className="rb-card-title">Открытое голосование</div>
+              <div className="rb-card-sub">Слушай оба трека и голосуй — минимум 3 голоса решают исход</div>
+            </div>
+            <button type="button" className="rb-btn rb-btn-ghost" onClick={() => void loadJudgingFeed()}>
+              Обновить
+            </button>
+          </div>
+          {judgingFeedLoading && judgingFeed.length === 0 ? (
+            <div className="rb-loading"><div className="rb-spinner"/><span>Загрузка баттлов…</span></div>
+          ) : judgingFeed.length === 0 ? (
+            <div className="rb-hero" style={{ paddingTop: 28 }}>
+              <div className="rb-hero-icon"><Headphones/></div>
+              <div className="rb-hero-title">Пока пусто</div>
+              <div className="rb-hero-desc">Нет баттлов на голосовании. Загляни позже.</div>
+            </div>
+          ) : (
+            judgingFeed.map((b) => {
+              const rec1 = b.recordings.find((r) => r.userId === b.creator.id) || b.recordings[0];
+              const rec2 = b.recordings.find((r) => r.userId !== b.creator.id) || b.recordings[1];
+              const myVote = mySpectatorVotes[b.id];
+              return (
+                <div key={b.id} className="rb-card" style={{ marginBottom: 12 }}>
+                  <div className="rb-row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{b.title}</div>
+                      <div className="rb-card-sub">
+                        @{b.creator.username} vs @{b.opponent?.username || '…'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--t3)' }}>
+                      <div>{formatCountdown(b.votingEndsAt, nowTick)}</div>
+                      <div>{b.spectatorVoteCount} голос.</div>
+                    </div>
+                  </div>
+                  {rec1 && (
+                    <MixedTrackPlayer
+                      voiceUrl={rec1.voiceUrl}
+                      beatUrl={rec1.beatUrl || b.beatUrl || ''}
+                      label={`@${rec1.username}`}
+                      playerKey={`vote-a-${rec1.id}`}
+                    />
+                  )}
+                  {rec2 && (
+                    <MixedTrackPlayer
+                      voiceUrl={rec2.voiceUrl}
+                      beatUrl={rec2.beatUrl || b.beatUrl || ''}
+                      label={`@${rec2.username}`}
+                      playerKey={`vote-b-${rec2.id}`}
+                    />
+                  )}
+                  {myVote ? (
+                    <div className="rb-card-sub" style={{ marginTop: 10 }}>
+                      Ваш голос: {myVote === 'USER1' ? `@${b.creator.username}` : `@${b.opponent?.username || 'оппонент'}`}
+                    </div>
+                  ) : (
+                    <div className="rb-row rb-mt16" style={{ gap: 8 }}>
+                      <button
+                        type="button"
+                        className="rb-btn rb-btn-primary tall full"
+                        disabled={votingBusyId === b.id}
+                        onClick={() => void handleSpectatorVote(b.id, 'USER1')}
+                      >
+                        За @{b.creator.username}
+                      </button>
+                      <button
+                        type="button"
+                        className="rb-btn rb-btn-primary tall full"
+                        disabled={votingBusyId === b.id || !b.opponent}
+                        onClick={() => void handleSpectatorVote(b.id, 'USER2')}
+                      >
+                        За @{b.opponent?.username || 'оппонента'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -2218,6 +2420,39 @@ export default function RapBattleNew() {
     );
   };
 
+  const renderJudgingTimerCard = () => {
+    const ends =
+      judgingPhase === 'peer_grace' && peerGraceEndsAt ? peerGraceEndsAt : votingEndsAt;
+    const label =
+      judgingPhase === 'peer_grace'
+        ? 'Доп. время на оценку участников'
+        : 'Голосование зрителей';
+    return (
+      <div className="rb-card" style={{ marginBottom: 12 }}>
+        <div className="rb-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span className="rb-section-label">{label}</span>
+            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
+              {formatCountdown(ends, nowTick)}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--t3)' }}>
+            <div>Зрители: {spectatorVoteCount}</div>
+            <div>Нужно ≥ 3 для решения толпы</div>
+            {spectatorTally && (
+              <div style={{ marginTop: 4, color: 'var(--t2)' }}>
+                {spectatorTally.user1} : {spectatorTally.user2}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="rb-card-sub" style={{ marginTop: 8 }}>
+          Если зрителей мало — победитель по взаимным оценкам 1–5. Баттл не завершится до конца таймера.
+        </div>
+      </div>
+    );
+  };
+
   // ── JUDGING ──
   const renderMutualJudgingPhase = () => {
     const role   = getCurrentUserRole();
@@ -2228,16 +2463,17 @@ export default function RapBattleNew() {
         <div className="rb-card-hd">
           <div>
             <div className="rb-card-title">Оцените трек оппонента</div>
-            <div className="rb-card-sub">Прослушайте и поставьте оценку</div>
+            <div className="rb-card-sub">Параллельно идёт голосование зрителей</div>
           </div>
           <span className="rb-badge rb-badge-purple">Судейство</span>
         </div>
+        {renderJudgingTimerCard()}
         <div className="rb-card">
           <span className="rb-section-label">Трек оппонента</span>
           <MixedTrackPlayer voiceUrl={oppRec.voiceUrl} beatUrl={oppRec.beatUrl} label="Трек оппонента" playerKey={`opp-${oppRec.id}`}/>
         </div>
         <div className="rb-card rb-centered">
-          <span className="rb-section-label">Ваша оценка</span>
+          <span className="rb-section-label">Ваша оценка (резервный вердикт)</span>
           <div className="rb-stars">
             {[1,2,3,4,5].map(r => (
               <button key={r} onClick={()=>handleRatingSubmit(r)} className="rb-star-btn">⭐</button>
@@ -2248,56 +2484,28 @@ export default function RapBattleNew() {
       </div>
     );
 
-    if (hasRated && !opponentHasRated) return (
-      <div className="rb-hero" style={{paddingTop:40}}>
-        <div className="rb-pulse-ring"><Clock/></div>
-        <div className="rb-hero-title">Ожидание оценки</div>
-        <div className="rb-hero-desc">Вы оценили трек. Ждём оппонента...</div>
-        <div style={{marginTop:24}}>
-          <div className="rb-stars">
-            {[1,2,3,4,5].map(r=>(
-              <div key={r} className={`rb-star-btn${r<=(role==='CREATOR'?(user1Rating||0):(user2Rating||0))?' lit':''}`} style={{cursor:'default'}}>⭐</div>
-            ))}
-          </div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:'10px',color:'var(--t3)',marginTop:8,letterSpacing:'.06em'}}>ВАША ОЦЕНКА</div>
-        </div>
-      </div>
-    );
-
-    if (hasRated && opponentHasRated) {
-      const creatorReceived = user2Rating || 0;
-      const opponentReceived = user1Rating || 0;
-      const myReceived  = role === 'CREATOR' ? creatorReceived : opponentReceived;
-      const oppReceived = role === 'CREATOR' ? opponentReceived : creatorReceived;
+    if (hasRated) {
       return (
         <div>
           <div className="rb-card-hd">
-            <div className="rb-card-title">Результаты</div>
-            <span className="rb-badge rb-badge-purple">Завершено</span>
+            <div>
+              <div className="rb-card-title">Ждём итог</div>
+              <div className="rb-card-sub">
+                {opponentHasRated
+                  ? 'Оба участника оценили. Ждём конец окна голосования…'
+                  : 'Ваша оценка сохранена. Ждём оппонента и/или зрителей…'}
+              </div>
+            </div>
+            <span className="rb-badge rb-badge-purple">Судейство</span>
           </div>
-          <div className="rb-score-grid">
-            <div className={`rb-score-cell${myReceived > oppReceived ? ' winner' : ''}`}>
-              <div className="rb-score-num">{myReceived}</div>
-              <div className="rb-score-label">Оценка вам</div>
-              <div className="rb-score-name">Вы</div>
+          {renderJudgingTimerCard()}
+          <div style={{marginTop:8}}>
+            <div className="rb-stars">
+              {[1,2,3,4,5].map(r=>(
+                <div key={r} className={`rb-star-btn${r<=(role==='CREATOR'?(user1Rating||0):(user2Rating||0))?' lit':''}`} style={{cursor:'default'}}>⭐</div>
+              ))}
             </div>
-            <div className={`rb-score-cell${oppReceived > myReceived ? ' winner' : ''}`}>
-              <div className="rb-score-num">{oppReceived}</div>
-              <div className="rb-score-label">Оценка оппоненту</div>
-              <div className="rb-score-name">Оппонент</div>
-            </div>
-          </div>
-          <div className="rb-card rb-centered">
-            <span className="rb-section-label">Итог</span>
-            <div style={{fontSize:20,fontWeight:700,letterSpacing:'-.02em',marginBottom:20}}>
-              {myReceived > oppReceived ? 'Вы победили' : myReceived < oppReceived ? 'Оппонент победил' : 'Ничья'}
-            </div>
-            <button onClick={() => {
-              if (judgeResult) setCurrentPhase('finished');
-              else startNewBattle();
-            }} className="rb-btn rb-btn-primary">
-              Завершить
-            </button>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:'10px',color:'var(--t3)',marginTop:8,letterSpacing:'.06em'}}>ВАША ОЦЕНКА</div>
           </div>
         </div>
       );
@@ -2314,58 +2522,53 @@ export default function RapBattleNew() {
   };
 
   // ── WAITING FOR OPPONENT RATING ──
-  const renderWaitingForOpponentRatingPhase = () => {
-    const role = getCurrentUserRole();
-    return (
-      <div className="rb-hero" style={{paddingTop:40}}>
-        <div className="rb-pulse-ring"><Clock/></div>
-        <div className="rb-hero-title">Ожидание оценки</div>
-        <div className="rb-hero-desc">Вы оценили трек. Ждём оппонента...</div>
-        <div style={{marginTop:24}}>
-          <div className="rb-stars">
-            {[1,2,3,4,5].map(r=>(
-              <div key={r} className={`rb-star-btn${r<=(role==='CREATOR'?(user1Rating||0):(user2Rating||0))?' lit':''}`} style={{cursor:'default'}}>⭐</div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderWaitingForOpponentRatingPhase = () => renderMutualJudgingPhase();
 
   // ── FINISHED ──
   const renderFinishedPhase = () => {
     if (!currentBattle) return null;
     const u1 = currentBattle.participants.find(p=>p.role==='CREATOR')?.user ?? currentBattle.creator;
     const u2 = currentBattle.participants.find(p=>p.role==='OPPONENT')?.user;
-    const user1Total = judgeResult?.user1Total ?? user2Rating ?? 0;
-    const user2Total = judgeResult?.user2Total ?? user1Rating ?? 0;
-    const winner = judgeResult?.winner
-      ?? (user1Total > user2Total ? 'USER1' : user2Total > user1Total ? 'USER2' : 'DRAW');
+    const winner = judgeResult?.winner ?? currentBattle.winner ?? 'DRAW';
+    const by = judgedBy || judgeResult?.judgedBy || currentBattle.judgedBy;
+    const isCommunity = by === 'community';
+    const user1Total = isCommunity
+      ? (judgeResult?.tally?.user1 ?? spectatorTally?.user1 ?? 0)
+      : (judgeResult?.user1Total ?? user2Rating ?? 0);
+    const user2Total = isCommunity
+      ? (judgeResult?.tally?.user2 ?? spectatorTally?.user2 ?? 0)
+      : (judgeResult?.user2Total ?? user1Rating ?? 0);
+    const role = getCurrentUserRole();
+    const iWon =
+      (winner === 'USER1' && role === 'CREATOR') ||
+      (winner === 'USER2' && role === 'OPPONENT');
+    const outcome =
+      winner === 'DRAW' ? 'Ничья' : iWon ? 'Вы победили' : 'Оппонент победил';
+
     return (
       <div>
         <div className="rb-card-hd">
-          <div className="rb-card-title">Баттл завершён</div>
-          <span className="rb-badge rb-badge-muted">Финал</span>
+          <div>
+            <div className="rb-card-title">Баттл завершён</div>
+            <div className="rb-card-sub">{judgedByLabel(by)}</div>
+          </div>
+          <span className="rb-badge rb-badge-green">Финал</span>
+        </div>
+        <div className="rb-card rb-centered" style={{ marginBottom: 12 }}>
+          <div style={{fontSize:22,fontWeight:700,letterSpacing:'-.02em'}}>{outcome}</div>
         </div>
         <div className="rb-score-grid">
           <div className={`rb-score-cell${winner==='USER1'?' winner':''}`}>
             <div className="rb-score-num">{user1Total}</div>
+            <div className="rb-score-label">{isCommunity ? 'Голоса' : 'Оценка'}</div>
             <div className="rb-score-name">{u1?.username}</div>
           </div>
           <div className={`rb-score-cell${winner==='USER2'?' winner':''}`}>
             <div className="rb-score-num">{user2Total}</div>
+            <div className="rb-score-label">{isCommunity ? 'Голоса' : 'Оценка'}</div>
             <div className="rb-score-name">{u2?.username}</div>
           </div>
         </div>
-        {judgeResult.judge?.feedback && (
-          <div className="rb-card">
-            <span className="rb-section-label">AI Анализ</span>
-            <p style={{fontSize:13,color:'var(--t2)',lineHeight:1.65}}>{judgeResult.judge.feedback}</p>
-            <div style={{marginTop:10,fontFamily:"'DM Mono',monospace",fontSize:'9.5px',color:'var(--t3)'}}>
-              Уверенность: {Math.round((judgeResult.judge.confidence||0)*100)}%
-            </div>
-          </div>
-        )}
         <div className="rb-row rb-row center rb-mt16">
           <button onClick={startNewBattle} className="rb-btn rb-btn-primary tall"><Sparkles/> Новый баттл</button>
         </div>

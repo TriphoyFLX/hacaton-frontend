@@ -60,8 +60,11 @@ export interface Battle {
   beatName?: string;
   currentTurn?: 'USER1' | 'USER2'; // Текущий ход записи
   winner?: 'USER1' | 'USER2' | 'DRAW';
-  judgedBy?: string;
-  judgedAt?: string;
+  judgedBy?: string | null;
+  judgedAt?: string | null;
+  votingEndsAt?: string | null;
+  peerGraceEndsAt?: string | null;
+  spectatorVoteCount?: number;
   createdAt: string;
   updatedAt: string;
   creator: {
@@ -321,6 +324,12 @@ export const getBattleRecordings = async (battleId: string): Promise<BattleRecor
   return response.json();
 };
 
+export interface SpectatorTally {
+  user1: number;
+  user2: number;
+  total: number;
+}
+
 export interface BattleRatingResult {
   creatorRating: number | null;
   opponentRating: number | null;
@@ -328,10 +337,39 @@ export interface BattleRatingResult {
   opponentReceived: number | null;
   bothRated: boolean;
   hasRated: boolean;
-  winner?: 'USER1' | 'USER2' | 'DRAW';
+  winner?: 'USER1' | 'USER2' | 'DRAW' | null;
   user1Score?: number | null;
   user2Score?: number | null;
   status: string;
+  judgedBy?: string | null;
+  judgedAt?: string | null;
+  votingEndsAt?: string | null;
+  peerGraceEndsAt?: string | null;
+  voteCount?: number;
+  myVote?: 'USER1' | 'USER2' | null;
+  tally?: SpectatorTally | null;
+  canSeeTally?: boolean;
+  phase?: 'voting' | 'peer_grace' | 'finished' | 'recording';
+  isParticipant?: boolean;
+  minSpectatorVotes?: number;
+}
+
+export interface JudgingFeedBattle {
+  id: string;
+  title: string;
+  beatUrl: string | null;
+  votingEndsAt: string | null;
+  spectatorVoteCount: number;
+  creator: { id: string; username: string; displayName: string | null; avatar: string | null };
+  opponent: { id: string; username: string; displayName: string | null; avatar: string | null } | null;
+  recordings: Array<{
+    id: string;
+    userId: string;
+    voiceUrl: string;
+    beatUrl: string;
+    duration: number;
+    username: string;
+  }>;
 }
 
 // Submit user rating for battle
@@ -426,4 +464,61 @@ export const leaveBattleQueue = async (): Promise<void> => {
     headers: getAuthHeaders(),
   });
   if (!response.ok) throw new Error('Failed to leave queue');
+};
+
+export const listJudgingBattles = async (): Promise<JudgingFeedBattle[]> => {
+  const response = await fetch(`${API_BASE}/battles/judging`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to list judging battles');
+  }
+  const data = await response.json();
+  return data.battles || [];
+};
+
+export const castBattleVote = async (
+  battleId: string,
+  choice: 'USER1' | 'USER2',
+): Promise<{
+  success: boolean;
+  myVote: 'USER1' | 'USER2';
+  voteCount: number;
+  tally: SpectatorTally;
+  votingEndsAt: string | null;
+}> => {
+  const response = await fetch(`${API_BASE}/battles/${battleId}/vote`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ choice }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to vote');
+  }
+  return response.json();
+};
+
+export const getBattleVoteStatus = async (battleId: string) => {
+  const response = await fetch(`${API_BASE}/battles/${battleId}/vote-status`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to fetch vote status');
+  }
+  return response.json() as Promise<{
+    status: string;
+    phase: string;
+    votingEndsAt: string | null;
+    peerGraceEndsAt: string | null;
+    voteCount: number;
+    myVote: 'USER1' | 'USER2' | null;
+    tally: SpectatorTally | null;
+    canSeeTally: boolean;
+    winner?: 'USER1' | 'USER2' | 'DRAW' | null;
+    judgedBy?: string | null;
+    minSpectatorVotes: number;
+  }>;
 };
