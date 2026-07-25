@@ -97,6 +97,20 @@ export default defineConfig({
         // Large drumkits / media stay network-only
         globIgnores: ['**/drumkits/**', '**/og-image.jpg'],
         runtimeCaching: [
+          // Prefer network for navigations so installed PWA picks up new index.html quickly
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'soundlab-pages',
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 8,
+                maxAgeSeconds: 60 * 60 * 24,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
             handler: 'NetworkOnly',

@@ -13,6 +13,7 @@ import './index.css'
 import './styles/responsive.css'
 import { installDisablePictureInPicture } from './lib/disablePictureInPicture'
 import { bindPwaInstallCapture } from './lib/pwa'
+import { bindPwaControllerReload, startPwaAutoUpdate } from './lib/pwaUpdate'
 import App from './App.tsx'
 
 installDisablePictureInPicture()
@@ -21,17 +22,16 @@ installDisablePictureInPicture()
 // after SW + BIP are ready. Late listeners miss the event → "Add shortcut" only.
 if (typeof window !== 'undefined') {
   bindPwaInstallCapture()
+  bindPwaControllerReload()
 }
 
-// Register SW immediately so Chrome Android can install as standalone app, not a bookmark
+// Register SW immediately so Chrome Android can install as standalone app, not a bookmark.
+// autoUpdate + skipWaiting activate new builds; we also poll on focus (mobile kills timers).
 if (typeof window !== 'undefined') {
   registerSW({
     immediate: true,
     onRegisteredSW(_swUrl, registration) {
-      if (!registration) return
-      window.setInterval(() => {
-        void registration.update()
-      }, 60 * 60 * 1000)
+      startPwaAutoUpdate(registration)
     },
   })
 }

@@ -1,5 +1,12 @@
 /* SoundLab Web Push handlers — imported by Workbox-generated SW */
 
+// Allow the page to activate a waiting worker immediately after a deploy.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('push', (event) => {
   let data = {
     title: 'SoundLab',
