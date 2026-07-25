@@ -212,8 +212,8 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           gap: 8px;
           align-items: center;
           flex-shrink: 0;
+          min-width: 0;
         }
-        .sl-nav-desktop { display: none; }
         .sl-btn {
           min-height: 40px;
           height: auto;
@@ -243,6 +243,9 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           border-color: transparent;
           color: var(--muted);
         }
+        /* After .sl-btn so display:none wins over inline-flex */
+        .sl-nav-actions .sl-nav-desktop { display: none; }
+        .sl-nav-actions .sl-nav-mobile { display: inline-flex; }
 
         .sl-hero {
           padding: 28px 0 36px;
@@ -466,8 +469,8 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
             padding: 16px 24px;
           }
           .sl-logo { font-size: 24px; }
-          .sl-nav-mobile { display: none; }
-          .sl-nav-desktop { display: inline-flex; }
+          .sl-nav-actions .sl-nav-mobile { display: none; }
+          .sl-nav-actions .sl-nav-desktop { display: inline-flex; }
           .sl-btn { padding: 10px 18px; font-size: 14px; }
           .sl-hero { padding: 40px 0 48px; gap: 28px; }
           .sl-hero h1 { font-size: clamp(44px, 7vw, 64px); }
