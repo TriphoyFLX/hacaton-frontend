@@ -4,8 +4,9 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 
 import Header from './Header';
+import PushEnableBanner from './PushEnableBanner';
 import { useAuthStore } from '../store/authStore';
-import { ensureWebPushSubscription } from '../lib/webPush';
+import { ensureWebPushSubscription, getNotificationPermission } from '../lib/webPush';
 import { warmAppRoutes, prefetchRoute } from '../lib/routePrefetch';
 import { setCachedPageData, isPageDataFresh } from '../lib/pageDataCache';
 
@@ -86,12 +87,13 @@ export default function Layout() {
     };
   }, [token]);
 
-  // PWA / browser Web Push — subscribe after login (messages, reposts, etc.)
+  // Re-sync push only if permission already granted (no auto prompt — mobile blocks that).
   useEffect(() => {
     if (!token) return;
+    if (getNotificationPermission() !== 'granted') return;
     const timer = window.setTimeout(() => {
       void ensureWebPushSubscription();
-    }, 2500);
+    }, 1500);
     return () => window.clearTimeout(timer);
   }, [token]);
 
@@ -113,6 +115,8 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {token ? <PushEnableBanner /> : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { pushApi } from '../api/push';
 
 const SUBSCRIBED_KEY = 'sl_web_push_endpoint_v1';
+const DISMISS_KEY = 'sl_web_push_banner_dismissed_v1';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -11,13 +12,43 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return output;
 }
 
-function supportsWebPush(): boolean {
+export function supportsWebPush(): boolean {
   return (
     typeof window !== 'undefined' &&
     'serviceWorker' in navigator &&
     'PushManager' in window &&
     'Notification' in window
   );
+}
+
+export function getNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (!supportsWebPush()) return 'unsupported';
+  return Notification.permission;
+}
+
+export function wasPushBannerDismissed(): boolean {
+  try {
+    return localStorage.getItem(DISMISS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function dismissPushBanner(): void {
+  try {
+    localStorage.setItem(DISMISS_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+/** True when we already synced an endpoint from this browser. */
+export function hasLocalPushEndpoint(): boolean {
+  try {
+    return Boolean(localStorage.getItem(SUBSCRIBED_KEY));
+  } catch {
+    return false;
+  }
 }
 
 async function waitForServiceWorker(): Promise<ServiceWorkerRegistration | null> {
