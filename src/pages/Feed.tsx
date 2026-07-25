@@ -922,11 +922,6 @@ ${FONT_IMPORT}
 .post-comment-form textarea:not(:placeholder-shown) {
   color: transparent;
 }
-.post-composer-hint {
-  margin-top: 6px;
-  font: 11px 'DM Mono', monospace;
-  color: var(--text-muted);
-}
 .post-comment.is-reply-target {
   background: rgba(110, 168, 254, 0.1);
   box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.22);
@@ -1873,7 +1868,6 @@ function PostCard({
             </div>
             <button type="submit" disabled={!commentText.trim()}>Отправить</button>
           </form>
-          <div className="post-composer-hint">Enter — отправить · Shift+Enter — новая строка</div>
           {commentError && <div className="post-comment" role="alert">{commentError}</div>}
         </div>
       </div>}

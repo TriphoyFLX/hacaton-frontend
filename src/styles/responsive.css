@@ -424,11 +424,6 @@ select {
     border-radius: 18px 18px 0 0 !important;
   }
 
-  .vf-composer-hint,
-  .post-composer-hint {
-    display: none;
-  }
-
   .vf-actions {
     right: 8px !important;
   }
