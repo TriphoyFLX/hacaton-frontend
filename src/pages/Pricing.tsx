@@ -157,10 +157,10 @@ export default function Pricing() {
     let cancelled = false;
     void (async () => {
       try {
-        const payment = await billingApi.syncPayment(paymentId);
+        const result = await billingApi.syncPayment(paymentId);
         if (cancelled) return;
 
-        const status = String(payment?.status || '').toUpperCase();
+        const status = String(result?.payment?.status || '').toUpperCase();
         if (status === 'SUCCEEDED') {
           localStorage.removeItem('sl_pending_payment');
           setErr('');

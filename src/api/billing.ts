@@ -38,6 +38,9 @@ export const billingApi = {
     ).then((r) => r.data),
   syncPayment: (id: string) =>
     api
-      .get<{ id: string; status: string; kind?: string; amountRub?: number }>(`/billing/payments/${id}`)
+      .get<{
+        payment: { id: string; status: string; kind?: string; amountRub?: number };
+        billing?: BillingSnapshot;
+      }>(`/billing/payments/${id}`)
       .then((r) => r.data),
 };
