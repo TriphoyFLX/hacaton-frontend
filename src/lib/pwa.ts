@@ -243,8 +243,11 @@ export function bindPwaInstallCapture() {
     window.matchMedia('(display-mode: window-controls-overlay)'),
   ];
   const onDisplayMode = () => {
-    if (isPwaStandalone()) markPwaInstalledOnDevice();
-    notify();
+    if (isPwaStandalone()) {
+      markPwaInstalledOnDevice();
+    } else {
+      notify();
+    }
   };
   mediaQueries.forEach((mq) => {
     if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onDisplayMode);
@@ -286,11 +289,34 @@ export async function promptPwaInstall(): Promise<'accepted' | 'dismissed' | 'un
   }
 }
 
-/** Single source of truth for install UI across Header / Sidebar / Dashboard / Landing. */
-export function getPwaInstallSnapshot() {
+export type PwaInstallSnapshot = {
+  standalone: boolean;
+  installedOnDevice: boolean;
+  hideInstallUi: boolean;
+  hasDeferred: boolean;
+  uninstallFeedbackPending: boolean;
+  dismissed: boolean;
+};
+
+const SERVER_PWA_SNAPSHOT: PwaInstallSnapshot = {
+  standalone: false,
+  installedOnDevice: false,
+  hideInstallUi: false,
+  hasDeferred: false,
+  uninstallFeedbackPending: false,
+  dismissed: false,
+};
+
+let cachedPwaSnapshot: PwaInstallSnapshot = SERVER_PWA_SNAPSHOT;
+
+/**
+ * Snapshot for useSyncExternalStore — must return a stable reference when
+ * values are unchanged (new object each call causes React error #185).
+ */
+export function getPwaInstallSnapshot(): PwaInstallSnapshot {
   const standalone = isPwaStandalone();
   const installedOnDevice = standalone || isPwaMarkedInstalledOnDevice();
-  return {
+  const next: PwaInstallSnapshot = {
     standalone,
     installedOnDevice,
     hideInstallUi: installedOnDevice,
@@ -298,4 +324,23 @@ export function getPwaInstallSnapshot() {
     uninstallFeedbackPending: isPwaUninstallFeedbackPending(),
     dismissed: wasPwaDismissed(),
   };
+
+  const prev = cachedPwaSnapshot;
+  if (
+    prev.standalone === next.standalone &&
+    prev.installedOnDevice === next.installedOnDevice &&
+    prev.hideInstallUi === next.hideInstallUi &&
+    prev.hasDeferred === next.hasDeferred &&
+    prev.uninstallFeedbackPending === next.uninstallFeedbackPending &&
+    prev.dismissed === next.dismissed
+  ) {
+    return prev;
+  }
+
+  cachedPwaSnapshot = next;
+  return next;
+}
+
+export function getServerPwaInstallSnapshot(): PwaInstallSnapshot {
+  return SERVER_PWA_SNAPSHOT;
 }

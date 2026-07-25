@@ -3,6 +3,7 @@ import {
   bindPwaInstallCapture,
   getDeferredInstallPrompt,
   getPwaInstallSnapshot,
+  getServerPwaInstallSnapshot,
   isIosSafari,
   promptPwaInstall,
   subscribeInstallPrompt,
@@ -24,14 +25,7 @@ function useInstallSnapshot() {
   return useSyncExternalStore(
     subscribeInstallPrompt,
     getPwaInstallSnapshot,
-    () => ({
-      standalone: false,
-      installedOnDevice: false,
-      hideInstallUi: false,
-      hasDeferred: false,
-      uninstallFeedbackPending: false,
-      dismissed: false,
-    }),
+    getServerPwaInstallSnapshot,
   );
 }
 
