@@ -7,6 +7,7 @@ import { API_ORIGIN } from '../api/client';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import PwaInstallButton from './PwaInstallButton';
 import { appSocket } from '../lib/appSocket';
+import { isChatNotificationEntity, notificationText as formatNotificationText } from '../lib/notificationCopy';
 
 const SearchModal = lazy(() => import('./SearchModal'));
 
@@ -377,26 +378,7 @@ export default function Header() {
     if (opening) await loadNotifications();
   };
 
-  const notificationText = (notification: AppNotification) => {
-    const name = notification.actor.displayName || `@${notification.actor.username}`;
-    if (notification.type === 'REPOST') {
-      if (notification.entityType === 'soundtok_same_repost') {
-        return `${name} сделал(а) репост той же публикации`;
-      }
-      return `${name} сделал(а) репост вашего видео`;
-    }
-    if (notification.entityType === 'soundtok') {
-      if (notification.type === 'LIKE') return `${name} оценил(а) ваше видео`;
-      if (notification.type === 'COMMENT') return `${name} прокомментировал(а) ваше видео`;
-    }
-    const actions: Record<Exclude<AppNotification['type'], 'REPOST'>, string> = {
-      LIKE: 'оценил(а) вашу публикацию',
-      COMMENT: 'оставил(а) комментарий к публикации',
-      FOLLOW: 'подписался(ась) на вас',
-      MESSAGE: 'отправил(а) вам сообщение',
-    };
-    return `${name} ${actions[notification.type]}`;
-  };
+  const notificationText = (notification: AppNotification) => formatNotificationText(notification);
 
   const openNotification = async (notification: AppNotification) => {
     setIsNotificationsOpen(false);
@@ -412,6 +394,11 @@ export default function Header() {
       // keep local dismiss even if delete fails
     }
 
+    if (isChatNotificationEntity(notification.entityType) && notification.entityId) {
+      navigate(`/chats/${notification.entityId}`);
+      return;
+    }
+
     if (
       (notification.entityType === 'soundtok' || notification.entityType === 'soundtok_same_repost') &&
       notification.entityId
@@ -421,7 +408,6 @@ export default function Header() {
       return;
     }
     if (notification.entityType === 'post' && notification.entityId) navigate(`/feed?p=${notification.entityId}`);
-    else if (notification.entityType === 'chat' && notification.entityId) navigate(`/chats/${notification.entityId}`);
     else navigate(`/profile/${notification.actor.username}`);
   };
 
