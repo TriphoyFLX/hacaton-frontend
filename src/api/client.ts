@@ -14,7 +14,8 @@ export const SOCKET_ORIGIN = import.meta.env.VITE_SOCKET_URL?.replace(/\/$/, '')
 
 export const api = axios.create({
   baseURL: `${API_ORIGIN}/api`,
-  timeout: 60_000,
+  // Keep default snappy; long uploads override per-request.
+  timeout: 20_000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -42,11 +43,22 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Network / timeout / CORS — never treat as "logged out"
+    if (!error.response) {
+      return Promise.reject(error);
+    }
+
     const requestUrl = String(error.config?.url || '');
     const isCredentialRequest = /\/auth\/(login|register|verify-email|resend-code)$/.test(requestUrl);
-    if (error.response?.status === 401 && getAuthToken() && !isCredentialRequest) {
+    const isAuthProbe = /\/auth\/me$/.test(requestUrl);
+    if (error.response.status === 401 && getAuthToken() && !isCredentialRequest) {
       const { useAuthStore } = await import('../store/authStore');
       useAuthStore.getState().logout();
+
+      // Soft probe failures shouldn't hard-bounce mid-upload / mid-swipe
+      if (isAuthProbe) {
+        return Promise.reject(error);
+      }
 
       const path = window.location.pathname;
       if (!path.startsWith('/login') && !path.startsWith('/register')) {

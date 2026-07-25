@@ -430,12 +430,14 @@ select {
   }
 
   .vf-actions {
-    right: 8px !important;
+    right: 6px !important;
+    bottom: 48px !important;
   }
 
   .vf-bottom-info {
     left: 12px !important;
-    right: 78px !important;
+    right: 72px !important;
+    bottom: 8px !important;
   }
 }
 

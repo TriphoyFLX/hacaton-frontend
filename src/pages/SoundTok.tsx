@@ -633,9 +633,10 @@ ${FONT_IMPORT}
 
 .st-fab {
   position: absolute;
-  bottom: 20px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
+  z-index: 20;
   max-width: calc(100% - 24px);
   width: 52px;
   height: 52px;
@@ -1073,9 +1074,9 @@ export default function SoundTok() {
     e.preventDefault();
     if (!videoFile) return;
 
-    const maxBytes = 15 * 1024 * 1024;
+    const maxBytes = 50 * 1024 * 1024;
     if (videoFile.size > maxBytes) {
-      showToast('Файл слишком большой — максимум 15 MB', 'error');
+      showToast('Файл слишком большой — максимум 50 MB', 'error');
       return;
     }
 
@@ -1092,7 +1093,7 @@ export default function SoundTok() {
       const status = (error as { response?: { status?: number; data?: { error?: string } } })?.response?.status;
       const serverError = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
       if (status === 413) {
-        showToast(serverError || 'Файл слишком большой — максимум 15 MB', 'error');
+        showToast(serverError || 'Файл слишком большой — максимум 50 MB', 'error');
       } else if (status === 401) {
         showToast('Сессия истекла — войдите снова', 'error');
       } else {
@@ -1283,8 +1284,8 @@ export default function SoundTok() {
                     accept="video/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
-                      if (file && file.size > 15 * 1024 * 1024) {
-                        showToast('Файл слишком большой — максимум 15 MB', 'error');
+                      if (file && file.size > 50 * 1024 * 1024) {
+                        showToast('Файл слишком большой — максимум 50 MB', 'error');
                         e.target.value = '';
                         setVideoFile(null);
                         return;
@@ -1313,7 +1314,7 @@ export default function SoundTok() {
                       ) : (
                         <>
                           <div className="st-file-name">Нажмите, чтобы выбрать клип</div>
-                          <div className="st-file-hint">MP4 · MOV · WebM · до 15 MB</div>
+                          <div className="st-file-hint">MP4 · MOV · WebM · до 50 MB</div>
                         </>
                       )}
                     </div>

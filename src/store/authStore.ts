@@ -161,9 +161,13 @@ export const useAuthStore = create<AuthState>()(
           const response = await authApi.getMe();
           syncAuthStorage(response.data, token);
           set({ user: response.data, token });
-        } catch {
-          clearAuthSession();
-          set({ user: null, token: null });
+        } catch (err: unknown) {
+          // Only drop session on real auth rejection — keep it on offline/5xx/timeouts
+          const status = (err as { response?: { status?: number } })?.response?.status;
+          if (status === 401 || status === 403) {
+            clearAuthSession();
+            set({ user: null, token: null });
+          }
         }
       },
     }),

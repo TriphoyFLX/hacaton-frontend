@@ -86,7 +86,8 @@ export const soundTokApi = {
     }
 
     const response = await api.post('/soundtok', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      // Let Axios set multipart boundary; phone uploads need a longer timeout
+      timeout: 180_000,
     });
     return response.data;
   },

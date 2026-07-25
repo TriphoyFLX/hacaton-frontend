@@ -142,17 +142,23 @@ const css = `
 .vf-video-container {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   will-change: transform, opacity;
   touch-action: none;
+  backface-visibility: hidden;
 }
 
 .vf-video {
   width: 100%;
   height: 100%;
+  max-width: none;
+  max-height: none;
   object-fit: cover;
+  object-position: center;
   cursor: pointer;
   background: #000;
 }
@@ -360,7 +366,7 @@ const css = `
 .vf-actions {
   position: absolute;
   right: 10px;
-  bottom: 88px;
+  bottom: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1150,17 +1156,26 @@ button.vf-repost-attr:hover {
   }
 
   .vf-actions {
-    right: 8px;
-    /* Above caption + seek — Layout already reserves bottom nav */
-    bottom: 108px;
+    right: 6px;
+    /* Layout already pads bottom nav — keep rail near caption/seek */
+    bottom: 48px;
     z-index: 9;
+    gap: 0;
+  }
+
+  .vf-action-group {
+    margin-bottom: 10px;
+  }
+
+  .vf-author-block {
+    margin-bottom: 12px;
   }
 
   .vf-bottom-info {
     left: 12px;
-    right: 78px;
-    bottom: 10px;
-    padding: 12px 10px 14px;
+    right: 72px;
+    bottom: 8px;
+    padding: 10px 8px 12px;
   }
 
   .vf-seek {
@@ -1204,7 +1219,7 @@ button.vf-repost-attr:hover {
   padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
 }
 .st-root--guest .vf-actions {
-  bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(48px + env(safe-area-inset-bottom, 0px));
 }
 .st-root--guest .vf-seek {
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
@@ -1227,7 +1242,7 @@ button.vf-repost-attr:hover {
 
   .vf-actions {
     right: 12px;
-    bottom: 96px;
+    bottom: 56px;
   }
 
   .vf-bottom-info {
@@ -1383,6 +1398,9 @@ export default function VideoFeed({
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekAria, setSeekAria] = useState({ now: 0, max: 0 });
+  const [stageHeightPx, setStageHeightPx] = useState(
+    () => (typeof window !== 'undefined' ? window.innerHeight : 0),
+  );
 
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
@@ -1764,6 +1782,27 @@ export default function VideoFeed({
       stage.removeEventListener('wheel', unlockOnGesture);
     };
   }, [enableSound]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const measure = () => {
+      const h = stage.clientHeight || window.innerHeight;
+      if (h > 0) setStageHeightPx(h);
+    };
+    measure();
+
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(stage);
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
+  }, [soundToks.length]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (commentsOpen || isSeekingRef.current || isAnimatingRef.current) return;
@@ -2298,15 +2337,14 @@ export default function VideoFeed({
               key={soundTok.id}
               className="vf-video-container"
               style={{
-                transform: `translateY(calc(${(index - currentIndex) * 100}% - ${dragOffset}px))`,
+                transform: `translate3d(0, ${(index - currentIndex) * (stageHeightPx || window.innerHeight) - dragOffset}px, 0)`,
                 opacity:
-                  isDragging || isAnimating
-                    ? Math.abs(index - currentIndex) <= 1
+                  Math.abs(index - currentIndex) <= 1
+                    ? isActive || isDragging || isAnimating
                       ? 1
                       : 0
-                    : isActive
-                      ? 1
-                      : 0,
+                    : 0,
+                visibility: Math.abs(index - currentIndex) <= 1 ? 'visible' : 'hidden',
                 transition:
                   isDragging || isAnimating ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
                 pointerEvents: isActive ? 'auto' : 'none',
