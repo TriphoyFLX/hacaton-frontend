@@ -830,8 +830,13 @@ ${FONT_IMPORT}
   font-weight: 700;
   font-size: 13px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .post-comment-form > button:disabled { opacity: 0.4; cursor: not-allowed; }
+.post-comment-send-icon { display: none; }
 .post-comment-reply-bar {
   display: flex;
   align-items: center;
@@ -844,6 +849,12 @@ ${FONT_IMPORT}
   background: rgba(110, 168, 254, 0.1);
   font-size: 13px;
   color: var(--text-secondary);
+}
+.post-comment-reply-bar > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .post-comment-reply-chip {
   display: inline-flex;
@@ -884,11 +895,15 @@ ${FONT_IMPORT}
   border-radius: 20px;
   font: 16px/1.4 'Syne', sans-serif;
   white-space: pre-wrap;
-  overflow: hidden;
+  word-break: break-word;
+  overflow-x: hidden;
+  overflow-y: auto;
   color: var(--text-primary);
   pointer-events: none;
   z-index: 0;
+  scrollbar-width: none;
 }
+.post-comment-input-backdrop::-webkit-scrollbar { display: none; }
 .post-comment-input-mention {
   color: #8eb8ff;
   font-weight: 700;
@@ -907,7 +922,7 @@ ${FONT_IMPORT}
   border: none;
   border-radius: 20px;
   padding: 11px 14px;
-  color: transparent;
+  color: var(--text-primary);
   caret-color: var(--text-primary);
   background: transparent;
   font: 16px/1.4 'Syne', sans-serif;
@@ -918,14 +933,28 @@ ${FONT_IMPORT}
 .post-comment-form textarea::placeholder {
   color: var(--text-secondary);
   opacity: 1;
+  -webkit-text-fill-color: var(--text-secondary);
 }
 .post-comment-form textarea:not(:placeholder-shown) {
   color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 .post-composer-hint {
   margin-top: 6px;
   font: 11px 'DM Mono', monospace;
   color: var(--text-muted);
+}
+.post-comments-empty {
+  padding: 22px 10px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.post-comment-error {
+  margin-top: 8px;
+  color: var(--red, #f5a9a3);
+  font: 12px/1.4 'DM Mono', monospace;
 }
 .post-comment.is-reply-target {
   background: rgba(110, 168, 254, 0.1);
@@ -1023,9 +1052,13 @@ ${FONT_IMPORT}
 .post-comment-reply-btn:hover { color: var(--text-primary); }
 .post-share-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.68); }
 .post-share-dialog { width: min(420px, 100%); max-height: 75vh; overflow: auto; padding: 18px; border: 1px solid var(--border-mid); border-radius: 13px; background: var(--bg-surface); }
-.post-share-dialog h3 { margin: 0 0 5px; font-size: 18px; }.post-share-dialog p { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; }
-.post-share-chat { display: block; width: 100%; margin: 6px 0; padding: 11px; cursor: pointer; color: var(--text-primary); text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px 'Syne', sans-serif; }
-.post-share-chat:hover { border-color: var(--border-hover); background: var(--bg-hover); }.post-share-close { float: right; background: transparent; color: var(--text-secondary); border: 0; cursor: pointer; }
+.post-share-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.post-share-dialog h3 { margin: 0; font-size: 18px; line-height: 1.2; flex: 1; min-width: 0; }
+.post-share-dialog p { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; }
+.post-share-chat { display: block; width: 100%; margin: 6px 0; padding: 12px; cursor: pointer; color: var(--text-primary); text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px 'Syne', sans-serif; min-height: 44px; }
+.post-share-chat:hover { border-color: var(--border-hover); background: var(--bg-hover); }
+.post-share-close { flex-shrink: 0; width: 40px; height: 40px; display: grid; place-items: center; background: transparent; color: var(--text-secondary); border: 0; border-radius: 10px; cursor: pointer; }
+.post-share-close:hover { background: var(--bg-hover); color: var(--text-primary); }
 .cp-hashtag-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
 .cp-hashtag-hint { color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
 .cp-hashtag-add { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; background: transparent; color: var(--text-secondary); cursor: pointer; font: 11px 'DM Mono', monospace; }
@@ -1075,6 +1108,57 @@ ${FONT_IMPORT}
   .ambient-orb-2 {
     display: none !important;
   }
+  .post-card-header,
+  .post-body,
+  .post-card-footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .post-comments-panel {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+  .post-comment.reply {
+    margin-left: 14px;
+    padding-left: 8px;
+  }
+  .post-comment-delete {
+    width: 40px;
+    height: 40px;
+  }
+  .post-comment-vote,
+  .post-comment-reply-btn {
+    min-height: 40px;
+  }
+  .stat-btn {
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+  .btn-more,
+  .btn-send {
+    width: 40px;
+    height: 40px;
+  }
+  .btn-follow {
+    min-height: 40px;
+    height: auto;
+    padding: 8px 12px;
+  }
+  .post-comment-form > button {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .post-comment-send-label {
+    display: none;
+  }
+  .post-comment-send-icon {
+    display: block;
+  }
+  .post-composer-hint {
+    display: none;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1088,9 +1172,9 @@ ${FONT_IMPORT}
   .cp-preview-grid {
     grid-template-columns: 1fr;
   }
-  .post-comment-form > button {
-    min-width: 44px;
-    min-height: 44px;
+  .post-footer-row {
+    flex-wrap: wrap;
+    gap: 4px;
   }
 }
 `;
@@ -1823,7 +1907,7 @@ function PostCard({
               ]);
             })()
           ) : (
-            <div className="post-comment">Комментариев пока нет.</div>
+            <div className="post-comments-empty">Комментариев пока нет.</div>
           )}
         </div>
         <div className="post-comment-composer">
@@ -1867,6 +1951,12 @@ function PostCard({
                   setCommentText(event.target.value);
                   resizeCommentField(event.target);
                 }}
+                onScroll={(event) => {
+                  const backdrop = event.currentTarget.parentElement?.querySelector(
+                    '.post-comment-input-backdrop',
+                  ) as HTMLElement | null;
+                  if (backdrop) backdrop.scrollTop = event.currentTarget.scrollTop;
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
@@ -1879,16 +1969,21 @@ function PostCard({
                 aria-label="Текст комментария"
               />
             </div>
-            <button type="submit" disabled={!commentText.trim()}>Отправить</button>
+            <button type="submit" disabled={!commentText.trim()} aria-label="Отправить">
+              <span className="post-comment-send-label">Отправить</span>
+              <Send className="post-comment-send-icon" size={18} />
+            </button>
           </form>
           <div className="post-composer-hint">Enter — отправить · Shift+Enter — новая строка</div>
-          {commentError && <div className="post-comment" role="alert">{commentError}</div>}
+          {commentError && <div className="post-comment-error" role="alert">{commentError}</div>}
         </div>
       </div>}
       {shareOpen && <div className="post-share-overlay" role="dialog" aria-modal="true">
         <div className="post-share-dialog">
-          <button className="post-share-close" onClick={() => setShareOpen(false)} aria-label="Закрыть"><X size={18}/></button>
-          <h3>Поделиться в чате</h3>
+          <div className="post-share-head">
+            <h3>Поделиться в чате</h3>
+            <button className="post-share-close" onClick={() => setShareOpen(false)} aria-label="Закрыть"><X size={18}/></button>
+          </div>
           <p>Выберите чат, куда отправить ссылку на публикацию.</p>
           {chats.map((chat) => <button className="post-share-chat" key={chat.id} onClick={() => void shareToChat(chat)}>
             {chat.type === 'GROUP' ? chat.name || 'Группа без названия' : `@${chat.otherUser?.username || 'пользователь'}`}

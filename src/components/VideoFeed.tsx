@@ -748,8 +748,8 @@ button.vf-repost-attr:hover {
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: none;
   background: rgba(255,255,255,0.08);
   border-radius: 50%;
@@ -892,7 +892,8 @@ button.vf-repost-attr:hover {
   background: transparent;
   color: rgba(255,255,255,0.45);
   cursor: pointer;
-  padding: 0;
+  min-height: 36px;
+  padding: 8px 4px;
   font-size: 12px;
 }
 
@@ -931,7 +932,11 @@ button.vf-repost-attr:hover {
   padding: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   margin-left: auto;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 8px;
 }
 
 .vf-comment-delete:hover {
@@ -958,6 +963,13 @@ button.vf-repost-attr:hover {
   padding: 10px 14px 0;
   color: rgba(255,255,255,0.7);
   font-size: 13px;
+}
+
+.vf-reply-bar > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vf-reply-chip {
@@ -1029,10 +1041,17 @@ button.vf-repost-attr:hover {
   border-radius: 20px;
   font: 16px/1.4 inherit;
   white-space: pre-wrap;
-  overflow: hidden;
+  word-break: break-word;
+  overflow-x: hidden;
+  overflow-y: auto;
   color: #fff;
   pointer-events: none;
   z-index: 0;
+  scrollbar-width: none;
+}
+
+.vf-comment-input-backdrop::-webkit-scrollbar {
+  display: none;
 }
 
 .vf-comment-input-mention {
@@ -1054,7 +1073,7 @@ button.vf-repost-attr:hover {
   border: none;
   border-radius: 20px;
   padding: 11px 14px;
-  color: transparent;
+  color: #fff;
   caret-color: #fff;
   font-size: 16px;
   line-height: 1.4;
@@ -1066,6 +1085,12 @@ button.vf-repost-attr:hover {
 .vf-sheet-input textarea::placeholder {
   color: rgba(255,255,255,0.38);
   opacity: 1;
+  -webkit-text-fill-color: rgba(255,255,255,0.38);
+}
+
+.vf-sheet-input textarea:not(:placeholder-shown) {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .vf-comment-mention {
@@ -1153,6 +1178,24 @@ button.vf-repost-attr:hover {
     -webkit-box-orient: vertical;
     overflow: hidden;
     word-break: break-word;
+  }
+
+  .vf-comment-item.reply {
+    margin-left: 14px;
+    padding-left: 8px;
+  }
+
+  .vf-comment-vote,
+  .vf-comment-reply {
+    min-height: 40px;
+  }
+
+  .vf-composer-hint {
+    display: none;
+  }
+
+  .vf-sheet-composer {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -2845,6 +2888,12 @@ export default function VideoFeed({
                     onChange={(e) => {
                       setNewComment(e.target.value);
                       resizeCommentField(e.target);
+                    }}
+                    onScroll={(e) => {
+                      const backdrop = e.currentTarget.parentElement?.querySelector(
+                        '.vf-comment-input-backdrop',
+                      ) as HTMLElement | null;
+                      if (backdrop) backdrop.scrollTop = e.currentTarget.scrollTop;
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {

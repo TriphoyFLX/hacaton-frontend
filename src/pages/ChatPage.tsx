@@ -598,9 +598,21 @@ ${FONT_IMPORT}
   border: 0;
   border-radius: 8px;
   background: transparent;
+  color: inherit;
   cursor: pointer;
+  display: grid;
+  place-items: center;
   font-size: 18px;
   line-height: 1;
+}
+@media (pointer: coarse) {
+  .msg-ctx-emoji {
+    width: 40px;
+    height: 40px;
+  }
+  .msg-ctx-item {
+    min-height: 44px;
+  }
 }
 .msg-ctx-emoji:hover {
   background: rgba(255, 255, 255, 0.08);
