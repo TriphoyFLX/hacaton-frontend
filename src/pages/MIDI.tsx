@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import '../styles/daw.css';
 import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
