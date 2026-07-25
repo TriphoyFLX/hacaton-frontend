@@ -365,14 +365,16 @@ export default function Header() {
     };
   }, [token]);
 
-  // Unlock AudioContext after first click so chimes can play later
+  // Unlock AudioContext on any user gesture so later socket chimes can play
   useEffect(() => {
     const unlock = () => unlockNotificationSound();
-    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
-    window.addEventListener('keydown', unlock, { once: true });
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock);
+    window.addEventListener('touchstart', unlock, { passive: true });
     return () => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
+      window.removeEventListener('touchstart', unlock);
     };
   }, []);
 

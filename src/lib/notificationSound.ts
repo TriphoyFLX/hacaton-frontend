@@ -3,11 +3,12 @@
  * Debounced so bursts of events don't spam.
  */
 
-const MIN_GAP_MS = 1100;
+const MIN_GAP_MS = 900;
 const MUTE_KEY = 'sl_notification_sound_muted_v1';
 
 let audioCtx: AudioContext | null = null;
 let lastPlayedAt = 0;
+let unlocked = false;
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -34,12 +35,12 @@ function tone(
   osc.frequency.setValueAtTime(frequency, start);
 
   filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(1800, start);
-  filter.Q.setValueAtTime(0.7, start);
+  filter.frequency.setValueAtTime(2200, start);
+  filter.Q.setValueAtTime(0.6, start);
 
-  // Soft attack / long calm decay
+  // Soft attack / calm decay
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peak, start + 0.035);
+  gain.gain.exponentialRampToValueAtTime(peak, start + 0.04);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
   osc.connect(filter);
@@ -67,6 +68,19 @@ export function setNotificationSoundMuted(muted: boolean) {
   }
 }
 
+async function ensureRunning(): Promise<AudioContext | null> {
+  const ctx = getCtx();
+  if (!ctx) return null;
+  if (ctx.state === 'suspended') {
+    try {
+      await ctx.resume();
+    } catch {
+      return null;
+    }
+  }
+  return ctx.state === 'running' ? ctx : null;
+}
+
 /** Gentle two-note chime — quiet and non-jarring. */
 export function playNotificationSound(): void {
   if (typeof window === 'undefined') return;
@@ -76,27 +90,45 @@ export function playNotificationSound(): void {
   if (now - lastPlayedAt < MIN_GAP_MS) return;
   lastPlayedAt = now;
 
-  try {
-    const ctx = getCtx();
-    if (!ctx) return;
+  void (async () => {
+    try {
+      const ctx = await ensureRunning();
+      if (!ctx) return;
 
-    void ctx.resume().catch(() => undefined);
-
-    const t0 = ctx.currentTime + 0.02;
-    // Soft ascending fifth — calm “ding-dong”
-    tone(ctx, 523.25, t0, 0.42, 0.055); // C5
-    tone(ctx, 659.25, t0 + 0.14, 0.55, 0.045); // E5
-  } catch {
-    /* autoplay / AudioContext blocked until a gesture — ignore */
-  }
+      const t0 = ctx.currentTime + 0.03;
+      // Soft ascending fifth — calm “ding-dong” (audible but gentle)
+      tone(ctx, 523.25, t0, 0.48, 0.14); // C5
+      tone(ctx, 659.25, t0 + 0.16, 0.62, 0.11); // E5
+    } catch {
+      /* blocked until a user gesture */
+    }
+  })();
 }
 
-/** Call once on a user gesture so later socket sounds are allowed. */
+/**
+ * Call inside a user gesture so Chrome/Safari allow later notification chimes.
+ * Plays a silent buffer to fully unlock the audio pipeline.
+ */
 export function unlockNotificationSound(): void {
+  if (unlocked) return;
   try {
     const ctx = getCtx();
     if (!ctx) return;
-    void ctx.resume().catch(() => undefined);
+    void ctx
+      .resume()
+      .then(() => {
+        unlocked = true;
+        try {
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+        } catch {
+          /* ignore */
+        }
+      })
+      .catch(() => undefined);
   } catch {
     /* ignore */
   }
