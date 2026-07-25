@@ -816,6 +816,9 @@ ${FONT_IMPORT}
   padding: 10px 12px 12px;
   border-top: 1px solid var(--border);
   background: var(--bg-elevated, var(--bg-surface, #1a1a1a));
+  /* Keep input anchored while reply chip floats above */
+  isolation: isolate;
+  z-index: 2;
 }
 .post-comment-form { display: flex; align-items: flex-end; gap: 8px; }
 .post-comment-form > button {
@@ -838,17 +841,26 @@ ${FONT_IMPORT}
 .post-comment-form > button:disabled { opacity: 0.4; cursor: not-allowed; }
 .post-comment-send-icon { display: none; }
 .post-comment-reply-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 6px);
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin: 0;
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid rgba(110, 168, 254, 0.28);
-  background: rgba(110, 168, 254, 0.1);
+  background: rgba(22, 22, 22, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   font-size: 13px;
   color: var(--text-secondary);
+  pointer-events: auto;
 }
 .post-comment-reply-bar > span {
   min-width: 0;
@@ -957,10 +969,9 @@ ${FONT_IMPORT}
   font: 12px/1.4 'DM Mono', monospace;
 }
 .post-comment.is-reply-target {
-  background: rgba(110, 168, 254, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.22);
+  background: rgba(110, 168, 254, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.2);
   border-radius: 8px;
-  padding: 6px 8px;
 }
 .post-comment-mention {
   display: inline;
@@ -1528,8 +1539,12 @@ function PostCard({
   };
   const submitComment = async (event?: React.FormEvent | React.KeyboardEvent) => {
     event?.preventDefault();
-    const text = commentText.trim();
-    if (!text) return;
+    const raw = commentText.trim();
+    if (!raw) return;
+    const text =
+      replyTo && !raw.toLowerCase().startsWith(`@${replyTo.username.toLowerCase()}`)
+        ? `@${replyTo.username} ${raw}`
+        : raw;
     setCommentError('');
     try {
       const result = await postsApi.createComment(post.id, text, replyTo?.id);
@@ -1545,26 +1560,17 @@ function PostCard({
   const startReply = (comment: PostComment) => {
     const rootId = comment.parentId || comment.id;
     const username = comment.author.username;
-    const mention = `@${username} `;
     setReplyTo({ id: rootId, username });
-    setCommentText((prev) => {
-      const withoutOldMention = prev.replace(/^@[a-zA-Z0-9._]+ /, '');
-      return `${mention}${withoutOldMention}`;
-    });
+    // Don't inject @mention into the field — that jumps caret/height while typing.
     window.setTimeout(() => {
       const input = commentInputRef.current;
       if (!input) return;
-      input.focus();
-      input.setSelectionRange(mention.length, mention.length);
-      resizeCommentField(input);
+      input.focus({ preventScroll: true });
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
     }, 0);
   };
   const cancelReply = () => {
-    setCommentText((prev) => {
-      if (!replyTo) return prev;
-      const mention = `@${replyTo.username} `;
-      return prev.startsWith(mention) ? prev.slice(mention.length) : prev;
-    });
     setReplyTo(null);
   };
   const deleteComment = async (commentId: string) => {
@@ -1931,16 +1937,7 @@ function PostCard({
             <div className="post-comment-input-wrap">
               {commentText && (
                 <div className="post-comment-input-backdrop" aria-hidden>
-                  {replyTo && commentText.startsWith(`@${replyTo.username}`) ? (
-                    <>
-                      <span className="post-comment-input-mention">
-                        @{replyTo.username}
-                      </span>
-                      {commentText.slice(`@${replyTo.username}`.length)}
-                    </>
-                  ) : (
-                    commentText
-                  )}
+                  {commentText}
                 </div>
               )}
               <textarea

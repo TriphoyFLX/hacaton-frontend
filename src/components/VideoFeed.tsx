@@ -797,10 +797,8 @@ button.vf-repost-attr:hover {
 }
 
 .vf-comment-item.is-reply-target {
-  background: rgba(110, 168, 254, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.22);
-  padding-left: 8px;
-  padding-right: 8px;
+  background: rgba(110, 168, 254, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.2);
 }
 
 .vf-comment-avatar {
@@ -955,18 +953,32 @@ button.vf-repost-attr:hover {
 }
 
 .vf-sheet-composer {
+  position: relative;
   flex-shrink: 0;
   background: #161616;
   border-top: 1px solid rgba(255,255,255,0.08);
   padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  isolation: isolate;
 }
 
 .vf-reply-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 6px);
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 14px 0;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(110, 168, 254, 0.28);
+  background: rgba(22, 22, 22, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   color: rgba(255,255,255,0.7);
   font-size: 13px;
 }
@@ -1648,8 +1660,12 @@ export default function VideoFeed({
     }
     const vv = window.visualViewport;
     if (!vv) return;
+    let lastInset = -1;
     const sync = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      // Ignore tiny jitter from mobile browser chrome / keyboard animation
+      if (Math.abs(inset - lastInset) < 12) return;
+      lastInset = inset;
       document.documentElement.style.setProperty('--vf-keyboard-inset', `${inset}px`);
     };
     sync();
@@ -2134,27 +2150,18 @@ export default function VideoFeed({
   const startReply = (comment: Comment) => {
     const rootId = comment.parentId || comment.id;
     const username = comment.author.username;
-    const mention = `@${username} `;
     setReplyTo({ id: rootId, username });
-    setNewComment((prev) => {
-      const withoutOldMention = prev.replace(/^@[a-zA-Z0-9._]+ /, '');
-      return `${mention}${withoutOldMention}`;
-    });
+    // Keep the composer height stable — reply chip floats above the input.
     window.setTimeout(() => {
       const input = commentInputRef.current;
       if (!input) return;
-      input.focus();
-      input.setSelectionRange(mention.length, mention.length);
-      resizeCommentField(input);
+      input.focus({ preventScroll: true });
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
     }, 0);
   };
 
   const cancelReply = () => {
-    setNewComment((prev) => {
-      if (!replyTo) return prev;
-      const mention = `@${replyTo.username} `;
-      return prev.startsWith(mention) ? prev.slice(mention.length) : prev;
-    });
     setReplyTo(null);
   };
 
@@ -2167,7 +2174,11 @@ export default function VideoFeed({
     if (!currentSoundTokId || !newComment.trim() || submittingComment) return;
 
     setSubmittingComment(true);
-    const text = newComment.trim();
+    const raw = newComment.trim();
+    const text =
+      replyTo && !raw.toLowerCase().startsWith(`@${replyTo.username.toLowerCase()}`)
+        ? `@${replyTo.username} ${raw}`
+        : raw;
     const parentId = replyTo?.id;
     const parentUsername = replyTo?.username;
     setNewComment('');
@@ -2185,7 +2196,7 @@ export default function VideoFeed({
       onCommentCountChange?.(currentSoundTokId, commentsCount);
     } catch (error) {
       console.error('Failed to create comment:', error);
-      setNewComment(text);
+      setNewComment(raw);
       if (parentId && parentUsername) {
         setReplyTo({ id: parentId, username: parentUsername });
       }
@@ -2907,16 +2918,7 @@ export default function VideoFeed({
                 <div className="vf-comment-input-wrap">
                   {newComment && (
                     <div className="vf-comment-input-backdrop" aria-hidden>
-                      {replyTo && newComment.startsWith(`@${replyTo.username}`) ? (
-                        <>
-                          <span className="vf-comment-input-mention">
-                            @{replyTo.username}
-                          </span>
-                          {newComment.slice(`@${replyTo.username}`.length)}
-                        </>
-                      ) : (
-                        newComment
-                      )}
+                      {newComment}
                     </div>
                   )}
                   <textarea
