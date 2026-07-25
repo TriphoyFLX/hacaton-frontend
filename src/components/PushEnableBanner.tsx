@@ -105,14 +105,6 @@ const css = `
   font-size: 11px;
   color: #ff8a8a;
 }
-@media (min-width: 768px) {
-  .push-banner {
-    left: auto;
-    right: 20px;
-    bottom: 20px;
-    width: 360px;
-  }
-}
 `;
 
 function isIosSafari(): boolean {
@@ -124,6 +116,18 @@ function isIosSafari(): boolean {
   return iOS && webkit && !chrome;
 }
 
+/** Banner is for phones/tablets only — desktop already has in-app notifications. */
+function isDesktopBrowser(): boolean {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return true;
+  const ua = navigator.userAgent;
+  const mobileUa =
+    /Android|webOS|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (mobileUa) return false;
+  if (window.matchMedia('(pointer: coarse)').matches) return false;
+  return true;
+}
+
 export default function PushEnableBanner() {
   const token = useAuthStore((s) => s.token);
   const [visible, setVisible] = useState(false);
@@ -132,7 +136,7 @@ export default function PushEnableBanner() {
   const [hint, setHint] = useState('');
 
   useEffect(() => {
-    if (!token || !supportsWebPush() || wasPushBannerDismissed()) {
+    if (!token || !supportsWebPush()) {
       setVisible(false);
       return;
     }
@@ -142,6 +146,12 @@ export default function PushEnableBanner() {
       setVisible(false);
       // Quietly re-sync subscription (no permission prompt)
       void ensureWebPushSubscription();
+      return;
+    }
+
+    // Desktop: never show the nudge UI (socket / tab notifications are enough)
+    if (isDesktopBrowser() || wasPushBannerDismissed()) {
+      setVisible(false);
       return;
     }
 
