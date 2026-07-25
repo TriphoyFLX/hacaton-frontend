@@ -16,7 +16,7 @@ mkdirSync(outDir, { recursive: true });
 
 const svg = readFileSync(svgPath);
 
-const sizes = [48, 72, 96, 128, 144, 152, 167, 180, 192, 256, 384, 512];
+const sizes = [48, 72, 96, 120, 128, 144, 152, 167, 180, 192, 256, 384, 512];
 
 function render(size, { maskable = false } = {}) {
   const padding = maskable ? Math.round(size * 0.12) : 0;
@@ -60,4 +60,6 @@ for (const size of [192, 512]) {
 
 // Apple touch icon alias
 writeFileSync(join(outDir, 'apple-touch-icon.png'), render(180));
+// Alias for Yandex square favicon candidate
+writeFileSync(join(outDir, 'favicon-120.png'), render(120));
 console.log('done');

@@ -7,6 +7,7 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="google-site-verification" content="fNRT0UYEaWu_JsCryWlzvPfzfwtxa7zwHXSUsBxUs9U" />
+    <meta name="yandex-verification" content="1f68e778c1c9a522" />
 
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
@@ -45,9 +46,13 @@
     <link rel="alternate" hreflang="ru" href="https://soundlab-studio.ru/" />
     <link rel="alternate" hreflang="x-default" href="https://soundlab-studio.ru/" />
 
-    <link rel="icon" type="image/svg+xml" href="/soundlab.svg" />
+    <!-- Yandex/Google pick /favicon.ico first; keep PNG+SVG as modern fallbacks -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-48.png" />
+    <link rel="icon" type="image/png" sizes="120x120" href="/icons/favicon-120.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/soundlab.svg" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
@@ -91,8 +96,11 @@
             "url": "https://soundlab-studio.ru/",
             "logo": {
               "@type": "ImageObject",
-              "url": "https://soundlab-studio.ru/soundlab.svg"
+              "url": "https://soundlab-studio.ru/icons/icon-512.png",
+              "width": 512,
+              "height": 512
             },
+            "image": "https://soundlab-studio.ru/og-image.jpg",
             "sameAs": []
           },
           {
@@ -100,6 +108,7 @@
             "@id": "https://soundlab-studio.ru/#website",
             "url": "https://soundlab-studio.ru/",
             "name": "SoundLab",
+            "alternateName": "SoundLab Studio",
             "description": "Онлайн студия звукозаписи: записать трек онлайн, MIDI, вокал и биты в браузере.",
             "publisher": { "@id": "https://soundlab-studio.ru/#organization" },
             "inLanguage": "ru-RU",
@@ -123,6 +132,7 @@
             "description": "Онлайн студия звукозаписи в браузере. Записать трек онлайн, MIDI-секвенсор, запись вокала, эффекты и публикация в SoundTok.",
             "url": "https://soundlab-studio.ru/",
             "image": "https://soundlab-studio.ru/og-image.jpg",
+            "screenshot": "https://soundlab-studio.ru/og-image.jpg",
             "featureList": [
               "Запись трека онлайн",
               "Онлайн студия звукозаписи",

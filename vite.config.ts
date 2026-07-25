@@ -9,10 +9,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [
+        'favicon.ico',
         'soundlab.svg',
         'icons/*.png',
+        'og-image.jpg',
         'robots.txt',
         'sitemap.xml',
+        'yandex_1f68e778c1c9a522.html',
       ],
       manifest: {
         id: '/',
