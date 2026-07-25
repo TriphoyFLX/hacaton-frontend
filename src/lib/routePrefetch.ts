@@ -86,11 +86,30 @@ export function routePrefetchHandlers(path: string) {
   };
 }
 
-function schedule(cb: () => void, timeout: number): number {
+type WarmHandle = { kind: 'idle'; id: number } | { kind: 'timeout'; id: ReturnType<typeof setTimeout> };
+
+function schedule(cb: () => void, timeout: number): WarmHandle {
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    return window.requestIdleCallback(() => cb(), { timeout }) as unknown as number;
+    return {
+      kind: 'idle',
+      id: window.requestIdleCallback(() => cb(), { timeout }),
+    };
   }
-  return window.setTimeout(cb, Math.min(timeout, 800));
+  return {
+    kind: 'timeout',
+    id: window.setTimeout(cb, Math.min(timeout, 800)),
+  };
+}
+
+function cancelScheduled(handle: WarmHandle | undefined) {
+  if (!handle || typeof window === 'undefined') return;
+  if (handle.kind === 'idle' && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(handle.id);
+    return;
+  }
+  if (handle.kind === 'timeout') {
+    window.clearTimeout(handle.id);
+  }
 }
 
 /**
@@ -115,14 +134,14 @@ export function warmAppRoutes(): () => void {
 
   let cancelled = false;
   let idx = 0;
-  let timer: number | undefined;
+  let handle: WarmHandle | undefined;
 
   const step = () => {
     if (cancelled) return;
     if (idx < priority.length) {
       prefetchRoute(priority[idx]);
       idx += 1;
-      timer = schedule(step, 1200);
+      handle = schedule(step, 1200);
       return;
     }
     // Nested heavy chunks after main tabs
@@ -131,16 +150,10 @@ export function warmAppRoutes(): () => void {
     }
   };
 
-  timer = schedule(step, 400);
+  handle = schedule(step, 400);
 
   return () => {
     cancelled = true;
-    if (timer !== undefined) {
-      if ('cancelIdleCallback' in window) {
-        window.cancelIdleCallback(timer);
-      } else {
-        window.clearTimeout(timer);
-      }
-    }
+    cancelScheduled(handle);
   };
 }
