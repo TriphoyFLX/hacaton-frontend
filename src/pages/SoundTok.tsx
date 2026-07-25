@@ -704,10 +704,10 @@ ${FONT_IMPORT}
   .st-fab {
     left: auto;
     right: 14px;
-    bottom: 18px;
+    bottom: calc(var(--app-bottom-nav, 0px) + 14px);
     transform: none;
-    width: 52px;
-    height: 52px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--purple), var(--pink));
     border-color: transparent;
@@ -817,7 +817,7 @@ ${FONT_IMPORT}
 
 @media (max-width: 768px) {
   .st-guest-banner {
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--app-bottom-nav, 0px) + 12px);
   }
 }
 `;

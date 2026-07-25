@@ -538,6 +538,12 @@ ${FONT_IMPORT}
   position: relative;
   cursor: context-menu;
 }
+@media (max-width: 768px) {
+  .message-bubble {
+    max-width: min(88%, 340px);
+    padding: 10px 14px;
+  }
+}
 .message-bubble.own {
   background: var(--text-primary);
   color: var(--bg);

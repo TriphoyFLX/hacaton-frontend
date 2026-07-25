@@ -608,12 +608,12 @@ textarea.rb-input { resize:vertical; min-height:80px; line-height:1.6; }
     font-size: 48px !important;
   }
   .rb-mic-btn {
-    width: 64px !important;
-    height: 64px !important;
+    width: 72px !important;
+    height: 72px !important;
   }
   .rb-mic-btn svg {
-    width: 22px !important;
-    height: 22px !important;
+    width: 24px !important;
+    height: 24px !important;
   }
   .rb-quality-grid,
   .rb-score-grid {
@@ -621,13 +621,30 @@ textarea.rb-input { resize:vertical; min-height:80px; line-height:1.6; }
     gap: 10px !important;
   }
   .rb-stars {
-    gap: 8px !important;
+    gap: 10px !important;
     flex-wrap: wrap;
+    justify-content: center;
   }
   .rb-star-btn {
-    width: 40px !important;
-    height: 40px !important;
-    font-size: 16px !important;
+    width: 48px !important;
+    height: 48px !important;
+    font-size: 18px !important;
+  }
+  .rb-btn,
+  .rb-primary,
+  button.rb-cta {
+    width: 100%;
+    min-height: 48px !important;
+    justify-content: center;
+  }
+  .rb-tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rb-tab {
+    min-height: 44px;
+    flex: 1 0 auto;
   }
 }
 `;

@@ -256,14 +256,15 @@ ${FONT_IMPORT}
 
 @media (max-width: 768px) {
   .header-inner {
-    padding: 6px 12px;
+    padding: 6px 10px;
     min-height: var(--app-header-h, 48px);
     justify-content: flex-end;
+    gap: 6px;
   }
 
   .header-btn {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
   }
 
   .header-hint {
@@ -272,10 +273,15 @@ ${FONT_IMPORT}
 
   .notifications-panel {
     top: calc(var(--app-header-h, 48px) + 8px);
-    right: 12px;
-    left: 12px;
+    right: 10px;
+    left: 10px;
     width: auto;
     max-height: calc(100dvh - var(--app-header-h, 48px) - var(--app-bottom-nav, 0px) - 24px);
+  }
+
+  .notifications-item {
+    min-height: 52px;
+    padding: 12px 10px;
   }
 }
 `;

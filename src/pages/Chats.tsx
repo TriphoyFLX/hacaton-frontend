@@ -260,6 +260,18 @@ ${FONT_IMPORT}
 .chat-row.pinned .chat-row-actions {
   opacity: 1;
 }
+@media (hover: none), (pointer: coarse) {
+  .chat-row-actions {
+    opacity: 1;
+  }
+  .chat-row {
+    min-height: 64px;
+  }
+  .pin-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
 .pin-btn {
   display: flex;
   align-items: center;

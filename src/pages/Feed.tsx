@@ -1079,10 +1079,18 @@ ${FONT_IMPORT}
 
 @media (max-width: 480px) {
   .feed-tabs {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .feed-tab {
+    font-size: 11px;
+    padding: 10px 4px;
   }
   .cp-preview-grid {
     grid-template-columns: 1fr;
+  }
+  .post-comment-form > button {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 `;

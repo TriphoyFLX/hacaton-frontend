@@ -215,7 +215,7 @@ export default function Landing({ variant = 'home' }: { variant?: LandingVariant
           min-width: 0;
         }
         .sl-btn {
-          min-height: 40px;
+          min-height: 44px;
           height: auto;
           padding: 10px 14px;
           border-radius: 999px;

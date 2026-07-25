@@ -207,6 +207,18 @@ ${FONT_IMPORT}
 .form-input::placeholder {
   color: var(--text-muted);
 }
+@media (max-width: 768px) {
+  .form-input {
+    font-size: 16px;
+    min-height: 48px;
+  }
+  .password-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+}
 .password-toggle {
   position: absolute;
   right: 10px;

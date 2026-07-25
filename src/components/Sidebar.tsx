@@ -409,6 +409,8 @@ ${FONT_IMPORT}
     border-right: none;
     z-index: 1000;
     padding: 8px 0 12px;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
 
   .sb-logo,

@@ -211,6 +211,23 @@ ${FONT_IMPORT}
 .form-input::placeholder {
   color: var(--text-muted);
 }
+@media (max-width: 768px) {
+  .form-input {
+    font-size: 16px;
+    min-height: 48px;
+  }
+  .password-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+  .checkbox-input {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+  }
+}
 .form-input[type="date"] {
   padding-right: 14px;
   color-scheme: dark;

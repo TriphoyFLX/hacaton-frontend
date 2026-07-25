@@ -70,13 +70,14 @@ const css = `
 .push-banner-btn {
   border: 0;
   border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 44px;
 }
 .push-banner-btn.primary {
   background: #f0ede8;
@@ -99,6 +100,10 @@ const css = `
   cursor: pointer;
   padding: 2px;
   flex-shrink: 0;
+  min-width: 40px;
+  min-height: 40px;
+  display: grid;
+  place-items: center;
 }
 .push-banner-err {
   margin: 8px 0 0;
