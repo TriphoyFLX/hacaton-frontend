@@ -107,8 +107,43 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        let pushEndpoint: string | null = null;
+        try {
+          pushEndpoint = localStorage.getItem('sl_web_push_endpoint_v1');
+        } catch {
+          /* ignore */
+        }
+        const authToken = getAuthToken();
         clearAuthSession();
         set({ user: null, token: null });
+
+        // Drop server + browser push subscription after logout (token captured above)
+        if (pushEndpoint && authToken) {
+          void import('../api/client').then(({ API_ORIGIN }) =>
+            fetch(`${API_ORIGIN}/api/push/subscribe`, {
+              method: 'DELETE',
+              headers: {
+                Authorization: `Bearer ${authToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ endpoint: pushEndpoint }),
+            }).catch(() => undefined),
+          );
+        }
+        void (async () => {
+          try {
+            const reg = await navigator.serviceWorker?.ready;
+            const sub = await reg?.pushManager.getSubscription();
+            await sub?.unsubscribe();
+          } catch {
+            /* ignore */
+          }
+          try {
+            localStorage.removeItem('sl_web_push_endpoint_v1');
+          } catch {
+            /* ignore */
+          }
+        })();
       },
 
       checkAuth: async () => {

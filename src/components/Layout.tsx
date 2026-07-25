@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 
 import Header from './Header';
 import { useAuthStore } from '../store/authStore';
+import { ensureWebPushSubscription } from '../lib/webPush';
 
 function isImmersiveRoute(pathname: string): boolean {
 
@@ -55,6 +56,15 @@ export default function Layout() {
         window.clearTimeout(id as number);
       }
     };
+  }, [token]);
+
+  // PWA / browser Web Push — subscribe after login (messages, reposts, etc.)
+  useEffect(() => {
+    if (!token) return;
+    const timer = window.setTimeout(() => {
+      void ensureWebPushSubscription();
+    }, 2500);
+    return () => window.clearTimeout(timer);
   }, [token]);
 
 
