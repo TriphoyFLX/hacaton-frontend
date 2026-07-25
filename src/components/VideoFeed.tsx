@@ -1109,6 +1109,13 @@ button.vf-repost-attr:hover {
   cursor: not-allowed;
 }
 
+.vf-composer-hint {
+  margin: 6px 16px 0;
+  font-size: 11px;
+  color: rgba(255,255,255,0.32);
+  font-family: 'DM Mono', monospace;
+}
+
 @media (max-width: 768px) {
   .vf-phone {
     width: 100%;
@@ -2865,6 +2872,7 @@ export default function VideoFeed({
                   <Send size={18} />
                 </button>
               </form>
+              <div className="vf-composer-hint">Enter — отправить · Shift+Enter — новая строка</div>
             </div>
           </div>
         </>
