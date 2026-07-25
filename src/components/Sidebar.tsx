@@ -658,7 +658,8 @@ const CONTENT_NAV = [
 ];
 
 export default function Sidebar() {
-  const { user, token } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const totalUnread = useChatUnreadStore((s) => s.totalUnread);
   const refreshUnread = useChatUnreadStore((s) => s.refresh);
   const isAdmin = user?.role === 'ADMIN';

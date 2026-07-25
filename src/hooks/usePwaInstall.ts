@@ -1,9 +1,8 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import {
   bindPwaInstallCapture,
   getDeferredInstallPrompt,
   getPwaInstallSnapshot,
-  getServerPwaInstallSnapshot,
   isIosSafari,
   promptPwaInstall,
   subscribeInstallPrompt,
@@ -21,25 +20,12 @@ function ensureCapture() {
   bindPwaInstallCapture();
 }
 
-function useInstallSnapshot() {
-  return useSyncExternalStore(
-    subscribeInstallPrompt,
-    getPwaInstallSnapshot,
-    getServerPwaInstallSnapshot,
-  );
-}
-
-function useDeferredPrompt() {
-  return useSyncExternalStore(
-    subscribeInstallPrompt,
-    () => getDeferredInstallPrompt(),
-    () => null,
-  );
-}
-
+/**
+ * PWA install state. Uses a simple subscribe + tick (not useSyncExternalStore)
+ * to avoid React #185 infinite loops from unstable snapshot object identities.
+ */
 export function usePwaInstall() {
-  const snap = useInstallSnapshot();
-  const deferred = useDeferredPrompt();
+  const [tick, setTick] = useState(0);
   const [iosSafari, setIosSafari] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -47,16 +33,25 @@ export function usePwaInstall() {
     ensureCapture();
     setIosSafari(isIosSafari());
 
+    const unsub = subscribeInstallPrompt(() => {
+      setTick((n) => n + 1);
+    });
+
     let cancelled = false;
     void detectPwaInstalledOnDevice().then(() => {
-      if (cancelled) return;
-      setReady(true);
+      if (!cancelled) setReady(true);
     });
 
     return () => {
       cancelled = true;
+      unsub();
     };
   }, []);
+
+  // Re-read after tick / ready changes
+  void tick;
+  const snap = getPwaInstallSnapshot();
+  const deferred = getDeferredInstallPrompt();
 
   const hideInstallUi = snap.hideInstallUi;
   const canNativeInstall = Boolean(deferred) && !hideInstallUi;

@@ -177,7 +177,8 @@ ${FONT_IMPORT}
 `;
 
 export default function Dashboard() {
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const { canOfferInstall, ready } = usePwaInstall();
 
   const handleLogout = () => {

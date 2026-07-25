@@ -12,9 +12,24 @@ const DISMISS_MS = 1000 * 60 * 60 * 24 * 7;
 type RelatedApp = { id?: string; platform?: string; url?: string };
 
 const listeners = new Set<() => void>();
+let notifyScheduled = false;
 
 function notify() {
-  listeners.forEach((fn) => fn());
+  // Coalesce bursts (BIP + mark + detect) into one React update tick
+  if (notifyScheduled) return;
+  notifyScheduled = true;
+  const flush = () => {
+    notifyScheduled = false;
+    listeners.forEach((fn) => {
+      try {
+        fn();
+      } catch {
+        /* ignore subscriber errors */
+      }
+    });
+  };
+  if (typeof queueMicrotask === 'function') queueMicrotask(flush);
+  else Promise.resolve().then(flush);
 }
 
 export function subscribeInstallPrompt(listener: () => void) {
@@ -82,22 +97,28 @@ export function clearPwaDismissed() {
 }
 
 export function markPwaInstalledOnDevice() {
+  let changed = true;
   try {
+    changed =
+      localStorage.getItem(INSTALLED_KEY) !== '1' ||
+      localStorage.getItem(UNINSTALL_FEEDBACK_KEY) === '1';
     localStorage.setItem(INSTALLED_KEY, '1');
     localStorage.removeItem(UNINSTALL_FEEDBACK_KEY);
   } catch {
     /* ignore */
   }
-  notify();
+  if (changed) notify();
 }
 
 export function clearPwaInstalledOnDevice() {
+  let changed = true;
   try {
+    changed = localStorage.getItem(INSTALLED_KEY) !== null;
     localStorage.removeItem(INSTALLED_KEY);
   } catch {
     /* ignore */
   }
-  notify();
+  if (changed) notify();
 }
 
 export function isPwaMarkedInstalledOnDevice(): boolean {
@@ -125,12 +146,14 @@ export function isPwaUninstallFeedbackPending(): boolean {
 }
 
 export function clearPwaUninstallFeedbackPending() {
+  let changed = true;
   try {
+    changed = localStorage.getItem(UNINSTALL_FEEDBACK_KEY) !== null;
     localStorage.removeItem(UNINSTALL_FEEDBACK_KEY);
   } catch {
     /* ignore */
   }
-  notify();
+  if (changed) notify();
 }
 
 function isSoundLabRelatedApp(app: RelatedApp): boolean {
@@ -210,17 +233,19 @@ export function bindPwaInstallCapture() {
 
   const onBip = (event: Event) => {
     event.preventDefault();
+    deferredPrompt = event as BeforeInstallPromptEvent;
     // Browser only fires this when NOT already installed → treat as uninstall if we had a flag
     if (isPwaMarkedInstalledOnDevice()) {
       handlePwaUninstalledOnDevice();
+    } else {
+      notify();
     }
-    deferredPrompt = event as BeforeInstallPromptEvent;
-    notify();
   };
 
   const onInstalled = () => {
     deferredPrompt = null;
     markPwaInstalledOnDevice();
+    notify(); // hasDeferred flipped even if already marked installed
   };
 
   window.addEventListener('beforeinstallprompt', onBip);
@@ -236,18 +261,13 @@ export function bindPwaInstallCapture() {
     void detectPwaInstalledOnDevice();
   };
   document.addEventListener('visibilitychange', onVisible);
-  window.addEventListener('focus', onVisible);
 
   const mediaQueries = [
     window.matchMedia('(display-mode: standalone)'),
     window.matchMedia('(display-mode: window-controls-overlay)'),
   ];
   const onDisplayMode = () => {
-    if (isPwaStandalone()) {
-      markPwaInstalledOnDevice();
-    } else {
-      notify();
-    }
+    if (isPwaStandalone()) markPwaInstalledOnDevice();
   };
   mediaQueries.forEach((mq) => {
     if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onDisplayMode);
@@ -260,7 +280,6 @@ export function bindPwaInstallCapture() {
     window.removeEventListener('beforeinstallprompt', onBip);
     window.removeEventListener('appinstalled', onInstalled);
     document.removeEventListener('visibilitychange', onVisible);
-    window.removeEventListener('focus', onVisible);
     mediaQueries.forEach((mq) => {
       if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onDisplayMode);
       else mq.removeListener(onDisplayMode);
@@ -280,7 +299,7 @@ export async function promptPwaInstall(): Promise<'accepted' | 'dismissed' | 'un
     } else {
       markPwaDismissed();
     }
-    notify();
+    notify(); // deferred cleared
     return choice.outcome;
   } catch {
     deferredPrompt = null;
