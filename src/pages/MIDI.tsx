@@ -2995,6 +2995,9 @@ function MIDISequencer() {
     setIsDragging(true);
     setSelectedNotes(prev => e.shiftKey ? (prev.includes(note.id) ? prev : [...prev, note.id]) : [note.id]);
   }, [project, pushHistory, clearNoteLongPress, handleNoteContextDelete]);
+
+  // НАЧАЛО РАСШИРЕНИЯ НОТЫ (pointer = mouse + touch)
+  const handleResizePointerDown = useCallback((note: Note, e: React.PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
@@ -3005,7 +3008,7 @@ function MIDISequencer() {
     } catch {
       // ignore
     }
-    
+
     dragStateRef.current = {
       id: note.id,
       type: 'resize',
