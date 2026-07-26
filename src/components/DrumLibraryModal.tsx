@@ -99,9 +99,15 @@ export default function DrumLibraryModal({ open, onClose, onPick }: Props) {
     try {
       stopPreview();
       const res = await fetch(sample.url);
-      if (!res.ok) throw new Error('Не удалось скачать сэмпл');
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      if (!res.ok || contentType.includes('text/html')) {
+        throw new Error('Сэмпл ещё не залит на сервер');
+      }
       const blob = await res.blob();
-      const type = blob.type || 'audio/wav';
+      if (blob.type.includes('html') || blob.size < 256) {
+        throw new Error('Сэмпл ещё не залит на сервер');
+      }
+      const type = blob.type?.startsWith('audio/') ? blob.type : 'audio/wav';
       const ext = sample.file.includes('.') ? sample.file.slice(sample.file.lastIndexOf('.')) : '.wav';
       const safeName = sample.name.replace(/[\\/:*?"<>|]+/g, ' ').trim() || sample.file;
       const file = new File([blob], `${safeName}${ext}`, { type });

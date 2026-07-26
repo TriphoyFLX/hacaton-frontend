@@ -14,6 +14,8 @@ import {
   Search,
   Crown,
   Flag,
+  Music2,
+  Upload,
 } from 'lucide-react';
 import { API_ORIGIN } from '../api/client';
 import { getAuthToken } from '../lib/authToken';
@@ -260,7 +262,7 @@ const ADMIN_CSS = `
 }
 `;
 
-type Tab = 'overview' | 'purchases' | 'reports' | 'users' | 'posts' | 'soundtoks';
+type Tab = 'overview' | 'purchases' | 'reports' | 'users' | 'posts' | 'soundtoks' | 'oneshots';
 type PurchaseFilter = 'all' | 'subscriptions' | 'tokens' | 'presets';
 type PaymentStatusFilter = 'ALL' | 'SUCCEEDED' | 'PENDING' | 'CANCELED';
 type ReportStatusFilter = 'OPEN' | 'REVIEWING' | 'RESOLVED' | 'DISMISSED' | 'ALL';
@@ -404,6 +406,24 @@ interface SoundTok {
   likes: number;
 }
 
+interface OneshotSample {
+  id: string;
+  name: string;
+  file: string;
+  url: string;
+  bytes: number;
+  onDisk?: boolean;
+}
+
+interface OneshotsList {
+  kitId: string;
+  categoryId: string;
+  total: number;
+  onDiskCount: number;
+  samples: OneshotSample[];
+  orphans: string[];
+}
+
 interface PaymentRow {
   id: string;
   kind: string;
@@ -468,6 +488,12 @@ export default function AdminPanel() {
   const [postsTotal, setPostsTotal] = useState(0);
   const [soundToks, setSoundToks] = useState<SoundTok[]>([]);
   const [soundToksTotal, setSoundToksTotal] = useState(0);
+  const [oneshots, setOneshots] = useState<OneshotSample[]>([]);
+  const [oneshotsOrphans, setOneshotsOrphans] = useState<string[]>([]);
+  const [oneshotsOnDisk, setOneshotsOnDisk] = useState(0);
+  const [oneshotsUploading, setOneshotsUploading] = useState(false);
+  const [oneshotsProgress, setOneshotsProgress] = useState('');
+  const [oneshotsFilter, setOneshotsFilter] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [paymentsTotal, setPaymentsTotal] = useState(0);
   const [presetPurchases, setPresetPurchases] = useState<PresetPurchaseRow[]>([]);
@@ -523,6 +549,13 @@ export default function AdminPanel() {
     const data = await adminFetch<Paged<SoundTok>>(`/soundtoks?limit=${PAGE_SIZE}&offset=0`);
     setSoundToks(data.items);
     setSoundToksTotal(data.total);
+  }, []);
+
+  const loadOneshots = useCallback(async () => {
+    const data = await adminFetch<OneshotsList>('/drumkits/greentrip/oneshots');
+    setOneshots(data.samples);
+    setOneshotsOrphans(data.orphans || []);
+    setOneshotsOnDisk(data.onDiskCount);
   }, []);
 
   const loadPurchases = useCallback(async (filter: PurchaseFilter, status: PaymentStatusFilter) => {
@@ -632,6 +665,9 @@ export default function AdminPanel() {
         case 'soundtoks':
           await loadSoundToks();
           break;
+        case 'oneshots':
+          await loadOneshots();
+          break;
       }
       loadedAtRef.current.set(cacheKey, Date.now());
     } catch (e: unknown) {
@@ -655,6 +691,7 @@ export default function AdminPanel() {
     loadUsers,
     loadPosts,
     loadSoundToks,
+    loadOneshots,
   ]);
 
   useEffect(() => {
@@ -721,6 +758,75 @@ export default function AdminPanel() {
     }
   };
 
+  const uploadOneshots = async (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    const files = Array.from(fileList);
+    const MAX_BATCH_BYTES = 45 * 1024 * 1024;
+    const batches: File[][] = [];
+    let current: File[] = [];
+    let currentBytes = 0;
+    for (const f of files) {
+      if (current.length >= 10 || (currentBytes + f.size > MAX_BATCH_BYTES && current.length > 0)) {
+        batches.push(current);
+        current = [];
+        currentBytes = 0;
+      }
+      current.push(f);
+      currentBytes += f.size;
+    }
+    if (current.length) batches.push(current);
+
+    setOneshotsUploading(true);
+    setOneshotsProgress(`0 / ${files.length}`);
+    let done = 0;
+    const allErrors: string[] = [];
+    try {
+      const token = getAuthToken();
+      for (const batch of batches) {
+        const form = new FormData();
+        for (const f of batch) form.append('files', f, f.name);
+        const res = await fetch(`${ADMIN_API}/drumkits/greentrip/oneshots`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: form,
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          uploaded?: unknown[];
+          errors?: Array<{ file: string; error: string }>;
+        };
+        if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+        done += batch.length;
+        setOneshotsProgress(`${done} / ${files.length}`);
+        for (const e of data.errors || []) allErrors.push(`${e.file}: ${e.error}`);
+      }
+      await loadOneshots();
+      if (allErrors.length) {
+        alert(`Загружено с ошибками:\n${allErrors.slice(0, 8).join('\n')}`);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось загрузить');
+    } finally {
+      setOneshotsUploading(false);
+      setOneshotsProgress('');
+    }
+  };
+
+  const deleteOneshot = async (fileName: string) => {
+    if (!confirm(`Удалить ${fileName}?`)) return;
+    try {
+      const res = await fetch(`${ADMIN_API}/drumkits/greentrip/oneshots/${encodeURIComponent(fileName)}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('Не удалось удалить');
+      setOneshots((prev) => prev.filter((s) => s.file !== fileName));
+      setOneshotsOnDisk((n) => Math.max(0, n - 1));
+    } catch {
+      alert('Не удалось удалить файл');
+    }
+  };
+
   const updateReport = async (
     reportId: string,
     payload: { status?: string; adminNote?: string },
@@ -780,8 +886,13 @@ export default function AdminPanel() {
           label: `Видео${stats ? ` (${stats.totals.soundToks})` : soundToksTotal ? ` (${soundToksTotal})` : ''}`,
           icon: Video,
         },
+        {
+          id: 'oneshots' as const,
+          label: `One-shots${oneshots.length ? ` (${oneshotsOnDisk}/${oneshots.length})` : ''}`,
+          icon: Music2,
+        },
       ] as const,
-    [stats, usersTotal, postsTotal, soundToksTotal, reportsOpenCount],
+    [stats, usersTotal, postsTotal, soundToksTotal, reportsOpenCount, oneshots.length, oneshotsOnDisk],
   );
 
   return (
@@ -1614,6 +1725,107 @@ export default function AdminPanel() {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'oneshots' && (
+          <div className="space-y-4">
+            <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-white font-medium">GREENTRIP · One-shots</p>
+                  <p className="text-gray-400 text-sm">
+                    На диске: {oneshotsOnDisk} · в манифесте: {oneshots.length}
+                    {oneshotsOrphans.length ? ` · сироты: ${oneshotsOrphans.length}` : ''}
+                  </p>
+                </div>
+                <label
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer ${
+                    oneshotsUploading
+                      ? 'bg-gray-600 text-gray-300 pointer-events-none'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  }`}
+                >
+                  <Upload size={16} />
+                  {oneshotsUploading ? oneshotsProgress || 'Загрузка…' : 'Добавить wav'}
+                  <input
+                    type="file"
+                    accept=".wav,.mp3,.ogg,.flac,.m4a,.aac,audio/*"
+                    multiple
+                    className="hidden"
+                    disabled={oneshotsUploading}
+                    onChange={(e) => {
+                      void uploadOneshots(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+              <p className="text-gray-500 text-xs">
+                Можно выбрать несколько файлов сразу — они уйдут батчами на сервер и попадут в библиотеку MIDI.
+                Лимит ~25 MB на файл.
+              </p>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  value={oneshotsFilter}
+                  onChange={(e) => setOneshotsFilter(e.target.value)}
+                  placeholder="Фильтр по имени…"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-gray-200 text-sm"
+                />
+              </div>
+            </div>
+
+            {loading && !oneshots.length ? (
+              <div className="h-32 flex items-center justify-center text-gray-400">Загрузка…</div>
+            ) : (
+              <div className="space-y-2">
+                {oneshots
+                  .filter((s) => {
+                    const q = oneshotsFilter.trim().toLowerCase();
+                    if (!q) return true;
+                    return s.name.toLowerCase().includes(q) || s.file.toLowerCase().includes(q);
+                  })
+                  .map((sample) => (
+                    <div
+                      key={sample.id}
+                      className="bg-gray-800 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-white text-sm truncate">{sample.name}</p>
+                        <p className="text-gray-500 text-xs truncate">
+                          {sample.file}
+                          {sample.bytes ? ` · ${(sample.bytes / (1024 * 1024)).toFixed(1)} MB` : ''}
+                          {sample.onDisk === false ? ' · нет на диске' : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {sample.onDisk !== false && (
+                          <a
+                            href={sample.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-200 hover:bg-gray-600"
+                          >
+                            ▶
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void deleteOneshot(sample.file)}
+                          className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+                          title="Удалить"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                {!oneshots.length && (
+                  <p className="text-gray-500 text-sm text-center py-8">Пока пусто — загрузи wav файлы выше</p>
+                )}
+              </div>
             )}
           </div>
         )}

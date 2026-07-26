@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import '../styles/daw.css';
 import {
   Play, Pause, Square, Plus, Trash2, Music, Piano, Drum, Guitar,
   Download, Upload, Repeat, Sliders, Activity, Volume2,
   MoreVertical, X, Check, Save, Headphones, Waves, Settings,
-  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff, Pencil, Library, Share2
+  Radio, Zap, Wind, Speaker, Undo2, ArrowLeft, FolderOpen, RefreshCw, Mic, MicOff, Pencil, Library, Share2, Menu
 } from 'lucide-react';
-import DesktopOnlyGate from '../components/DesktopOnlyGate';
 import DrumLibraryModal from '../components/DrumLibraryModal';
 import PublishBeatModal from '../components/PublishBeatModal';
 import { getAuthUserId } from '../lib/authToken';
 import { midiProjectsApi, type MidiProjectSummary } from '../api/midiProjects';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import {
   EQ_GAIN_LIMIT,
   EQ_BANDS,
@@ -358,7 +358,9 @@ const STUDIO_CSS = `
   --st-amber: #ffd60a;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
   background:
     radial-gradient(1200px 500px at 10% -10%, rgba(255,255,255,0.04), transparent 55%),
     var(--st-bg);
@@ -366,6 +368,8 @@ const STUDIO_CSS = `
   font-family: 'Syne', ui-sans-serif, sans-serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 .midi-studio * { box-sizing: border-box; }
@@ -637,6 +641,16 @@ const STUDIO_CSS = `
   background: rgba(14,14,15,0.96);
 }
 
+.st-side-backdrop {
+  display: none;
+}
+
+.st-mobile-only { display: none !important; }
+
+.st-mobile-dock {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .midi-studio { height: 100%; min-height: 0; }
   .st-topbar { padding: 8px 12px; gap: 8px; }
@@ -645,26 +659,121 @@ const STUDIO_CSS = `
   .st-field { padding: 0 8px; }
   .st-side { width: 220px; }
   .st-side-scroll { padding: 12px 10px 18px; gap: 12px; }
-  .st-toolbar { padding: 0 12px; gap: 10px; overflow-x: auto; }
+  .st-toolbar { padding: 0 12px; gap: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .st-mixer { padding: 0 16px; gap: 20px; overflow-x: auto; }
 }
 
-@media (max-width: 640px) {
-  .st-body { overflow-x: auto; }
-  .st-side { width: 196px; }
-  .st-main { min-width: 520px; }
-  .st-topbar { align-items: flex-start; }
-  .st-brand { min-width: 0; }
-  .st-project-name { width: 88px; }
-  .st-actions { gap: 4px; }
-  .st-chip { padding: 0 7px; }
-  .st-toolbar { height: 38px; }
-  .st-mixer { height: 104px; }
+@media (max-width: 768px) {
+  .st-mobile-only { display: inline-flex !important; }
+  .st-desktop-only { display: none !important; }
+
+  .st-topbar {
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 8px 10px;
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+  }
+  .st-brand { min-width: 0; flex: 1; }
+  .st-project-name { width: min(140px, 36vw); font-size: 15px; }
+  .st-meta { display: none; }
+  .st-actions { gap: 6px; flex-wrap: nowrap; }
+  .st-actions .st-seg { display: none; }
+  .st-actions .st-transport { display: none; }
+  .st-chip { min-height: 40px; padding: 0 10px; font-size: 12px; }
+  .st-chip.ghost { min-width: 40px; justify-content: center; }
+
+  .st-body {
+    position: relative;
+    overflow: hidden;
+    flex-direction: column;
+  }
+
+  .st-side-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 70;
+    background: rgba(0,0,0,0.55);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .st-side {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(860px, 86vw);
+    max-width: 320px;
+    z-index: 80;
+    transform: translateX(-105%);
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 8px 0 32px rgba(0,0,0,0.45);
+    border-right: 1px solid var(--st-line);
+  }
+  .st-side.open { transform: translateX(0); }
+
+  .st-main {
+    min-width: 0;
+    width: 100%;
+    flex: 1;
+  }
+
+  .st-toolbar {
+    height: auto;
+    min-height: 44px;
+    padding: 6px 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .st-mixer { display: none; }
+
+  .st-mobile-dock {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 8px 10px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--st-line);
+    background: rgba(14,14,15,0.96);
+    backdrop-filter: blur(16px);
+  }
+  .st-mobile-dock .st-transport {
+    flex: 1;
+    justify-content: center;
+  }
+  .st-mobile-dock .st-transport .play {
+    padding: 10px 22px;
+    min-width: 72px;
+  }
+  .st-mobile-dock .st-chip {
+    min-height: 44px;
+  }
+
+  .st-piano-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .st-note-hit {
+    min-height: 18px;
+  }
+  .st-note-resize {
+    width: 18px !important;
+    opacity: 1 !important;
+  }
 }
 
 @media (pointer: coarse) {
   .midi-studio [data-note],
-  .midi-studio [data-clip] { touch-action: none; }
+  .midi-studio [data-clip],
+  .midi-studio [data-playhead],
+  .midi-studio [data-ruler] { touch-action: none; }
 }
 
 @keyframes st-pulse {
@@ -1400,6 +1509,10 @@ function MIDISequencer() {
   const [quantizeGrid, setQuantizeGrid] = useState(0.5); // 8 cells per bar (1/8 note)
   const [eqPanelOpen, setEqPanelOpen] = useState(false);
   const [drumLibraryOpen, setDrumLibraryOpen] = useState(false);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const [mobileExtrasOpen, setMobileExtrasOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const noteLongPressRef = useRef<{ id: string; timer: number } | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
   const [publishProgress, setPublishProgress] = useState('');
@@ -1550,17 +1663,22 @@ function MIDISequencer() {
   }, [project, snapToGrid, quantizeGrid, getActivePattern, getTimelineLength]);
 
   const beginPlayheadScrub = useCallback((
-    e: React.MouseEvent,
+    e: React.PointerEvent,
     mode: 'pattern' | 'song',
     getBeatFromClientX: (clientX: number) => number,
   ) => {
-    if (e.button !== 0) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     scrubbingRef.current = true;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
     seekPlayheadToBeat(getBeatFromClientX(e.clientX), mode);
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       if (!scrubbingRef.current) return;
       seekPlayheadToBeat(getBeatFromClientX(ev.clientX), mode);
     };
@@ -1579,11 +1697,13 @@ function MIDISequencer() {
         }
         lastTimeRef.current = eng.ctx.currentTime;
       }
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   }, [seekPlayheadToBeat]);
 
   const getEngine = useCallback(() => {
@@ -1773,10 +1893,18 @@ function MIDISequencer() {
   useEffect(() => {
     if (!isDragging) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const dragging = dragStateRef.current;
       if (!dragging) return;
       if (!project) return;
+      if (noteLongPressRef.current) {
+        const dx = Math.abs(e.clientX - dragging.startX);
+        const dy = Math.abs(e.clientY - dragging.startY);
+        if (dx > 6 || dy > 6) {
+          window.clearTimeout(noteLongPressRef.current.timer);
+          noteLongPressRef.current = null;
+        }
+      }
 
       const fine = e.altKey; // Alt on Win/Linux, ⌥ Option on Mac
       const deltaX = e.clientX - dragging.startX;
@@ -1822,22 +1950,24 @@ function MIDISequencer() {
       });
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       dragStateRef.current = null;
       setIsDragging(false);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
     
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [isDragging, zoom, project, quantizeGrid, snapToGrid]);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const dragging = playlistDragRef.current;
       if (!dragging) return;
       const fine = e.altKey; // Alt on Win/Linux, ⌥ Option on Mac
@@ -1893,15 +2023,17 @@ function MIDISequencer() {
       });
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       playlistDragRef.current = null;
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [snapToGrid, zoom, quantizeGrid]);
 
@@ -2601,9 +2733,10 @@ function MIDISequencer() {
 
   const beginPlaylistDrag = useCallback((
     clip: PlaylistClip,
-    e: React.MouseEvent,
+    e: React.PointerEvent,
     type: PlaylistDragState['type'],
   ) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     if (!project) return;
@@ -2815,11 +2948,39 @@ function MIDISequencer() {
     });
   }, [project, isDragging, zoom, ensureAudio, quantizeGrid, snapToGrid, getActivePattern, commitProject]);
 
-  // НАЧАЛО ПЕРЕТАСКИВАНИЯ НОТЫ
-  const handleNoteMouseDown = useCallback((note: Note, e: React.MouseEvent) => {
+  const clearNoteLongPress = useCallback(() => {
+    if (noteLongPressRef.current) {
+      window.clearTimeout(noteLongPressRef.current.timer);
+      noteLongPressRef.current = null;
+    }
+  }, []);
+
+  // НАЧАЛО ПЕРЕТАСКИВАНИЯ НОТЫ (pointer = mouse + touch)
+  const handleNotePointerDown = useCallback((note: Note, e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
+    clearNoteLongPress();
     if (project) pushHistory(project);
+
+    // Long-press delete on touch (no right-click)
+    if (e.pointerType !== 'mouse') {
+      noteLongPressRef.current = {
+        id: note.id,
+        timer: window.setTimeout(() => {
+          noteLongPressRef.current = null;
+          handleNoteContextDelete(note.id);
+          dragStateRef.current = null;
+          setIsDragging(false);
+        }, 520),
+      };
+    }
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
     
     dragStateRef.current = {
       id: note.id,
@@ -2833,13 +2994,17 @@ function MIDISequencer() {
     };
     setIsDragging(true);
     setSelectedNotes(prev => e.shiftKey ? (prev.includes(note.id) ? prev : [...prev, note.id]) : [note.id]);
-  }, [project, pushHistory]);
-
-  // НАЧАЛО РАСШИРЕНИЯ НОТЫ
-  const handleResizeMouseDown = useCallback((note: Note, e: React.MouseEvent) => {
+  }, [project, pushHistory, clearNoteLongPress, handleNoteContextDelete]);
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
+    clearNoteLongPress();
     if (project) pushHistory(project);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
     
     dragStateRef.current = {
       id: note.id,
@@ -2853,7 +3018,7 @@ function MIDISequencer() {
     };
     setIsDragging(true);
     setSelectedNotes(prev => e.shiftKey ? (prev.includes(note.id) ? prev : [...prev, note.id]) : [note.id]);
-  }, [project, pushHistory]);
+  }, [project, pushHistory, clearNoteLongPress]);
 
   const uploadAndLoadSample = useCallback(async (file: File) => {
     if (!project) throw new Error('No active project');
@@ -2939,10 +3104,14 @@ function MIDISequencer() {
       );
     } catch (e) {
       console.error('Failed to import audio sample', e);
+      const apiError = (e as { response?: { data?: { error?: string }; status?: number } })?.response;
+      const serverMsg = apiError?.data?.error;
       window.alert(
         e instanceof Error && e.message === 'SAMPLE_TOO_LARGE'
           ? 'Файл слишком большой. Максимальный размер сэмпла — 6 МБ.'
-          : 'Не удалось загрузить сэмпл на сервер. Попробуйте другой файл.',
+          : serverMsg
+            ? `Не удалось загрузить сэмпл: ${serverMsg}`
+            : 'Не удалось загрузить сэмпл на сервер. Попробуйте WAV/MP3 до 6 МБ.',
       );
     }
   }, [project, uploadAndLoadSample, commitProject, ensureAudio]);
@@ -3501,6 +3670,26 @@ function MIDISequencer() {
     reader.readAsText(file);
   };
 
+  useEffect(() => {
+    if (isMobile) setZoom(z => (z > 40 ? 32 : z));
+  }, [isMobile]);
+
+  const previewPitch = useCallback((pitch: number) => {
+    if (!project?.activeTrackId) return;
+    const track = project.tracks.find(t => t.id === project.activeTrackId);
+    if (!track) return;
+    void (async () => {
+      const eng = await ensureAudio();
+      const noteSeconds = Math.max(0.12, quantizeGrid / (project.bpm / 60));
+      if (track.customSample) {
+        const buf = await eng.ensureSample(track.customSample);
+        if (buf) eng.playSampleBuffer(buf, 0, (track.volume || 0.9) * 0.9, noteSeconds, pitch, track.eq);
+      } else {
+        eng.playNote(track, pitch, 0, noteSeconds);
+      }
+    })();
+  }, [project, ensureAudio, quantizeGrid]);
+
   if (!project) {
     const formatUpdated = (iso: string) =>
       new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -3519,7 +3708,9 @@ function MIDISequencer() {
             --ml-muted: #8e8e93;
             --ml-dim: #636366;
             --ml-red: #ff453a;
-            min-height: 100vh;
+            min-height: 100%;
+            height: 100%;
+            overflow: auto;
             background:
               linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
               linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
@@ -3527,7 +3718,7 @@ function MIDISequencer() {
             background-size: 48px 48px, 48px 48px, auto;
             color: var(--ml-text);
             font-family: 'Syne', ui-sans-serif, sans-serif;
-            padding: clamp(28px, 4vh, 56px) clamp(20px, 4vw, 56px) 56px;
+            padding: clamp(20px, 4vh, 56px) clamp(14px, 4vw, 56px) calc(28px + env(safe-area-inset-bottom, 0px));
             box-sizing: border-box;
             -webkit-font-smoothing: antialiased;
           }
@@ -3867,11 +4058,19 @@ function MIDISequencer() {
   const patternBeatLength = patternBeats(activePattern.length);
 
   return (
-    <div className="midi-studio">
+    <div className={`midi-studio${isMobile ? ' is-mobile' : ''}`}>
       <style>{STUDIO_CSS}</style>
 
       <header className="st-topbar">
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
+          <button
+            type="button"
+            className="st-chip ghost st-mobile-only"
+            aria-label="Треки и паттерны"
+            onClick={() => setMobilePanelOpen(true)}
+          >
+            <Menu size={16} />
+          </button>
           <div className="st-brand">
             <div className="st-brand-mark">
               <Activity size={15} strokeWidth={1.75} />
@@ -4002,18 +4201,26 @@ function MIDISequencer() {
               Song
             </button>
           </div>
-          <button type="button" className="st-chip" onClick={addPatternToPlaylist}>+ Playlist</button>
+          <button type="button" className="st-chip st-desktop-only" onClick={addPatternToPlaylist}>+ Playlist</button>
+          <button
+            type="button"
+            className="st-chip ghost st-mobile-only"
+            onClick={() => setMobileExtrasOpen(v => !v)}
+            title="BPM и настройки"
+          >
+            <Settings size={15} />
+          </button>
           <button
             type="button"
             className="st-chip"
             onClick={() => void saveProjectNow(project)}
             disabled={saveStatus === 'saving'}
           >
-            <Save size={13} /> Save
+            <Save size={13} /> <span className="st-desktop-only">Save</span>
           </button>
           <button
             type="button"
-            className="st-chip on"
+            className="st-chip on st-desktop-only"
             onClick={() => {
               setPublishError('');
               setPublishOpen(true);
@@ -4024,7 +4231,7 @@ function MIDISequencer() {
             <Share2 size={13} /> Опубликовать
           </button>
           <span
-            className="st-save-dot"
+            className="st-save-dot st-desktop-only"
             title={saveStatus === 'error' ? 'Ошибка сохранения' : saveStatus === 'saving' ? 'Сохранение…' : 'Сохранено'}
             style={{
               background: saveStatus === 'error' ? '#ff453a' : saveStatus === 'saving' ? '#ffd60a' : '#30d158',
@@ -4050,11 +4257,84 @@ function MIDISequencer() {
               {project.metronomeEnabled ? 'Click' : 'Mute'}
             </button>
           </div>
-          <button type="button" className="st-chip ghost" onClick={() => void returnToProjects()} title="Вернуться к проектам">
+          <button type="button" className="st-chip ghost st-desktop-only" onClick={() => void returnToProjects()} title="Вернуться к проектам">
             <ArrowLeft size={14} /> Projects
           </button>
         </div>
       </header>
+
+      {isMobile && mobileExtrasOpen && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 10,
+            padding: '10px 12px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(14,14,15,0.96)',
+            alignItems: 'center',
+          }}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8e8e93' }}>
+            BPM
+            <input
+              className="st-input"
+              type="number"
+              value={project.bpm}
+              onChange={e => {
+                const val = parseInt(e.target.value, 10);
+                if (val > 0 && val <= 300) setProject({ ...project, bpm: val });
+              }}
+              style={{ width: 56 }}
+            />
+          </label>
+          <select
+            className="st-select"
+            value={project.activePatternId}
+            onChange={e => {
+              playheadRef.current = 0;
+              setPlayheadTime(0);
+              setProject({ ...project, activePatternId: e.target.value, transportMode: 'pattern' });
+            }}
+            style={{ maxWidth: 140 }}
+          >
+            {project.patterns.map(pattern => (
+              <option key={pattern.id} value={pattern.id}>{pattern.name}</option>
+            ))}
+          </select>
+          <div className="st-seg">
+            <button
+              type="button"
+              className={project.transportMode === 'pattern' ? 'on' : ''}
+              onClick={() => setProject({ ...project, transportMode: 'pattern' })}
+            >
+              Pattern
+            </button>
+            <button
+              type="button"
+              className={project.transportMode === 'song' ? 'on' : ''}
+              onClick={() => setProject({ ...project, transportMode: 'song' })}
+            >
+              Song
+            </button>
+          </div>
+          <button type="button" className="st-chip" onClick={addPatternToPlaylist}>+ Playlist</button>
+          <button
+            type="button"
+            className="st-chip on"
+            onClick={() => {
+              setPublishError('');
+              setPublishOpen(true);
+            }}
+            disabled={publishBusy}
+          >
+            <Share2 size={13} /> Publish
+          </button>
+          <button type="button" className="st-chip ghost" onClick={() => void returnToProjects()}>
+            <ArrowLeft size={14} /> Projects
+          </button>
+        </div>
+      )}
 
       {presetBanner && (
         <div
@@ -4092,38 +4372,76 @@ function MIDISequencer() {
 
       {/* Main Content */}
       <div className="st-body">
+        {mobilePanelOpen && (
+          <button
+            type="button"
+            className="st-side-backdrop"
+            aria-label="Закрыть панель"
+            onClick={() => setMobilePanelOpen(false)}
+          />
+        )}
         {/* Sidebar */}
-        <aside className="st-side">
+        <aside className={`st-side${mobilePanelOpen ? ' open' : ''}`}>
           <div className="st-side-scroll">
+            <div className="st-mobile-only" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, width: '100%' }}>
+              <span className="st-section-title" style={{ margin: 0 }}>Studio</span>
+              <button type="button" className="st-chip ghost" onClick={() => setMobilePanelOpen(false)} aria-label="Закрыть">
+                <X size={16} />
+              </button>
+            </div>
             <div className="st-panel">
               <div className="st-section-title" style={{ marginBottom: 10 }}>Browser</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {project.patterns.map(pattern => (
-                  <button
-                    key={pattern.id}
-                    onClick={() => setProject({ ...project, activePatternId: pattern.id, transportMode: 'pattern' })}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('application/x-pattern-id', pattern.id);
-                      e.dataTransfer.effectAllowed = 'copy';
-                    }}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: 10,
-                      border: pattern.id === project.activePatternId ? '1px solid rgba(245,245,247,0.35)' : '1px solid rgba(255,255,255,0.08)',
-                      background: pattern.id === project.activePatternId ? 'rgba(245,245,247,0.1)' : 'rgba(255,255,255,0.02)',
-                      color: pattern.id === project.activePatternId ? '#F5F5F7' : '#8e8e93',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontWeight: 500,
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    <span>{pattern.name}</span>
-                    <span style={{ color: '#636366' }}>{pattern.length} bars</span>
-                  </button>
+                  <div key={pattern.id} style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => {
+                        setProject({ ...project, activePatternId: pattern.id, transportMode: 'pattern' });
+                        if (isMobile) {
+                          setEditorView('piano');
+                          setMobilePanelOpen(false);
+                        }
+                      }}
+                      draggable={!isMobile}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('application/x-pattern-id', pattern.id);
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      style={{
+                        display: 'flex',
+                        flex: 1,
+                        justifyContent: 'space-between',
+                        padding: '10px 10px',
+                        minHeight: 44,
+                        borderRadius: 10,
+                        border: pattern.id === project.activePatternId ? '1px solid rgba(245,245,247,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                        background: pattern.id === project.activePatternId ? 'rgba(245,245,247,0.1)' : 'rgba(255,255,255,0.02)',
+                        color: pattern.id === project.activePatternId ? '#F5F5F7' : '#8e8e93',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      <span>{pattern.name}</span>
+                      <span style={{ color: '#636366' }}>{pattern.length} bars</span>
+                    </button>
+                    {isMobile && (
+                      <button
+                        type="button"
+                        className="st-chip ghost"
+                        title="Добавить в Playlist"
+                        onClick={() => {
+                          addPatternClipAt(pattern.id, Math.max(0, snapToGrid(playheadRef.current) / BEATS_PER_BAR), 0);
+                          setEditorView('playlist');
+                          setMobilePanelOpen(false);
+                        }}
+                        style={{ minWidth: 44, justifyContent: 'center' }}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -4241,7 +4559,10 @@ function MIDISequencer() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {project.tracks.map(track => (
-                <div key={track.id} onClick={() => setProject({...project, activeTrackId: track.id})} style={{ 
+                <div key={track.id} onClick={() => {
+                  setProject({...project, activeTrackId: track.id});
+                  if (isMobile) setMobilePanelOpen(false);
+                }} style={{ 
                   padding: 14, borderRadius: 14, border: '1px solid', cursor: 'pointer', 
                   transition: 'background 0.15s, border-color 0.15s, opacity 0.15s', 
                   background: project.activeTrackId === track.id ? 'rgba(255,255,255,0.06)' : 'transparent', 
@@ -4329,9 +4650,49 @@ function MIDISequencer() {
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <button type="button" onClick={undo} title="Undo (Ctrl+Z)" className="st-chip ghost">
-                <Undo2 size={14} /> Undo
+                <Undo2 size={14} /> <span className="st-desktop-only">Undo</span>
               </button>
-              <button type="button" onClick={() => setZoom(z => Math.max(24, Math.round(z / 1.25)))} className="st-chip ghost">в€’ Zoom</button>
+              {selectedNotes.length > 0 && (
+                <button
+                  type="button"
+                  className="st-chip"
+                  style={{ color: '#ff453a' }}
+                  onClick={() => {
+                    commitProject(prev => ({
+                      ...prev,
+                      tracks: prev.tracks.map(track => ({
+                        ...track,
+                        notes: track.notes.filter(n => !selectedNotes.includes(n.id)),
+                      })),
+                    }));
+                    setSelectedNotes([]);
+                  }}
+                >
+                  <Trash2 size={14} /> Del
+                </button>
+              )}
+              {selectedClipIds.length > 0 && editorView === 'playlist' && (
+                <>
+                  <button
+                    type="button"
+                    className="st-chip"
+                    style={{ color: '#ff453a' }}
+                    onClick={() => handlePlaylistClipDelete(selectedClipIds)}
+                  >
+                    <Trash2 size={14} /> Del
+                  </button>
+                  {selectedClipIds.length === 1 && (() => {
+                    const clip = project.arrangement.find(c => c.id === selectedClipIds[0]);
+                    if (!clip || clip.type === 'audio') return null;
+                    return (
+                      <button type="button" className="st-chip" onClick={() => openClipPattern(clip)}>
+                        Open
+                      </button>
+                    );
+                  })()}
+                </>
+              )}
+              <button type="button" onClick={() => setZoom(z => Math.max(24, Math.round(z / 1.25)))} className="st-chip ghost">−</button>
               <input
                 type="range"
                 min={24}
@@ -4339,20 +4700,26 @@ function MIDISequencer() {
                 value={zoom}
                 onChange={e => setZoom(Number(e.target.value))}
                 title="Масштаб"
-                style={{ width: 100, accentColor: '#F5F5F7' }}
+                style={{ width: isMobile ? 72 : 100, accentColor: '#F5F5F7' }}
               />
               <button type="button" onClick={() => {
                 setZoom(z => Math.min(320, Math.round(z * 1.25)));
                 setQuantizeGrid(q => (q >= 1 ? 0.5 : q));
-              }} className="st-chip ghost">Zoom +</button>
-              <span style={{ fontSize: 11, color: '#636366', fontFamily: "'DM Mono', monospace", minWidth: 36 }}>{zoom}px</span>
-              <button type="button" onClick={() => commitProject(p => ({...p, tracks: p.tracks.map(t => ({...t, notes: []}))}))} className="st-chip ghost" style={{ color: '#ff453a' }}>Clear All</button>
-              <button type="button" onClick={exportProject} className="st-chip ghost">Export JSON</button>
+              }} className="st-chip ghost">+</button>
+              <span className="st-desktop-only" style={{ fontSize: 11, color: '#636366', fontFamily: "'DM Mono', monospace", minWidth: 36 }}>{zoom}px</span>
+              <button type="button" onClick={() => commitProject(p => ({...p, tracks: p.tracks.map(t => ({...t, notes: []}))}))} className="st-chip ghost st-desktop-only" style={{ color: '#ff453a' }}>Clear All</button>
+              <button type="button" onClick={exportProject} className="st-chip ghost st-desktop-only">Export JSON</button>
+              {isMobile && (
+                <span style={{ fontSize: 10, color: '#636366', width: '100%' }}>
+                  Тап по сетке — нота · зажать ноту — удалить · клавиши слева — превью
+                </span>
+              )}
             </div>
           </div>
 
           {editorView === 'piano' && (
           <div
+            className="st-piano-scroll"
             style={{ flex: 1, overflow: 'auto', position: 'relative', userSelect: 'none' }}
             onWheel={(e) => {
               if (e.ctrlKey || e.metaKey) {
@@ -4380,7 +4747,7 @@ function MIDISequencer() {
               <div
                 style={{ position: 'relative', width: patternBeatLength * zoom, height: 28, cursor: 'ew-resize' }}
                 title="Перетащите, чтобы задать старт"
-                onMouseDown={(e) => {
+                onPointerDown={(e) => {
                   const el = e.currentTarget;
                   beginPlayheadScrub(e, 'pattern', (clientX) => {
                     const rect = el.getBoundingClientRect();
@@ -4471,16 +4838,22 @@ function MIDISequencer() {
                   const isC = pitch % 12 === 0;
                   const isBlack = [1, 3, 6, 8, 10].includes(pitch % 12);
                   return (
-                    <div key={pitch} style={{ 
+                    <button
+                      type="button"
+                      key={pitch}
+                      onClick={() => previewPitch(pitch)}
+                      style={{ 
                       height: NOTE_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', 
                       paddingRight: 8, borderBottom: '1px solid rgba(255,255,255,0.01)', 
                       fontSize: '8px', fontFamily: 'monospace', letterSpacing: '-0.02em',
                       background: isBlack ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.03)', 
                       color: isC ? '#F5F5F7' : isBlack ? '#888' : '#bbb',
                       fontWeight: isC ? 700 : 500,
+                      borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                      width: '100%', cursor: 'pointer', appearance: 'none',
                     }}>
                       {getNoteLabel(pitch)}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -4554,8 +4927,12 @@ function MIDISequencer() {
                     
                     return (
                       <div 
-                        key={note.id} 
-                        onMouseDown={(e) => handleNoteMouseDown(note, e)}
+                        key={note.id}
+                        data-note
+                        className="st-note-hit"
+                        onPointerDown={(e) => handleNotePointerDown(note, e)}
+                        onPointerUp={clearNoteLongPress}
+                        onPointerCancel={clearNoteLongPress}
                         onContextMenu={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -4578,17 +4955,18 @@ function MIDISequencer() {
                         }}
                       >
                         <div 
-                          onMouseDown={(e) => handleResizeMouseDown(note, e)}
+                          className="st-note-resize"
+                          onPointerDown={(e) => handleResizePointerDown(note, e)}
                           style={{ 
                             position: 'absolute', right: -2, top: 0, bottom: 0, 
-                            width: 12, cursor: 'ew-resize',
+                            width: isMobile ? 18 : 12, cursor: 'ew-resize',
                             background: 'rgba(255,255,255,0.1)',
                             borderRadius: '0 4px 4px 0',
-                            opacity: isActive ? 1 : 0,
+                            opacity: isActive || isMobile ? 1 : 0,
                             transition: 'opacity 0.2s'
                           }}
                           onMouseEnter={e => { if (isActive) e.currentTarget.style.opacity = '1'; }}
-                          onMouseLeave={e => { if (isActive && !isDragging) e.currentTarget.style.opacity = '0'; }}
+                          onMouseLeave={e => { if (isActive && !isDragging && !isMobile) e.currentTarget.style.opacity = '0'; }}
                         />
                       </div>
                     );
@@ -4597,7 +4975,7 @@ function MIDISequencer() {
 
                 {/* Playhead — drag to set start */}
                 <div
-                  onMouseDown={(e) => {
+                  onPointerDown={(e) => {
                     const grid = e.currentTarget.parentElement;
                     if (!grid) return;
                     beginPlayheadScrub(e, 'pattern', (clientX) => {
@@ -4819,7 +5197,7 @@ function MIDISequencer() {
                   cursor: 'ew-resize',
                 }}
                 title="Перетащите, чтобы задать старт"
-                onMouseDown={(e) => {
+                onPointerDown={(e) => {
                   const el = e.currentTarget;
                   beginPlayheadScrub(e, 'song', (clientX) => {
                     const rect = el.getBoundingClientRect();
@@ -4963,10 +5341,10 @@ function MIDISequencer() {
                         : [clip.id];
                       handlePlaylistClipDelete(ids);
                     }}
-                    onMouseDown={(e) => {
-                      if (e.button !== 0) return;
+                    onPointerDown={(e) => {
                       beginPlaylistDrag(clip, e, 'move');
                     }}
+                    data-clip
                     style={{
                       position: 'absolute',
                       left: PLAYLIST_LABEL_WIDTH + clip.startBar * BEATS_PER_BAR * zoom + 1,
@@ -4994,7 +5372,7 @@ function MIDISequencer() {
                     }}
                   >
                     <div
-                      onMouseDown={(e) => beginPlaylistDrag(clip, e, 'resize-left')}
+                      onPointerDown={(e) => beginPlaylistDrag(clip, e, 'resize-left')}
                       title="Обрезать слева · ⌥/Alt — шаг 1/10"
                       style={{
                         position: 'absolute',
@@ -5012,7 +5390,7 @@ function MIDISequencer() {
                       <span style={{ opacity: 0.55, marginLeft: 6 }}>{barsLabel}b</span>
                     </span>
                     <div
-                      onMouseDown={(e) => beginPlaylistDrag(clip, e, 'resize-right')}
+                      onPointerDown={(e) => beginPlaylistDrag(clip, e, 'resize-right')}
                       title="Обрезать справа · ⌥/Alt — шаг 1/10"
                       style={{
                         position: 'absolute',
@@ -5028,7 +5406,7 @@ function MIDISequencer() {
                 );
               })}
               <div
-                onMouseDown={(e) => {
+                onPointerDown={(e) => {
                   const parent = e.currentTarget.parentElement;
                   if (!parent) return;
                   beginPlayheadScrub(e, 'song', (clientX) => {
@@ -5342,6 +5720,38 @@ function MIDISequencer() {
         </div>
       </div>
 
+      <div className="st-mobile-dock">
+        <button type="button" className="st-chip ghost" onClick={() => setMobilePanelOpen(true)} aria-label="Треки">
+          <Menu size={16} />
+        </button>
+        <div className="st-transport">
+          <button type="button" onClick={stopPlayback} title="Stop"><Square size={16} /></button>
+          <button
+            type="button"
+            className={`play ${project.isPlaying ? 'playing' : ''}`}
+            onClick={togglePlayback}
+            title={project.isPlaying ? 'Pause' : 'Play'}
+          >
+            {project.isPlaying ? <Pause size={18} /> : <Play size={18} />}
+          </button>
+          <button
+            type="button"
+            className={`click ${project.metronomeEnabled ? 'on' : ''}`}
+            title={project.metronomeEnabled ? 'Выключить метроном' : 'Включить метроном'}
+            onClick={() => commitProject(prev => ({ ...prev, metronomeEnabled: !prev.metronomeEnabled }))}
+          >
+            <Activity size={15} />
+          </button>
+        </div>
+        <button
+          type="button"
+          className="st-chip ghost"
+          onClick={() => setEditorView(v => (v === 'piano' ? 'playlist' : 'piano'))}
+        >
+          {editorView === 'piano' ? 'Arr' : 'Keys'}
+        </button>
+      </div>
+
       <DrumLibraryModal
         open={drumLibraryOpen}
         onClose={() => setDrumLibraryOpen(false)}
@@ -5365,9 +5775,5 @@ function MIDISequencer() {
 }
 
 export default function MIDI() {
-  return (
-    <DesktopOnlyGate feature="MIDI секвенсор" hint="Редактор нот удобнее на компьютере или планшете в альбомной ориентации.">
-      <MIDISequencer />
-    </DesktopOnlyGate>
-  );
+  return <MIDISequencer />;
 }

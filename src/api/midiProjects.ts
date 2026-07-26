@@ -31,7 +31,14 @@ export const midiProjectsApi = {
   remove: (id: string) => api.delete(`/midi-projects/${id}`),
   uploadSample: (projectId: string, file: File, sampleId?: string) => {
     const form = new FormData();
-    form.append('sample', file, file.name);
+    // Ensure multipart has a real audio mime — empty type breaks multer filters on mobile
+    const mime = file.type && file.type !== 'application/octet-stream'
+      ? file.type
+      : guessAudioMime(file.name);
+    const payload = mime && mime !== file.type
+      ? new File([file], file.name || 'sample.wav', { type: mime })
+      : file;
+    form.append('sample', payload, payload.name);
     if (sampleId) form.append('sampleId', sampleId);
     return api.post<MidiSampleUpload>(`/midi-projects/${projectId}/samples`, form, {
       timeout: 120_000,
@@ -51,3 +58,16 @@ export const midiProjectsApi = {
   downloadSample: (sampleId: string) =>
     api.get<ArrayBuffer>(`/midi-samples/${sampleId}`, { responseType: 'arraybuffer' }),
 };
+
+function guessAudioMime(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.ogg')) return 'audio/ogg';
+  if (lower.endsWith('.flac')) return 'audio/flac';
+  if (lower.endsWith('.m4a')) return 'audio/mp4';
+  if (lower.endsWith('.aac')) return 'audio/aac';
+  if (lower.endsWith('.webm')) return 'audio/webm';
+  if (lower.endsWith('.aiff') || lower.endsWith('.aif')) return 'audio/aiff';
+  return 'application/octet-stream';
+}

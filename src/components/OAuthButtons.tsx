@@ -57,9 +57,23 @@ export default function OAuthButtons() {
   const [providers, setProviders] = useState({ google: false, vk: false });
 
   useEffect(() => {
-    authApi.getProviders()
-      .then((r) => setProviders(r.data))
-      .catch(() => setProviders({ google: false, vk: false }));
+    let cancelled = false;
+    const load = (attempt = 0) => {
+      authApi.getProviders()
+        .then((r) => {
+          if (!cancelled) setProviders(r.data);
+        })
+        .catch(() => {
+          // 429 / transient errors: retry once so Google/VK buttons still appear
+          if (attempt < 1) {
+            window.setTimeout(() => load(attempt + 1), 1500);
+            return;
+          }
+          if (!cancelled) setProviders({ google: false, vk: false });
+        });
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   if (!providers.google && !providers.vk) {
