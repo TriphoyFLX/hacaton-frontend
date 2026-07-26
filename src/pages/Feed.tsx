@@ -7,12 +7,14 @@ import { followsApi } from '../api/follows';
 import { useAuthStore } from '../store/authStore';
 import {
   Image, Video, Music, Heart, MessageCircle, Share2,
-  MoreHorizontal, Send, Eye, ChevronDown, X, Trash2, ThumbsDown
+  MoreHorizontal, Send, Eye, ChevronDown, X, Trash2, ThumbsDown,
+  Bold, Italic, Strikethrough, Quote, Hash, Code2, EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminBadge from '../components/AdminBadge';
 import PlatinumBadge from '../components/PlatinumBadge';
 import { renderTextWithMentions } from '../utils/messageMentions';
+import { applyFeedFormat, renderFeedContent, type FormatAction } from '../utils/feedContent';
 import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
 
 // ── Styles ──
@@ -554,18 +556,110 @@ ${FONT_IMPORT}
   font-weight: 400;
   margin-bottom: 4px;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 .post-hashtag {
+  display: inline;
+  padding: 1px 6px;
+  margin: 0 1px;
+  border: 0;
+  border-radius: 5px;
+  background: rgba(110, 168, 254, 0.14);
+  color: #9ec1ff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, color 0.15s;
+}
+.post-hashtag:hover {
+  background: rgba(110, 168, 254, 0.28);
+  color: #c5daff;
+  text-decoration: none;
+}
+.post-mention {
+  display: inline;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--text-primary);
+  color: #9ec1ff;
   cursor: pointer;
   font: inherit;
   font-weight: 600;
 }
-.post-hashtag:hover {
+.post-mention:hover {
   text-decoration: underline;
+}
+.post-link {
+  color: #9ec1ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.post-link:hover {
+  color: #c5daff;
+}
+.post-bold {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.post-italic {
+  font-style: italic;
+}
+.post-strike {
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+.post-code {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.9em;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+.post-code-block {
+  display: block;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: pre;
+  font-family: 'DM Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+.post-code-block code {
+  font: inherit;
+}
+.post-quote {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0 8px 8px 0;
+  border-left: 3px solid rgba(110, 168, 254, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+.post-quote-line + .post-quote-line {
+  margin-top: 2px;
+}
+.post-spoiler {
+  background: #2a2a2a;
+  color: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0 3px;
+  transition: color 0.15s, background 0.15s;
+  user-select: none;
+}
+.post-spoiler.is-open {
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  user-select: text;
 }
 .post-read-more {
   display: inline-flex;
@@ -1070,10 +1164,45 @@ ${FONT_IMPORT}
 .post-share-chat:hover { border-color: var(--border-hover); background: var(--bg-hover); }
 .post-share-close { flex-shrink: 0; width: 40px; height: 40px; display: grid; place-items: center; background: transparent; color: var(--text-secondary); border: 0; border-radius: 10px; cursor: pointer; }
 .post-share-close:hover { background: var(--bg-hover); color: var(--text-primary); }
-.cp-hashtag-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+.cp-hashtag-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 10px; flex-wrap: wrap; }
 .cp-hashtag-hint { color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
-.cp-hashtag-add { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; background: transparent; color: var(--text-secondary); cursor: pointer; font: 11px 'DM Mono', monospace; }
-.cp-hashtag-add:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.cp-format-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 12px;
+  flex-wrap: wrap;
+}
+.cp-format-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 11px 'DM Mono', monospace;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.cp-format-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+.cp-format-btn svg {
+  width: 13px;
+  height: 13px;
+}
+.cp-format-hint {
+  margin-left: auto;
+  color: var(--text-muted);
+  font: 10.5px 'DM Mono', monospace;
+}
 .feed-tag-filter { position: relative; z-index: 10; display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 16px; padding: 7px 10px; border: 1px solid var(--border-mid); border-radius: 7px; color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
 .feed-tag-filter button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 
@@ -1214,10 +1343,46 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeMediaType, setActiveMediaType] = useState<'photo' | 'video' | 'audio' | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const applyFormat = (action: FormatAction) => {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? content.length;
+    const end = el?.selectionEnd ?? content.length;
+    const next = applyFeedFormat(content, start, end, action);
+    setContent(next.value);
+    requestAnimationFrame(() => {
+      const field = textareaRef.current;
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(next.selectionStart, next.selectionEnd);
+    });
+  };
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const key = e.key.toLowerCase();
+    if (key === 'b') {
+      e.preventDefault();
+      applyFormat('bold');
+    } else if (key === 'i') {
+      e.preventDefault();
+      applyFormat('italic');
+    } else if (key === 'e') {
+      e.preventDefault();
+      applyFormat('code');
+    } else if (e.shiftKey && key === 'x') {
+      e.preventDefault();
+      applyFormat('strike');
+    } else if (e.shiftKey && key === '.') {
+      e.preventDefault();
+      applyFormat('quote');
+    }
+  };
 
   const handleFileSelect = (type: 'photo' | 'video' | 'audio') => {
     setActiveMediaType(type);
@@ -1282,21 +1447,39 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
   return (
     <div className="cp-card">
       <textarea
+        ref={textareaRef}
         className="cp-textarea"
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        placeholder="Что у вас нового? Добавьте #хештег, чтобы публикацию было легче найти"
+        onKeyDown={handleTextareaKeyDown}
+        placeholder="Что у вас нового? *жирный*, > цитата, #хештег"
         rows={3}
       />
-      <div className="cp-hashtag-row">
-        <span className="cp-hashtag-hint">Хештеги: #музыка #новинка</span>
-        <button
-          type="button"
-          className="cp-hashtag-add"
-          onClick={() => setContent((current) => `${current}${current && !/\s$/.test(current) ? ' ' : ''}#`)}
-        >
-          + хештег
+      <div className="cp-format-row">
+        <button type="button" className="cp-format-btn" title="Жирный (Ctrl+B)" onClick={() => applyFormat('bold')}>
+          <Bold />
         </button>
+        <button type="button" className="cp-format-btn" title="Курсив (Ctrl+I)" onClick={() => applyFormat('italic')}>
+          <Italic />
+        </button>
+        <button type="button" className="cp-format-btn" title="Зачёркнутый (Ctrl+Shift+X)" onClick={() => applyFormat('strike')}>
+          <Strikethrough />
+        </button>
+        <button type="button" className="cp-format-btn" title="Код (Ctrl+E)" onClick={() => applyFormat('code')}>
+          <Code2 />
+        </button>
+        <button type="button" className="cp-format-btn" title="Спойлер" onClick={() => applyFormat('spoiler')}>
+          <EyeOff />
+        </button>
+        <button type="button" className="cp-format-btn" title="Цитата (Ctrl+Shift+.)" onClick={() => applyFormat('quote')}>
+          <Quote />
+          <span>Цитата</span>
+        </button>
+        <button type="button" className="cp-format-btn" title="Хештег" onClick={() => applyFormat('hashtag')}>
+          <Hash />
+          <span>Хештег</span>
+        </button>
+        <span className="cp-format-hint">как в Telegram</span>
       </div>
 
       {previews.length > 0 && (
@@ -1431,31 +1614,11 @@ function PostCard({
   const displayContent = contentTruncated && !showMore
     ? post.content.slice(0, 200) + '…'
     : post.content;
-  const renderPostContent = (content: string) => {
-    const hashtagPattern = /#[\p{L}\p{N}_-]+/gu;
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-
-    for (const match of content.matchAll(hashtagPattern)) {
-      const index = match.index ?? 0;
-      if (index > lastIndex) parts.push(content.slice(lastIndex, index));
-      const tag = match[0];
-      parts.push(
-        <button
-          type="button"
-          key={`${tag}-${index}`}
-          className="post-hashtag"
-          onClick={() => navigate(`/feed?tag=${encodeURIComponent(tag.slice(1))}`)}
-        >
-          {tag}
-        </button>,
-      );
-      lastIndex = index + tag.length;
-    }
-
-    if (lastIndex < content.length) parts.push(content.slice(lastIndex));
-    return parts.length ? parts : content;
-  };
+  const renderPostContent = (content: string) =>
+    renderFeedContent(content, {
+      onHashtagClick: (tag) => navigate(`/feed?tag=${encodeURIComponent(tag)}`),
+      onMentionClick: (username) => navigate(`/profile/${encodeURIComponent(username)}`),
+    });
 
   const renderMedia = () => {
     const mediaList = (post as any).media;
@@ -1797,7 +1960,7 @@ function PostCard({
 
       {post?.content && (
         <div className="post-body">
-          <p className="post-text">{renderPostContent(displayContent)}</p>
+          <div className="post-text">{renderPostContent(displayContent)}</div>
           {contentTruncated && (
             <button className="post-read-more" onClick={() => setShowMore(v => !v)}>
               {showMore ? 'Свернуть' : 'Читать далее'}
