@@ -54,6 +54,7 @@ export interface Battle {
   id: string;
   title: string;
   description?: string;
+  mode?: 'FRIENDLY' | 'RANKED';
   status: 'WAITING' | 'INVITING' | 'SELECTING_BEAT' | 'USER1_TURN' | 'USER2_TURN' | 'JUDGING' | 'FINISHED' | 'CANCELLED';
   creatorId: string;
   beatUrl?: string;
@@ -341,6 +342,7 @@ export interface BattleRatingResult {
   user1Score?: number | null;
   user2Score?: number | null;
   status: string;
+  mode?: 'FRIENDLY' | 'RANKED';
   judgedBy?: string | null;
   judgedAt?: string | null;
   votingEndsAt?: string | null;
@@ -349,8 +351,10 @@ export interface BattleRatingResult {
   myVote?: 'USER1' | 'USER2' | null;
   tally?: SpectatorTally | null;
   canSeeTally?: boolean;
-  phase?: 'voting' | 'peer_grace' | 'finished' | 'recording';
+  phase?: 'voting' | 'peer_grace' | 'finished' | 'recording' | 'waiting_judge';
   isParticipant?: boolean;
+  isJudge?: boolean;
+  judge?: { id: string; username: string; displayName: string | null; avatar: string | null } | null;
   minSpectatorVotes?: number;
 }
 
@@ -405,24 +409,59 @@ export const getBattleRatings = async (battleId: string): Promise<BattleRatingRe
   return response.json();
 };
 
-// Judge battle with AI
-export const judgeBattle = async (battleId: string): Promise<{
-  judge: BattleJudge;
-  winner: 'USER1' | 'USER2' | 'DRAW';
-  user1Total: number;
-  user2Total: number;
+// Submit human judge verdict (ranked)
+export const submitJudgeVerdict = async (
+  battleId: string,
+  choice: 'USER1' | 'USER2',
+): Promise<{
+  success: boolean;
+  winner: 'USER1' | 'USER2';
+  judgedBy: string;
+  status: string;
 }> => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/judge`, {
+  const response = await fetch(`${API_BASE}/battles/${battleId}/judge-verdict`, {
     method: 'POST',
-    headers: getAuthHeaders()
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ choice }),
   });
-  
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to judge battle');
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to submit verdict');
   }
-  
   return response.json();
+};
+
+export type JudgeQueueStatusResponse =
+  | { status: 'idle' }
+  | { status: 'waiting'; queueSize: number; joinedAt?: string }
+  | { status: 'assigned'; battle: Battle };
+
+export const joinJudgeQueue = async (): Promise<JudgeQueueStatusResponse> => {
+  const response = await fetch(`${API_BASE}/battles/judge-queue`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to join judge queue');
+  }
+  return response.json();
+};
+
+export const getJudgeQueueStatus = async (): Promise<JudgeQueueStatusResponse> => {
+  const response = await fetch(`${API_BASE}/battles/judge-queue/status`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to check judge queue');
+  return response.json();
+};
+
+export const leaveJudgeQueue = async (): Promise<void> => {
+  const response = await fetch(`${API_BASE}/battles/judge-queue`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to leave judge queue');
 };
 
 export const getMyBattleRating = async (): Promise<BattleRatingSnapshot> => {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Play, Pause, Upload, Users, Trophy, Send, Volume2, Disc, Clock, CheckCircle, XCircle, Sparkles, Save, Headphones, Sliders, Swords, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, getMyBattleRating, joinBattleQueue, getBattleQueueStatus, leaveBattleQueue, listJudgingBattles, castBattleVote, BattleRatingResult, BattleRatingSnapshot, JudgingFeedBattle, User, Battle, BattleRecording } from '../api/battles';
+import { getAvailableUsers, createBattle, getUserBattles, getBattleInvitations, respondToBattle, updateBattleBeat, uploadBeatFile, updateBattleStatus, saveBattleRecording, getBattleRecordings, submitRating, getBattleRatings, getMyBattleRating, joinBattleQueue, getBattleQueueStatus, leaveBattleQueue, listJudgingBattles, submitJudgeVerdict, joinJudgeQueue, getJudgeQueueStatus, leaveJudgeQueue, BattleRatingResult, BattleRatingSnapshot, JudgingFeedBattle, User, Battle, BattleRecording } from '../api/battles';
 import BattleRatingCard from '../components/BattleRatingCard';
 import { useAuthStore } from '../store/authStore';
 import { API_ORIGIN } from '../api/client';
@@ -32,8 +32,9 @@ function formatCountdown(endsAt: string | null | undefined, nowMs: number): stri
 function judgedByLabel(judgedBy?: string | null): string {
   if (judgedBy === 'community') return 'Голоса зрителей';
   if (judgedBy === 'peer') return 'Оценка участников';
+  if (judgedBy === 'human-judge') return 'Живой судья';
   if (judgedBy === 'timeout') return 'Таймаут (ничья)';
-  if (judgedBy === 'ai-judge') return 'AI-судья';
+  if (judgedBy === 'ai-judge') return 'AI-судья (устарело)';
   return judgedBy || 'Судейство';
 }
 
@@ -949,7 +950,7 @@ export default function RapBattleNew() {
   const [lastSaved, setLastSaved] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [currentPhase, setCurrentPhase] = useState<'waiting'|'creating'|'queue_setup'|'queue_searching'|'selecting_beat_creation'|'selecting_opponent'|'inviting'|'waiting_for_opponent'|'selecting_beat'|'waiting_for_beat'|'user1_turn'|'user2_turn'|'reviewing_recording'|'mutual_judging'|'waiting_for_opponent_rating'|'finished'|'history'>('waiting');
+  const [currentPhase, setCurrentPhase] = useState<'waiting'|'creating'|'queue_setup'|'queue_searching'|'judge_searching'|'selecting_beat_creation'|'selecting_opponent'|'inviting'|'waiting_for_opponent'|'selecting_beat'|'waiting_for_beat'|'user1_turn'|'user2_turn'|'reviewing_recording'|'mutual_judging'|'waiting_for_opponent_rating'|'finished'|'history'>('waiting');
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedOpponent, setSelectedOpponent] = useState<User | null>(null);
   const [currentBattle, setCurrentBattle] = useState<Battle | null>(null);
@@ -1006,15 +1007,18 @@ export default function RapBattleNew() {
   const [votingEndsAt, setVotingEndsAt] = useState<string | null>(null);
   const [peerGraceEndsAt, setPeerGraceEndsAt] = useState<string | null>(null);
   const [spectatorVoteCount, setSpectatorVoteCount] = useState(0);
-  const [judgingPhase, setJudgingPhase] = useState<'voting' | 'peer_grace' | 'finished' | 'recording'>('recording');
+  const [judgingPhase, setJudgingPhase] = useState<'voting' | 'peer_grace' | 'finished' | 'recording' | 'waiting_judge'>('recording');
   const [judgedBy, setJudgedBy] = useState<string | null>(null);
   const [spectatorTally, setSpectatorTally] = useState<{ user1: number; user2: number; total: number } | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
-  const [waitingTab, setWaitingTab] = useState<'home' | 'vote'>('home');
+  const [waitingTab, setWaitingTab] = useState<'home' | 'judge'>('home');
   const [judgingFeed, setJudgingFeed] = useState<JudgingFeedBattle[]>([]);
   const [judgingFeedLoading, setJudgingFeedLoading] = useState(false);
-  const [votingBusyId, setVotingBusyId] = useState<string | null>(null);
-  const [mySpectatorVotes, setMySpectatorVotes] = useState<Record<string, 'USER1' | 'USER2'>>({});
+  const [judgeBusyId, setJudgeBusyId] = useState<string | null>(null);
+  const [judgeQueueSize, setJudgeQueueSize] = useState(0);
+  const [assignedJudgeName, setAssignedJudgeName] = useState<string | null>(null);
+  const [isAssignedJudge, setIsAssignedJudge] = useState(false);
+  const [battleMode, setBattleMode] = useState<'FRIENDLY' | 'RANKED' | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef   = useRef<Blob[]>([]);
@@ -1178,6 +1182,32 @@ export default function RapBattleNew() {
   }, [currentPhase]);
 
   useEffect(() => {
+    if (currentPhase !== 'judge_searching') return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await getJudgeQueueStatus();
+        if (cancelled) return;
+        if (status.status === 'assigned') {
+          await enterMatchedBattle(status.battle);
+          return;
+        }
+        if (status.status === 'waiting') {
+          setJudgeQueueSize(status.queueSize || 0);
+        }
+      } catch {
+        /* keep polling */
+      }
+    };
+    void poll();
+    const id = window.setInterval(() => void poll(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [currentPhase]);
+
+  useEffect(() => {
     if (!currentBattle) return;
     setIsSaving(true);
     saveBattleState({ currentBattle, currentPhase, user1Recording, user2Recording, beatUrl, recordingTime, recordingQuality, isRecording, isPlayingBeat, hasRated, currentRound, error, lastSaved: Date.now() });
@@ -1193,6 +1223,7 @@ export default function RapBattleNew() {
 
   const enterMatchedBattle = async (battle: Battle) => {
     setCurrentBattle(battle);
+    setBattleMode((battle.mode as 'FRIENDLY' | 'RANKED' | undefined) || null);
     if (battle.beatUrl) setBeatUrl(resolveMediaUrl(battle.beatUrl));
     const isCreator = battle.creatorId === user?.id;
     if (battle.status === 'USER1_TURN') {
@@ -1250,6 +1281,29 @@ export default function RapBattleNew() {
     setCurrentPhase('waiting');
   };
 
+  const startJudgeQueue = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await joinJudgeQueue();
+      if (result.status === 'assigned') {
+        await enterMatchedBattle(result.battle);
+      } else {
+        setJudgeQueueSize(result.status === 'waiting' ? result.queueSize : 0);
+        setCurrentPhase('judge_searching');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось встать в очередь судей');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelJudgeQueue = async () => {
+    try { await leaveJudgeQueue(); } catch {}
+    setCurrentPhase('waiting');
+  };
+
   const loadPendingInvitations = async () => {
     try {
       if (currentBattle) return;
@@ -1300,6 +1354,8 @@ export default function RapBattleNew() {
     if (String(currentBattle.creator.id) === user.id) return 'CREATOR';
     const opp = currentBattle.participants.find(p => p.role === 'OPPONENT');
     if (opp && String(opp.user.id) === user.id) return 'OPPONENT';
+    const judge = currentBattle.participants.find(p => p.role === 'JUDGE');
+    if (judge && String(judge.user.id) === user.id) return 'JUDGE';
     return null;
   };
 
@@ -1311,9 +1367,12 @@ export default function RapBattleNew() {
     if (data.votingEndsAt !== undefined) setVotingEndsAt(data.votingEndsAt ?? null);
     if (data.peerGraceEndsAt !== undefined) setPeerGraceEndsAt(data.peerGraceEndsAt ?? null);
     if (typeof data.voteCount === 'number') setSpectatorVoteCount(data.voteCount);
-    if (data.phase) setJudgingPhase(data.phase);
+    if (data.phase) setJudgingPhase(data.phase as any);
     if (data.judgedBy !== undefined) setJudgedBy(data.judgedBy ?? null);
     if (data.tally) setSpectatorTally(data.tally);
+    if (data.mode) setBattleMode(data.mode);
+    if (typeof data.isJudge === 'boolean') setIsAssignedJudge(data.isJudge);
+    if (data.judge?.username) setAssignedJudgeName(data.judge.username);
 
     if (data.status === 'FINISHED') {
       setJudgeResult({
@@ -1344,7 +1403,9 @@ export default function RapBattleNew() {
       const data = await getBattleRatings(currentBattle.id);
       applyRatingsFromServer(data);
       if (data.status === 'FINISHED') return;
-      if (data.hasRated && !data.bothRated) {
+      if (data.mode === 'RANKED') {
+        setCurrentPhase('mutual_judging');
+      } else if (data.hasRated && !data.bothRated) {
         setCurrentPhase('waiting_for_opponent_rating');
       } else {
         setCurrentPhase('mutual_judging');
@@ -1593,21 +1654,19 @@ export default function RapBattleNew() {
     }
   }, []);
 
-  const handleSpectatorVote = async (battleId: string, choice: 'USER1' | 'USER2') => {
-    setVotingBusyId(battleId);
+  const handleJudgeVerdict = async (battleId: string, choice: 'USER1' | 'USER2') => {
+    setJudgeBusyId(battleId);
     setError('');
     try {
-      const result = await castBattleVote(battleId, choice);
-      setMySpectatorVotes((prev) => ({ ...prev, [battleId]: result.myVote }));
-      setJudgingFeed((prev) =>
-        prev.map((b) =>
-          b.id === battleId ? { ...b, spectatorVoteCount: result.voteCount } : b,
-        ),
-      );
+      await submitJudgeVerdict(battleId, choice);
+      await loadJudgingFeed();
+      if (currentBattle?.id === battleId) {
+        await syncBattleRatings();
+      }
     } catch (e: any) {
-      setError(e.message || 'Не удалось проголосовать');
+      setError(e.message || 'Не удалось вынести вердикт');
     } finally {
-      setVotingBusyId(null);
+      setJudgeBusyId(null);
     }
   };
 
@@ -1660,7 +1719,7 @@ export default function RapBattleNew() {
     if (
       currentPhase === 'mutual_judging' ||
       currentPhase === 'waiting_for_opponent_rating' ||
-      (currentPhase === 'waiting' && waitingTab === 'vote')
+      (currentPhase === 'waiting' && waitingTab === 'judge')
     ) {
       const t = window.setInterval(() => setNowTick(Date.now()), 1000);
       return () => clearInterval(t);
@@ -1668,7 +1727,7 @@ export default function RapBattleNew() {
   }, [currentPhase, waitingTab]);
 
   useEffect(() => {
-    if (currentPhase === 'waiting' && waitingTab === 'vote') {
+    if (currentPhase === 'waiting' && waitingTab === 'judge') {
       void loadJudgingFeed();
       const i = window.setInterval(() => void loadJudgingFeed(), 5000);
       return () => clearInterval(i);
@@ -1768,10 +1827,10 @@ export default function RapBattleNew() {
         </button>
         <button
           type="button"
-          className={`rb-btn ${waitingTab === 'vote' ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
-          onClick={() => setWaitingTab('vote')}
+          className={`rb-btn ${waitingTab === 'judge' ? 'rb-btn-primary' : 'rb-btn-ghost'}`}
+          onClick={() => setWaitingTab('judge')}
         >
-          <Headphones /> Слушать и голосовать
+          <Headphones /> Судейство
         </button>
       </div>
 
@@ -1801,26 +1860,25 @@ export default function RapBattleNew() {
         <div>
           <div className="rb-card-hd">
             <div>
-              <div className="rb-card-title">Открытое голосование</div>
-              <div className="rb-card-sub">Слушай оба трека и голосуй — минимум 3 голоса решают исход</div>
+              <div className="rb-card-title">Очередь судей</div>
+              <div className="rb-card-sub">В рейтинге победителя выбирает случайный живой судья</div>
             </div>
-            <button type="button" className="rb-btn rb-btn-ghost" onClick={() => void loadJudgingFeed()}>
-              Обновить
+            <button type="button" className="rb-btn rb-btn-primary" onClick={() => void startJudgeQueue()}>
+              Встать в очередь судьи
             </button>
           </div>
           {judgingFeedLoading && judgingFeed.length === 0 ? (
-            <div className="rb-loading"><div className="rb-spinner"/><span>Загрузка баттлов…</span></div>
+            <div className="rb-loading"><div className="rb-spinner"/><span>Загрузка назначенных баттлов…</span></div>
           ) : judgingFeed.length === 0 ? (
             <div className="rb-hero" style={{ paddingTop: 28 }}>
               <div className="rb-hero-icon"><Headphones/></div>
               <div className="rb-hero-title">Пока пусто</div>
-              <div className="rb-hero-desc">Нет баттлов на голосовании. Загляни позже.</div>
+              <div className="rb-hero-desc">Вам пока не назначен баттл на судейство.</div>
             </div>
           ) : (
             judgingFeed.map((b) => {
               const rec1 = b.recordings.find((r) => r.userId === b.creator.id) || b.recordings[0];
               const rec2 = b.recordings.find((r) => r.userId !== b.creator.id) || b.recordings[1];
-              const myVote = mySpectatorVotes[b.id];
               return (
                 <div key={b.id} className="rb-card" style={{ marginBottom: 12 }}>
                   <div className="rb-row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1831,8 +1889,8 @@ export default function RapBattleNew() {
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--t3)' }}>
-                      <div>{formatCountdown(b.votingEndsAt, nowTick)}</div>
-                      <div>{b.spectatorVoteCount} голос.</div>
+                      <div>Режим: Ranked</div>
+                      <div>Судья: вы</div>
                     </div>
                   </div>
                   {rec1 && (
@@ -1851,36 +1909,45 @@ export default function RapBattleNew() {
                       playerKey={`vote-b-${rec2.id}`}
                     />
                   )}
-                  {myVote ? (
-                    <div className="rb-card-sub" style={{ marginTop: 10 }}>
-                      Ваш голос: {myVote === 'USER1' ? `@${b.creator.username}` : `@${b.opponent?.username || 'оппонент'}`}
-                    </div>
-                  ) : (
-                    <div className="rb-row rb-mt16" style={{ gap: 8 }}>
-                      <button
-                        type="button"
-                        className="rb-btn rb-btn-primary tall full"
-                        disabled={votingBusyId === b.id}
-                        onClick={() => void handleSpectatorVote(b.id, 'USER1')}
-                      >
-                        За @{b.creator.username}
-                      </button>
-                      <button
-                        type="button"
-                        className="rb-btn rb-btn-primary tall full"
-                        disabled={votingBusyId === b.id || !b.opponent}
-                        onClick={() => void handleSpectatorVote(b.id, 'USER2')}
-                      >
-                        За @{b.opponent?.username || 'оппонента'}
-                      </button>
-                    </div>
-                  )}
+                  <div className="rb-row rb-mt16" style={{ gap: 8 }}>
+                    <button
+                      type="button"
+                      className="rb-btn rb-btn-primary tall full"
+                      disabled={judgeBusyId === b.id}
+                      onClick={() => void handleJudgeVerdict(b.id, 'USER1')}
+                    >
+                      Победитель @{b.creator.username}
+                    </button>
+                    <button
+                      type="button"
+                      className="rb-btn rb-btn-primary tall full"
+                      disabled={judgeBusyId === b.id || !b.opponent}
+                      onClick={() => void handleJudgeVerdict(b.id, 'USER2')}
+                    >
+                      Победитель @{b.opponent?.username || 'оппонент'}
+                    </button>
+                  </div>
                 </div>
               );
             })
           )}
         </div>
       )}
+    </div>
+  );
+
+  const renderJudgeSearchingPhase = () => (
+    <div className="rb-hero" style={{ paddingTop: 48 }}>
+      <div className="rb-pulse-ring"><Search style={{ width: 20, height: 20 }} /></div>
+      <div className="rb-hero-title">Ждём назначение судейства</div>
+      <div className="rb-hero-desc">
+        Вы в очереди судей{judgeQueueSize > 0 ? ` · в очереди: ${judgeQueueSize}` : ''}.
+      </div>
+      <div className="rb-hero-actions">
+        <button onClick={() => void cancelJudgeQueue()} className="rb-btn rb-btn-danger tall">
+          Выйти из очереди
+        </button>
+      </div>
     </div>
   );
 
@@ -2484,33 +2551,36 @@ export default function RapBattleNew() {
   };
 
   const renderJudgingTimerCard = () => {
-    const ends =
-      judgingPhase === 'peer_grace' && peerGraceEndsAt ? peerGraceEndsAt : votingEndsAt;
-    const label =
-      judgingPhase === 'peer_grace'
-        ? 'Доп. время на оценку участников'
-        : 'Голосование зрителей';
+    const isRanked = battleMode === 'RANKED';
+    const ends = isRanked ? null : (judgingPhase === 'peer_grace' && peerGraceEndsAt ? peerGraceEndsAt : votingEndsAt);
+    const label = isRanked ? 'Судейство живым судьёй' : 'Дружеское взаимное судейство';
     return (
       <div className="rb-card" style={{ marginBottom: 12 }}>
         <div className="rb-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <span className="rb-section-label">{label}</span>
             <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
-              {formatCountdown(ends, nowTick)}
+              {isRanked ? (assignedJudgeName ? `@${assignedJudgeName}` : 'поиск судьи…') : formatCountdown(ends, nowTick)}
             </div>
           </div>
           <div style={{ textAlign: 'right', fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--t3)' }}>
-            <div>Зрители: {spectatorVoteCount}</div>
-            <div>Нужно ≥ 3 для решения толпы</div>
-            {spectatorTally && (
-              <div style={{ marginTop: 4, color: 'var(--t2)' }}>
-                {spectatorTally.user1} : {spectatorTally.user2}
-              </div>
+            {isRanked ? (
+              <>
+                <div>Режим: Ranked</div>
+                <div>Вердикт даёт случайный судья</div>
+              </>
+            ) : (
+              <>
+                <div>Режим: Friendly</div>
+                <div>Решают только 2 участника</div>
+              </>
             )}
           </div>
         </div>
         <div className="rb-card-sub" style={{ marginTop: 8 }}>
-          Если зрителей мало — победитель по взаимным оценкам 1–5. Баттл не завершится до конца таймера.
+          {isRanked
+            ? 'Нейросеть отключена. Победитель определяется живым судьёй.'
+            : 'Без судьи: каждый участник ставит оценку оппоненту, итог — по взаимным оценкам.'}
         </div>
       </div>
     );
@@ -2519,14 +2589,54 @@ export default function RapBattleNew() {
   // ── JUDGING ──
   const renderMutualJudgingPhase = () => {
     const role   = getCurrentUserRole();
+    const creator = currentBattle?.creator;
+    const opp = currentBattle?.participants.find((p) => p.role === 'OPPONENT')?.user;
     const oppRec = role==='CREATOR' ? user2Recording : user1Recording;
+
+    if (battleMode === 'RANKED' && isAssignedJudge) {
+      const rec1 = user1Recording;
+      const rec2 = user2Recording;
+      return (
+        <div>
+          <div className="rb-card-hd">
+            <div>
+              <div className="rb-card-title">Ваше судейство</div>
+              <div className="rb-card-sub">Вы назначены случайным судьёй этого рейтингового баттла</div>
+            </div>
+            <span className="rb-badge rb-badge-purple">Judge</span>
+          </div>
+          {renderJudgingTimerCard()}
+          {rec1 && <div className="rb-card"><MixedTrackPlayer voiceUrl={rec1.voiceUrl} beatUrl={rec1.beatUrl} label={`@${creator?.username || 'USER1'}`} playerKey={`judge-u1-${rec1.id}`}/></div>}
+          {rec2 && <div className="rb-card"><MixedTrackPlayer voiceUrl={rec2.voiceUrl} beatUrl={rec2.beatUrl} label={`@${opp?.username || 'USER2'}`} playerKey={`judge-u2-${rec2.id}`}/></div>}
+          <div className="rb-row rb-mt16" style={{ gap: 8 }}>
+            <button className="rb-btn rb-btn-primary tall full" disabled={loading} onClick={() => void handleJudgeVerdict(currentBattle!.id, 'USER1')}>Побеждает @{creator?.username || 'USER1'}</button>
+            <button className="rb-btn rb-btn-primary tall full" disabled={loading} onClick={() => void handleJudgeVerdict(currentBattle!.id, 'USER2')}>Побеждает @{opp?.username || 'USER2'}</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (battleMode === 'RANKED' && !isAssignedJudge) {
+      return (
+        <div>
+          <div className="rb-card-hd">
+            <div>
+              <div className="rb-card-title">Ждём судью</div>
+              <div className="rb-card-sub">Рейтинговый бой завершится после вердикта случайного судьи</div>
+            </div>
+            <span className="rb-badge rb-badge-purple">Судейство</span>
+          </div>
+          {renderJudgingTimerCard()}
+        </div>
+      );
+    }
 
     if (!hasRated && oppRec) return (
       <div>
         <div className="rb-card-hd">
           <div>
             <div className="rb-card-title">Оцените трек оппонента</div>
-            <div className="rb-card-sub">Параллельно идёт голосование зрителей</div>
+            <div className="rb-card-sub">Дружеский режим: победа только по вашим взаимным оценкам</div>
           </div>
           <span className="rb-badge rb-badge-purple">Судейство</span>
         </div>
@@ -2536,7 +2646,7 @@ export default function RapBattleNew() {
           <MixedTrackPlayer voiceUrl={oppRec.voiceUrl} beatUrl={oppRec.beatUrl} label="Трек оппонента" playerKey={`opp-${oppRec.id}`}/>
         </div>
         <div className="rb-card rb-centered">
-          <span className="rb-section-label">Ваша оценка (резервный вердикт)</span>
+          <span className="rb-section-label">Ваша оценка</span>
           <div className="rb-stars">
             {[1,2,3,4,5].map(r => (
               <button key={r} onClick={()=>handleRatingSubmit(r)} className="rb-star-btn">⭐</button>
@@ -2555,8 +2665,8 @@ export default function RapBattleNew() {
               <div className="rb-card-title">Ждём итог</div>
               <div className="rb-card-sub">
                 {opponentHasRated
-                  ? 'Оба участника оценили. Ждём конец окна голосования…'
-                  : 'Ваша оценка сохранена. Ждём оппонента и/или зрителей…'}
+                  ? 'Оба участника оценили. Считаем итог…'
+                  : 'Ваша оценка сохранена. Ждём оценку оппонента…'}
               </div>
             </div>
             <span className="rb-badge rb-badge-purple">Судейство</span>
@@ -2736,6 +2846,7 @@ export default function RapBattleNew() {
         {currentPhase==='creating'                 && renderCreatingPhase()}
         {currentPhase==='queue_setup'              && renderQueueSetupPhase()}
         {currentPhase==='queue_searching'          && renderQueueSearchingPhase()}
+        {currentPhase==='judge_searching'          && renderJudgeSearchingPhase()}
         {currentPhase==='inviting'                 && renderInvitingPhase()}
         {currentPhase==='waiting_for_opponent'     && renderWaitingForOpponentPhase()}
         {(currentPhase==='waiting_for_beat')       && renderWaitingForOpponentPhase()}
