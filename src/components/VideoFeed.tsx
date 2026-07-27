@@ -14,6 +14,7 @@ import {
 } from '../lib/mediaUnlock';
 import { downloadSoundTokWithWatermark } from '../lib/soundtokDownload';
 import ShareSoundTokModal from './ShareSoundTokModal';
+import ImmersiveTopActions from './ImmersiveTopActions';
 import AdminBadge from './AdminBadge';
 import PlatinumBadge from './PlatinumBadge';
 import { renderTextWithMentions } from '../utils/messageMentions';
@@ -57,17 +58,23 @@ const css = `
   z-index: 12;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 14px;
+  min-height: calc(52px + env(safe-area-inset-top, 0px));
   pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.38) 58%, transparent 100%);
 }
-
+.vf-top-bar > * {
+  pointer-events: auto;
+}
 .vf-top-title {
   font-size: 17px;
   font-weight: 700;
   color: #fff;
   letter-spacing: -0.02em;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.75);
+  flex-shrink: 0;
 }
 
 .vf-video-loading {
@@ -180,8 +187,8 @@ const css = `
   top: 0;
   left: 0;
   right: 0;
-  height: 120px;
-  background: linear-gradient(rgba(0,0,0,0.45), transparent);
+  height: 160px;
+  background: linear-gradient(rgba(0,0,0,0.5), transparent);
   pointer-events: none;
   z-index: 2;
 }
@@ -2326,6 +2333,7 @@ export default function VideoFeed({
         >
           <div className="vf-top-bar">
             <span className="vf-top-title">SoundTok</span>
+            {!guestMode && <ImmersiveTopActions />}
           </div>
 
           {soundToks.map((soundTok, index) => {

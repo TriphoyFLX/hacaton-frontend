@@ -65,6 +65,7 @@ export default function Layout() {
   const token = useAuthStore((s) => s.token);
 
   const immersive = isImmersiveRoute(pathname);
+  const isSoundTokFeed = pathname === '/soundtok';
   const contentRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function Layout() {
     <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-[#0a0a0a]">
       <Sidebar />
 
-      <div className="app-shell flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ml-0 pb-[var(--app-bottom-nav)] md:ml-[200px] lg:ml-[220px] md:pb-0">
+      <div className={`app-shell flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ml-0 pb-[var(--app-bottom-nav)] md:ml-[200px] lg:ml-[220px] md:pb-0${isSoundTokFeed ? ' app-shell--soundtok' : ''}`}>
         <Header />
 
         <main
