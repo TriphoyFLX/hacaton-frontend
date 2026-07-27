@@ -4,6 +4,7 @@ import { getAuthToken } from '../lib/authToken';
 import { API_ORIGIN } from '../api/client';
 import { Link } from 'react-router-dom';
 import { useBilling } from '../hooks/useBilling';
+import { buildEnhancedAiTags, enhanceAiLyricsPrompt } from '../utils/aiPromptEnhancer';
 
 interface GenerationResult {
   id: number | string;
@@ -944,18 +945,18 @@ ${FONT_IMPORT}
 
 export default function AI() {
   const { billing, refresh: refreshBilling } = useBilling();
-  const [title, setTitle] = useState('Свобода');
-  const [tags, setTags] = useState('Винтажный джаз-лаундж, классические стандарты, плавные соло на трубе, контрабас и знойный женский вокал');
+  const [title, setTitle] = useState('Симфония рассвета');
+  const [tags, setTags] = useState('Эпическая симфония с живым оркестром, дышащие струнные, медные фанфары, деревянные соло, концертный зал, кинематографичная кульминация');
   const [prompt, setPrompt] = useState('');
   const [settings, setSettings] = useState<GenerationSettings>({
-    genre: 'Джаз',
-    mood: 'Тёплое',
-    energy: 55,
-    bpm: 92,
+    genre: 'Симфония',
+    mood: 'Эпичное',
+    energy: 70,
+    bpm: 88,
     language: 'Русский',
-    trackType: 'vocal',
+    trackType: 'instrumental',
     voice: 'Женский вокал',
-    duration: 'Стандартная',
+    duration: 'Длинная',
     translateInput: true,
     model: 'v5.5',
   });
@@ -1043,25 +1044,25 @@ export default function AI() {
     setSettings(current => ({ ...current, [key]: value }));
   };
 
-  const buildFinalTags = () => {
-    const vocalPart = settings.trackType === 'instrumental'
-      ? 'инструментальная композиция, без вокала'
-      : `${settings.voice}, вокал на ${settings.language} языке`;
-
-    return [
-      settings.genre,
-      tags.trim(),
-      settings.mood.toLowerCase(),
-      `энергия ${settings.energy}%`,
-      `${settings.bpm} BPM`,
-      vocalPart,
-      `длительность: ${settings.duration.toLowerCase()}`,
-    ].filter(Boolean).join(', ');
-  };
+  const buildFinalTags = () =>
+    buildEnhancedAiTags({
+      genre: settings.genre,
+      userTags: tags,
+      mood: settings.mood,
+      energy: settings.energy,
+      bpm: settings.bpm,
+      trackType: settings.trackType,
+      voice: settings.voice,
+      language: settings.language,
+      duration: settings.duration,
+    });
 
   const generateMusic = async () => {
     const finalTags = buildFinalTags();
-    const finalPrompt = settings.trackType === 'vocal' ? prompt.trim() : '';
+    const finalPrompt = enhanceAiLyricsPrompt(
+      settings.trackType === 'vocal' ? prompt.trim() : '',
+      settings.trackType,
+    );
 
     if (!title.trim() || !tags.trim()) {
       setError('Укажите название и основной музыкальный стиль.');
@@ -1255,12 +1256,13 @@ export default function AI() {
   }
 
   const presetStyles = [
-    { name: 'Джаз', tags: 'Винтажный джаз-лаундж, классические стандарты, плавные соло на трубе, контрабас и знойный женский вокал' },
-    { name: 'Поп', tags: 'Современный поп, танцевальный ритм, запоминающийся хук, синтезаторы и динамичный бас' },
-    { name: 'Рок', tags: 'Альтернативный рок, мощные гитары, драйвовый ритм, энергичное соло и сильный вокал' },
-    { name: 'Электроника', tags: 'Электронная музыка, синтвейв, ретро-синтезаторы, атмосферные пэды и ритмичный бит' },
-    { name: 'Хип-хоп', tags: 'Хип-хоп, trap-ритм, глубокий бас, автотюн и динамичные ударные' },
-    { name: 'Классика', tags: 'Классическая музыка, оркестр, скрипка, фортепиано и симфоническая аранжировка' },
+    { name: 'Симфония', tags: 'Грандиозная симфония, живой оркестр, струнный tutti, медные и деревянные, литавры, концертный зал' },
+    { name: 'Джаз', tags: 'Живой джаз-ансамбль, контрабас, акустическое фортепиано, настоящая ударная, труба и саксофон, клубная атмосфера' },
+    { name: 'Поп', tags: 'Живой поп-бэнд, настоящие барабаны, бас-гитара, тёплые гитары, человеческий вокал, радио-микс' },
+    { name: 'Рок', tags: 'Живая рок-группа, мощные гитары, реальный drum kit, комнатный звук, энергичный человеческий вокал' },
+    { name: 'Электроника', tags: 'Гибридная электроника с живыми перкуссиями, аналоговые синты, органические текстуры, не стерильный звук' },
+    { name: 'Хип-хоп', tags: 'Живые барабанные брейки, глубокий бас, виниловая текстура, естественный flow, человеческий голос без жёсткого autotune' },
+    { name: 'Классика', tags: 'Классическая симфония, камерный оркестр, виртуозные солисты, акустика зала, живая фразировка' },
   ];
 
   const applyPreset = (tags: string) => {
@@ -1268,9 +1270,11 @@ export default function AI() {
   };
 
   const creativePresets: Array<{ name: string; tags: string; settings: Partial<GenerationSettings> }> = [
-    { name: 'Ло-фай', tags: 'мягкий lo-fi hip-hop, виниловый треск, Rhodes и спокойный бит', settings: { genre: 'Ло-фай', mood: 'Уютное', energy: 30, bpm: 78, trackType: 'instrumental', duration: 'Короткая' } },
-    { name: 'Клубный трек', tags: 'современный house, плотный бас, яркий дроп и чистый клубный звук', settings: { genre: 'Электроника', mood: 'Эйфоричное', energy: 90, bpm: 126, trackType: 'vocal', voice: 'Женский вокал' } },
-    { name: 'Киносаундтрек', tags: 'широкий симфонический оркестр, кинематографичные струнные и эпичная кульминация', settings: { genre: 'Саундтрек', mood: 'Эпичное', energy: 65, bpm: 88, trackType: 'instrumental', duration: 'Длинная' } },
+    { name: 'Симфония', tags: 'полная симфония, живые струнные, медь, деревянные, литавры, эпичная кульминация, зал', settings: { genre: 'Симфония', mood: 'Эпичное', energy: 75, bpm: 84, trackType: 'instrumental', duration: 'Длинная' } },
+    { name: 'Киносаундтрек', tags: 'широкий симфонический оркестр, кинематографичные струнные, эпичная кульминация, живой ансамбль', settings: { genre: 'Саундтрек', mood: 'Эпичное', energy: 65, bpm: 88, trackType: 'instrumental', duration: 'Длинная' } },
+    { name: 'Живой вокал', tags: 'акустическая сессия, фортепиано, струнные, тёплый человеческий вокал, комнатная запись', settings: { genre: 'Акустика', mood: 'Романтичное', energy: 45, bpm: 76, trackType: 'vocal', voice: 'Женский вокал', duration: 'Стандартная' } },
+    { name: 'Ло-фай', tags: 'мягкий lo-fi, виниловое тепло, Rhodes, живые барабаны, камерная атмосфера', settings: { genre: 'Ло-фай', mood: 'Уютное', energy: 30, bpm: 78, trackType: 'instrumental', duration: 'Короткая' } },
+    { name: 'Клубный трек', tags: 'современный house с живыми перкуссиями, плотный бас, яркий дроп, чистый клубный микс', settings: { genre: 'Электроника', mood: 'Эйфоричное', energy: 90, bpm: 126, trackType: 'vocal', voice: 'Женский вокал' } },
     { name: 'Акустика', tags: 'интимная акустическая гитара, тёплое фортепиано и живая камерная запись', settings: { genre: 'Акустика', mood: 'Тёплое', energy: 35, bpm: 82, trackType: 'vocal', voice: 'Мужской вокал' } },
   ];
 
@@ -1320,8 +1324,8 @@ export default function AI() {
         {/* Description */}
         <div className="ai-desc">
           <p className="desc-text">
-            Генерируйте уникальные музыкальные композиции с помощью Suno AI.
-            Опишите стиль и добавьте текст песни при необходимости.
+            Генерируйте музыку с живым оркестром и человеческим звучанием — без роботизированного вокала.
+            Опишите стиль или выберите пресет «Симфония».
           </p>
           <p className="desc-text desc-meta">
             Тариф: {billing?.plan ?? '…'} · токены: {billing?.tokenBalance ?? '…'}
@@ -1352,7 +1356,7 @@ export default function AI() {
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               className="form-input form-textarea"
-              placeholder="Опишите желаемый музыкальный стиль"
+              placeholder="Например: эпическая симфония, живой оркестр, концертный зал, дышащие струнные"
               rows={3}
               maxLength={700}
             />
@@ -1405,14 +1409,14 @@ export default function AI() {
                 <div className="form-group">
                   <label className="form-label">Жанр</label>
                   <select className="form-input form-select" value={settings.genre} onChange={(e) => updateSettings('genre', e.target.value)}>
-                    <option>Джаз</option><option>Поп</option><option>Рок</option><option>Хип-хоп</option>
-                    <option>Электроника</option><option>Ло-фай</option><option>Акустика</option><option>Саундтрек</option>
+                    <option>Симфония</option><option>Джаз</option><option>Поп</option><option>Рок</option><option>Хип-хоп</option>
+                    <option>Электроника</option><option>Ло-фай</option><option>Акустика</option><option>Саундтрек</option><option>Классика</option>
                   </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Настроение</label>
                   <select className="form-input form-select" value={settings.mood} onChange={(e) => updateSettings('mood', e.target.value)}>
-                    <option>Тёплое</option><option>Эйфоричное</option><option>Меланхоличное</option><option>Эпичное</option><option>Мрачное</option><option>Романтичное</option>
+                    <option>Тёплое</option><option>Эйфоричное</option><option>Меланхоличное</option><option>Эпичное</option><option>Мрачное</option><option>Романтичное</option><option>Уютное</option>
                   </select>
                 </div>
                 <div className="form-group">

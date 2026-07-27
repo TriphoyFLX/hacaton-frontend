@@ -13,7 +13,7 @@ const TOKEN_PACK_UI: Array<{
   highlight?: boolean;
 }> = [
   { kind: 'TOKENS_400', tokens: 400, gens: 4, price: 199, badge: null },
-  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 349, badge: '-12%' },
+  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 399, badge: null },
   { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 549, badge: '-8%' },
   { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 999, badge: '-16%', highlight: true },
 ];
