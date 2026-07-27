@@ -897,9 +897,27 @@ export default function SoundTok() {
   const sharedVideoId = (searchParams.get('v') || '').trim() || null;
   const openCommentsFromQuery = searchParams.get('c') === '1';
   const hasVideos = soundToks.length > 0;
+  const [mobileChrome, setMobileChrome] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+  );
   const authNext = encodeURIComponent(
     sharedVideoId ? `/soundtok?v=${encodeURIComponent(sharedVideoId)}` : '/soundtok'
   );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const sync = () => setMobileChrome(mq.matches);
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    if (!guestMode) return;
+    const root = document.documentElement;
+    if (hasVideos && mobileChrome) root.classList.add('sl-soundtok-chrome');
+    else root.classList.remove('sl-soundtok-chrome');
+    return () => root.classList.remove('sl-soundtok-chrome');
+  }, [guestMode, hasVideos, mobileChrome]);
 
   const orderedSoundToks = useMemo(() => {
     if (!sharedVideoId || soundToks.length === 0) return soundToks;

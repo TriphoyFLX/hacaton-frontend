@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
 import Sidebar from './Sidebar';
@@ -66,7 +66,26 @@ export default function Layout() {
 
   const immersive = isImmersiveRoute(pathname);
   const isSoundTokFeed = pathname === '/soundtok';
+  const [mobileChrome, setMobileChrome] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+  );
   const contentRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const sync = () => setMobileChrome(mq.matches);
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  const hideAppHeader = isSoundTokFeed && mobileChrome;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (hideAppHeader) root.classList.add('sl-soundtok-chrome');
+    else root.classList.remove('sl-soundtok-chrome');
+    return () => root.classList.remove('sl-soundtok-chrome');
+  }, [hideAppHeader]);
 
   useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0 });
@@ -103,7 +122,7 @@ export default function Layout() {
       <Sidebar />
 
       <div className={`app-shell flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ml-0 pb-[var(--app-bottom-nav)] md:ml-[200px] lg:ml-[220px] md:pb-0${isSoundTokFeed ? ' app-shell--soundtok' : ''}`}>
-        <Header />
+        {!hideAppHeader && <Header />}
 
         <main
           ref={contentRef}

@@ -33,15 +33,24 @@
   min-height: 0;
 }
 
-/* SoundTok mobile: one top chrome over the video, not a separate black header bar */
+/* SoundTok mobile: one compact top chrome over the video */
 @media (max-width: 768px) {
   .app-shell--soundtok {
     --app-header-h: 0px;
   }
 
   .app-shell--soundtok .header-root {
-    display: none;
+    display: none !important;
   }
+
+  html.sl-soundtok-chrome .app-main--immersive {
+    min-height: 0;
+  }
+}
+
+html.sl-pwa.sl-soundtok-chrome .st-root--feed,
+html.sl-pwa.sl-soundtok-chrome .app-shell--soundtok {
+  min-height: 100dvh;
 }
 
 /* ── Page shells: unified padding ── */

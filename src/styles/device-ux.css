@@ -401,14 +401,14 @@ select:focus-visible {
   }
 }
 
-/* ── Standalone PWA: respect notches ── */
+/* ── Standalone PWA: respect notches (except SoundTok in-video chrome) ── */
 @media (display-mode: standalone) {
-  .header-root {
+  html:not(.sl-soundtok-chrome) .header-root {
     padding-top: env(safe-area-inset-top, 0px);
   }
 
   @media (max-width: 768px) {
-    :root {
+    html:not(.sl-soundtok-chrome) {
       --app-header-h: calc(48px + env(safe-area-inset-top, 0px));
     }
   }

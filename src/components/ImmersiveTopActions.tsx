@@ -21,10 +21,10 @@ const css = `
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -34,6 +34,13 @@ const css = `
   transition: background 0.15s, transform 0.12s;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
 }
+@media (min-width: 769px) {
+  .ita-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+}
 .ita-btn:hover {
   background: rgba(0, 0, 0, 0.45);
 }
@@ -41,17 +48,23 @@ const css = `
   transform: scale(0.96);
 }
 .ita-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
 }
+@media (min-width: 769px) {
+  .ita-icon {
+    width: 18px;
+    height: 18px;
+  }
+}
 .ita-dot {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 7px;
-  height: 7px;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #ff5c5c;
   border: 1.5px solid rgba(0, 0, 0, 0.55);
@@ -66,7 +79,7 @@ const css = `
 .ita-panel {
   position: fixed;
   z-index: 5000;
-  top: calc(12px + env(safe-area-inset-top, 0px) + 48px);
+  top: calc(4px + env(safe-area-inset-top, 0px) + 36px);
   right: 12px;
   left: 12px;
   width: auto;

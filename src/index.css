@@ -52,6 +52,11 @@
     overscroll-behavior-y: none;
   }
 
+  /* SoundTok full-bleed: safe-area only on the in-video top bar */
+  html.sl-pwa.sl-soundtok-chrome body {
+    padding-top: 0;
+  }
+
   html.sl-pwa #root {
     min-height: 100dvh;
   }

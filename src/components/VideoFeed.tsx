@@ -59,11 +59,23 @@ const css = `
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 14px;
-  min-height: calc(52px + env(safe-area-inset-top, 0px));
+  gap: 8px;
+  padding: calc(4px + env(safe-area-inset-top, 0px)) 10px 6px;
+  min-height: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.38) 58%, transparent 100%);
+  background: linear-gradient(180deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.22) 70%, transparent 100%);
+}
+@media (max-width: 768px) {
+  .vf-top-bar {
+    padding: calc(2px + env(safe-area-inset-top, 0px)) 8px 4px;
+    gap: 6px;
+  }
+  .vf-top-title {
+    font-size: 15px;
+  }
+  .vf-gradient-top {
+    height: 72px;
+  }
 }
 .vf-top-bar > * {
   pointer-events: auto;
