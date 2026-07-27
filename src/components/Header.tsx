@@ -45,9 +45,9 @@ ${FONT_IMPORT}
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  padding: 12px 20px;
+  padding: 8px 20px;
   max-width: 100%;
-  min-height: var(--app-header-h, 58px);
+  min-height: var(--app-header-h, 52px);
   box-sizing: border-box;
 }
 
@@ -256,15 +256,15 @@ ${FONT_IMPORT}
 
 @media (max-width: 768px) {
   .header-inner {
-    padding: 6px 10px;
-    min-height: var(--app-header-h, 48px);
+    padding: 4px 10px;
+    min-height: var(--app-header-h, 44px);
     justify-content: flex-end;
-    gap: 6px;
+    gap: 4px;
   }
 
   .header-btn {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
   }
 
   .header-hint {
@@ -272,11 +272,11 @@ ${FONT_IMPORT}
   }
 
   .notifications-panel {
-    top: calc(var(--app-header-h, 48px) + 8px);
+    top: calc(var(--app-header-h, 44px) + env(safe-area-inset-top, 0px) + 8px);
     right: 10px;
     left: 10px;
     width: auto;
-    max-height: calc(100dvh - var(--app-header-h, 48px) - var(--app-bottom-nav, 0px) - 24px);
+    max-height: calc(100dvh - var(--app-header-h, 44px) - env(safe-area-inset-top, 0px) - var(--app-bottom-nav, 0px) - 24px);
   }
 
   .notifications-item {

@@ -891,14 +891,14 @@ export default function SoundTok() {
   const openCommentsFromQuery = searchParams.get('c') === '1';
   const hasVideos = soundToks.length > 0;
   const [mobileChrome, setMobileChrome] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches,
   );
   const authNext = encodeURIComponent(
     sharedVideoId ? `/soundtok?v=${encodeURIComponent(sharedVideoId)}` : '/soundtok'
   );
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)');
+    const mq = window.matchMedia('(max-width: 1024px)');
     const sync = () => setMobileChrome(mq.matches);
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);

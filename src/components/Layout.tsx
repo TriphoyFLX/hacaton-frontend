@@ -67,12 +67,12 @@ export default function Layout() {
   const immersive = isImmersiveRoute(pathname);
   const isSoundTokFeed = pathname === '/soundtok';
   const [mobileChrome, setMobileChrome] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches,
   );
   const contentRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)');
+    const mq = window.matchMedia('(max-width: 1024px)');
     const sync = () => setMobileChrome(mq.matches);
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);

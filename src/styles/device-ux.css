@@ -401,18 +401,18 @@ select:focus-visible {
   }
 }
 
-/* ── Standalone PWA: respect notches (except SoundTok in-video chrome) ── */
+/* ── Standalone / installed PWA: notch only on the header chrome ── */
 @media (display-mode: standalone) {
   html:not(.sl-soundtok-chrome) .header-root {
     padding-top: env(safe-area-inset-top, 0px);
   }
-
-  @media (max-width: 768px) {
-    html:not(.sl-soundtok-chrome) {
-      --app-header-h: calc(48px + env(safe-area-inset-top, 0px));
-    }
-  }
 }
+
+html.sl-pwa:not(.sl-soundtok-chrome) .header-root {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Keep --app-header-h as content height only (do NOT add safe-area again) */
 
 /* ── Auth forms: full-bleed comfort ── */
 @media (max-width: 768px) {

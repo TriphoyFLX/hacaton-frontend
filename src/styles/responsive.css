@@ -1,7 +1,7 @@
 /* ── Global responsive tokens ── */
 :root {
   --app-bottom-nav: 0px;
-  --app-header-h: 58px;
+  --app-header-h: 52px;
   --page-pad-x: 28px;
   --page-pad-top: 48px;
   --page-pad-bottom: 80px;
@@ -11,7 +11,7 @@
 @media (max-width: 768px) {
   :root {
     --app-bottom-nav: calc(72px + env(safe-area-inset-bottom, 0px));
-    --app-header-h: 48px;
+    --app-header-h: 44px;
     --page-pad-x: 16px;
     --page-pad-top: 20px;
     --page-pad-bottom: 24px;
@@ -33,8 +33,8 @@
   min-height: 0;
 }
 
-/* SoundTok mobile: one compact top chrome over the video */
-@media (max-width: 768px) {
+/* SoundTok phone/tablet: one compact top chrome over the video */
+@media (max-width: 1024px) {
   .app-shell--soundtok {
     --app-header-h: 0px;
   }

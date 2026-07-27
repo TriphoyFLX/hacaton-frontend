@@ -41,20 +41,17 @@
     }
   }
 
-  /* Installed PWA (standalone) — fill notch / home indicator */
+  /* Installed PWA: horizontal safe-area only.
+     Top inset lives on the header / immersive chrome — never on body
+     (that stacked with header padding and made the top bar huge). */
   html.sl-pwa body {
     min-height: 100dvh;
     padding:
-      env(safe-area-inset-top, 0px)
+      0
       env(safe-area-inset-right, 0px)
       0
       env(safe-area-inset-left, 0px);
     overscroll-behavior-y: none;
-  }
-
-  /* SoundTok full-bleed: safe-area only on the in-video top bar */
-  html.sl-pwa.sl-soundtok-chrome body {
-    padding-top: 0;
   }
 
   html.sl-pwa #root {
