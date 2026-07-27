@@ -6,6 +6,7 @@ interface ChatUnreadState {
   chatUnread: Record<string, number>;
   loading: boolean;
   refresh: () => Promise<void>;
+  setTotalUnread: (count: number) => void;
   setChatUnread: (chatId: string, count: number) => void;
   clearChatUnread: (chatId: string) => void;
 }
@@ -23,6 +24,10 @@ export const useChatUnreadStore = create<ChatUnreadState>((set, get) => ({
     } catch {
       set({ loading: false });
     }
+  },
+
+  setTotalUnread: (count) => {
+    set({ totalUnread: Math.max(0, count) });
   },
 
   setChatUnread: (chatId, count) => {

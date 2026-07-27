@@ -6,6 +6,7 @@ import { soundsApi, type Sound } from '../api/sounds';
 import type { SoundTok } from '../api/soundtok';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { formatCount } from '../lib/format';
+import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
 
 type TabKey = 'soundtoks' | 'likes' | 'reposts' | 'sounds';
 
@@ -19,6 +20,24 @@ interface ProfileMediaTabsProps {
   repostedSoundToksCount?: number;
   repostedSoundToksPublic?: boolean;
   onRepostPrivacyChange?: (value: boolean) => Promise<void> | void;
+}
+
+type CachedMediaPage = {
+  items?: SoundTok[];
+  sounds?: Sound[];
+  total: number;
+  hasMore: boolean;
+  privateBlocked?: boolean;
+};
+
+type ApiErrorLike = {
+  response?: {
+    status?: number;
+  };
+};
+
+function getMediaCacheKey(identifier: string, tab: TabKey, offset: number) {
+  return `profile:media:${identifier.toLowerCase()}:${tab}:${offset}`;
 }
 
 const styles = `
@@ -370,6 +389,15 @@ export default function ProfileMediaTabs({
 
       if (append) setLoadingMore(true);
       else {
+        const cached = getStalePageData<CachedMediaPage>(getMediaCacheKey(identifier, nextTab, offset));
+        if (cached) {
+          setItems(cached.items ?? []);
+          setSounds(cached.sounds ?? []);
+          setTotal(cached.total);
+          setHasMore(Boolean(cached.hasMore));
+          setPrivateBlocked(Boolean(cached.privateBlocked));
+          setLoading(false);
+        }
         setLoading(true);
         setError(null);
         setPrivateBlocked(false);
@@ -378,6 +406,11 @@ export default function ProfileMediaTabs({
       try {
         if (nextTab === 'sounds') {
           const data = await soundsApi.getFavorites({ limit: 24, offset });
+          setCachedPageData(getMediaCacheKey(identifier, nextTab, offset), {
+            sounds: data.items,
+            total: data.total,
+            hasMore: Boolean(data.hasMore),
+          });
           setSounds((prev) => (append ? [...prev, ...data.items] : data.items));
           setItems([]);
           setTotal(data.total);
@@ -390,14 +423,26 @@ export default function ProfileMediaTabs({
                 ? profileApi.getUserLikedSoundToks
                 : profileApi.getUserRepostedSoundToks;
           const data = await fetcher(identifier, { limit: 24, offset });
+          setCachedPageData(getMediaCacheKey(identifier, nextTab, offset), {
+            items: data.items,
+            total: data.total,
+            hasMore: Boolean(data.hasMore),
+          });
           setItems((prev) => (append ? [...prev, ...data.items] : data.items));
           setSounds([]);
           setTotal(data.total);
           setHasMore(Boolean(data.hasMore));
         }
-      } catch (err: any) {
-        const status = err?.response?.status;
+      } catch (err) {
+        const status = (err as ApiErrorLike | undefined)?.response?.status;
         if (status === 403) {
+          setCachedPageData(getMediaCacheKey(identifier, nextTab, offset), {
+            items: [],
+            sounds: [],
+            total: 0,
+            hasMore: false,
+            privateBlocked: true,
+          });
           setPrivateBlocked(true);
           setItems([]);
           setSounds([]);

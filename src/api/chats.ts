@@ -159,6 +159,7 @@ export const chatsApi = {
       hasMore: boolean;
       limit: number;
       offset: number;
+      unreadTotal?: number;
     };
   },
 

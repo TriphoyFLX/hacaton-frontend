@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { ensureWebPushSubscription, getNotificationPermission } from '../lib/webPush';
 import { warmAppRoutes, prefetchRoute } from '../lib/routePrefetch';
 import { setCachedPageData, isPageDataFresh } from '../lib/pageDataCache';
+import { useChatUnreadStore } from '../store/chatUnreadStore';
 
 function isImmersiveRoute(pathname: string): boolean {
   if (pathname === '/soundtok') return true;
@@ -42,6 +43,9 @@ function warmHotApiData() {
           items: data.items ?? [],
           hasMore: Boolean(data.hasMore),
         });
+        if (typeof data.unreadTotal === 'number') {
+          useChatUnreadStore.getState().setTotalUnread(data.unreadTotal);
+        }
       })
       .catch(() => undefined);
   });

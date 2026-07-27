@@ -3,6 +3,7 @@ import { Check, Copy, Link2, Loader2, Send, Users, X } from 'lucide-react';
 import { chatsApi, Chat } from '../api/chats';
 import { SoundTok, soundTokApi } from '../api/soundtok';
 import { useAuthStore } from '../store/authStore';
+import { getStalePageData } from '../lib/pageDataCache';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 
 interface ShareSoundTokModalProps {
@@ -328,6 +329,12 @@ export default function ShareSoundTokModal({
     setError(null);
     setSentIds(new Set());
     setToast(null);
+    const cachedChats = getStalePageData<{ items: Chat[] }>('chats:list');
+    if (cachedChats?.items?.length) {
+      setChats(cachedChats.items);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     chatsApi

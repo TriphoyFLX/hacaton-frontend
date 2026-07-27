@@ -736,7 +736,7 @@ export default function Chats() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
-  const refreshUnread = useChatUnreadStore((s) => s.refresh);
+  const setTotalUnread = useChatUnreadStore((s) => s.setTotalUnread);
   const [chats, setChats] = useState<Chat[]>(() => {
     const stale = getStalePageData<{ items: Chat[]; hasMore: boolean }>('chats:list');
     return stale?.items ?? [];
@@ -779,7 +779,9 @@ export default function Chats() {
       setChats(data.items);
       setHasMore(data.hasMore);
       setCachedPageData('chats:list', { items: data.items, hasMore: data.hasMore });
-      refreshUnread();
+      if (typeof data.unreadTotal === 'number') {
+        setTotalUnread(data.unreadTotal);
+      }
     } catch (error) {
       console.error('Failed to fetch chats:', error);
     } finally {

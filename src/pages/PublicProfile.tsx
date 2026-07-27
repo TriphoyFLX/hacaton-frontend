@@ -13,6 +13,15 @@ import AdminBadge from '../components/AdminBadge';
 import PlatinumBadge, { isPlatinumUser, PLATINUM_PROFILE_CSS } from '../components/PlatinumBadge';
 import ReportUserModal from '../components/ReportUserModal';
 import ProfileMediaTabs from '../components/ProfileMediaTabs';
+import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
+
+function getProfileCacheKey(identifier: string) {
+  return `profile:public:${identifier.toLowerCase()}`;
+}
+
+function getProfileMediaCacheKey(identifier: string) {
+  return `profile:media:${identifier.toLowerCase()}:soundtoks:0`;
+}
 
 // ── Styles ──
 const FONT_IMPORT = '';
@@ -507,8 +516,9 @@ ${FONT_IMPORT}
 export default function PublicProfile() {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const staleProfile = username ? getStalePageData<UserProfile>(getProfileCacheKey(username)) : null;
+  const [user, setUser] = useState<UserProfile | null>(staleProfile);
+  const [loading, setLoading] = useState(() => !staleProfile);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
@@ -522,9 +532,30 @@ export default function PublicProfile() {
     const fetchUser = async () => {
       if (!username) return;
 
-      setLoading(true);
+      const cached = getStalePageData<UserProfile>(getProfileCacheKey(username));
+      if (cached) {
+        setUser(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
       try {
-        const data = await profileApi.getPublicProfile(username);
+        const [profileResult, mediaResult] = await Promise.allSettled([
+          profileApi.getPublicProfile(username),
+          profileApi.getUserSoundToks(username, { limit: 24, offset: 0 }),
+        ]);
+
+        if (mediaResult.status === 'fulfilled') {
+          setCachedPageData(getProfileMediaCacheKey(username), mediaResult.value);
+        }
+
+        if (profileResult.status !== 'fulfilled') {
+          throw profileResult.reason;
+        }
+
+        const data = profileResult.value;
+        setCachedPageData(getProfileCacheKey(username), data);
         setUser(data);
         if (currentUser?.id !== data.id) addRecentProfile(data);
         setIsFollowing(!!data.isFollowing);
@@ -535,7 +566,9 @@ export default function PublicProfile() {
         }
       } catch (error) {
         console.error('Failed to fetch user:', error);
-        setUser(null);
+        if (!cached) {
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }

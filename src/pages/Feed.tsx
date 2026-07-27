@@ -1846,6 +1846,11 @@ function PostCard({
     setShowMoreMenu(false);
     setShareStatus('');
     setShareOpen(true);
+    const cachedChats = getStalePageData<{ items: Chat[] }>('chats:list');
+    if (cachedChats?.items?.length) {
+      setChats(cachedChats.items);
+      return;
+    }
     try {
       const data = await chatsApi.getChats({ limit: 60, offset: 0 });
       setChats(data.items || []);
