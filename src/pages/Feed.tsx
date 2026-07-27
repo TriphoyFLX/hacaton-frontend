@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { postsApi, Post, PostComment } from '../api/posts';
 import { API_ORIGIN } from '../api/client';
@@ -1166,42 +1167,122 @@ ${FONT_IMPORT}
 .post-share-close:hover { background: var(--bg-hover); color: var(--text-primary); }
 .cp-hashtag-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 10px; flex-wrap: wrap; }
 .cp-hashtag-hint { color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
-.cp-format-row {
+.cp-format-menu {
+  position: fixed;
+  z-index: 1400;
+  min-width: 208px;
+  padding: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: rgba(14, 14, 14, 0.97);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.03) inset;
+  color: #f0ede8;
+  font-family: 'Syne', system-ui, sans-serif;
+  animation: cp-format-in 0.16s ease-out;
+  touch-action: manipulation;
+}
+@keyframes cp-format-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cp-format-menu.bar {
+  min-width: 0;
+  max-width: calc(100vw - 16px);
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin: 0 0 12px;
-  flex-wrap: wrap;
+  gap: 2px;
+  padding: 5px 6px;
+  border-radius: 999px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  animation: cp-format-bar-in 0.18s ease-out;
 }
-.cp-format-btn {
-  display: inline-flex;
+.cp-format-menu.bar::-webkit-scrollbar { display: none; }
+@keyframes cp-format-bar-in {
+  from { opacity: 0; transform: translate(-50%, calc(-100% + 8px)) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+}
+.cp-format-menu.bar {
+  transform: translate(-50%, -100%);
+}
+.cp-format-menu.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cp-format-menu-label {
+  padding: 6px 12px 8px;
+  color: rgba(240, 237, 232, 0.42);
+  font: 600 10px 'DM Mono', monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cp-format-item {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 30px;
-  min-width: 30px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  gap: 10px;
+  width: 100%;
+  border: 0;
   background: transparent;
-  color: var(--text-secondary);
+  color: rgba(240, 237, 232, 0.9);
   cursor: pointer;
-  font: 11px 'DM Mono', monospace;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  border-radius: 9px;
+  padding: 10px 12px;
+  font: 600 13px 'Syne', sans-serif;
+  text-align: left;
+  min-height: 42px;
 }
-.cp-format-btn:hover {
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.03);
+.cp-format-item:hover,
+.cp-format-item:active {
+  background: rgba(255,255,255,0.07);
+  color: #fff;
 }
-.cp-format-btn svg {
-  width: 13px;
-  height: 13px;
+.cp-format-item svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.88;
 }
-.cp-format-hint {
+.cp-format-item-kbd {
   margin-left: auto;
+  color: rgba(240, 237, 232, 0.35);
+  font: 500 10px 'DM Mono', monospace;
+}
+.cp-format-menu.bar .cp-format-item {
+  width: auto;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.cp-format-menu.bar .cp-format-item span,
+.cp-format-menu.bar .cp-format-item-kbd,
+.cp-format-menu.bar .cp-format-menu-label {
+  display: none;
+}
+.cp-format-sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: rgba(255,255,255,0.08);
+}
+.cp-format-menu.bar .cp-format-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+.cp-format-hint-inline {
+  margin: 0 0 12px;
   color: var(--text-muted);
-  font: 10.5px 'DM Mono', monospace;
+  font: 11px 'DM Mono', monospace;
+  line-height: 1.45;
+}
+@media (max-width: 768px) {
+  .cp-format-hint-inline { display: none; }
 }
 .feed-tag-filter { position: relative; z-index: 10; display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 16px; padding: 7px 10px; border: 1px solid var(--border-mid); border-radius: 7px; color: var(--text-secondary); font: 11px 'DM Mono', monospace; }
 .feed-tag-filter button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
@@ -1336,6 +1417,86 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(h / 24)}д`;
 }
 
+// ── Format menu helpers ──
+type FormatMenuState = {
+  mode: 'menu' | 'bar';
+  x: number;
+  y: number;
+};
+
+const FORMAT_ACTIONS: Array<{
+  action: FormatAction;
+  label: string;
+  icon: typeof Bold;
+  kbd?: string;
+  sepBefore?: boolean;
+}> = [
+  { action: 'bold', label: 'Жирный', icon: Bold, kbd: 'Ctrl+B' },
+  { action: 'italic', label: 'Курсив', icon: Italic, kbd: 'Ctrl+I' },
+  { action: 'strike', label: 'Зачёркнутый', icon: Strikethrough, kbd: 'Ctrl+⇧X' },
+  { action: 'code', label: 'Код', icon: Code2, kbd: 'Ctrl+E' },
+  { action: 'spoiler', label: 'Спойлер', icon: EyeOff },
+  { action: 'quote', label: 'Цитата', icon: Quote, kbd: 'Ctrl+⇧.', sepBefore: true },
+  { action: 'hashtag', label: 'Хештег', icon: Hash },
+];
+
+function isTouchFormatUi(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(pointer: coarse)').matches ||
+    window.matchMedia('(hover: none)').matches ||
+    window.innerWidth <= 768
+  );
+}
+
+/** Approximate selected text rect inside a textarea (for floating format bar). */
+function getTextareaSelectionAnchor(el: HTMLTextAreaElement): { x: number; y: number } {
+  const style = window.getComputedStyle(el);
+  const mirror = document.createElement('div');
+  const props = [
+    'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize', 'fontFamily',
+    'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textIndent',
+    'whiteSpace', 'wordWrap', 'wordBreak',
+  ] as const;
+  mirror.style.position = 'absolute';
+  mirror.style.visibility = 'hidden';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.wordWrap = 'break-word';
+  mirror.style.overflow = 'auto';
+  mirror.style.left = '-9999px';
+  mirror.style.top = '0';
+  const mirrorStyle = mirror.style as CSSStyleDeclaration & Record<string, string>;
+  const srcStyle = style as CSSStyleDeclaration & Record<string, string>;
+  for (const prop of props) {
+    mirrorStyle[prop] = srcStyle[prop];
+  }
+  mirror.style.width = `${el.clientWidth}px`;
+  mirror.style.height = `${el.clientHeight}px`;
+
+  const before = document.createTextNode(el.value.slice(0, el.selectionStart));
+  const mark = document.createElement('span');
+  mark.textContent = el.value.slice(el.selectionStart, el.selectionEnd) || '\u200b';
+  mirror.appendChild(before);
+  mirror.appendChild(mark);
+  document.body.appendChild(mirror);
+  mirror.scrollTop = el.scrollTop;
+  mirror.scrollLeft = el.scrollLeft;
+
+  const elRect = el.getBoundingClientRect();
+  const markRect = mark.getBoundingClientRect();
+  const mirrorRect = mirror.getBoundingClientRect();
+  document.body.removeChild(mirror);
+
+  const x = elRect.left + (markRect.left - mirrorRect.left) + markRect.width / 2;
+  const y = elRect.top + (markRect.top - mirrorRect.top) - 10;
+  const clampedX = Math.min(Math.max(x, 12), window.innerWidth - 12);
+  const clampedY = Math.min(Math.max(y, 56), window.innerHeight - 12);
+  return { x: clampedX, y: clampedY };
+}
+
 // ── Create Post Block ──
 function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
   const [content, setContent] = useState('');
@@ -1343,43 +1504,156 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeMediaType, setActiveMediaType] = useState<'photo' | 'video' | 'audio' | null>(null);
+  const [formatMenu, setFormatMenu] = useState<FormatMenuState | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
+  const formatMenuRef = useRef<HTMLDivElement>(null);
+  const savedSelectionRef = useRef<{ start: number; end: number } | null>(null);
+  const selectionTimerRef = useRef<number | null>(null);
+  const formatMenuModeRef = useRef<FormatMenuState['mode'] | null>(null);
+  formatMenuModeRef.current = formatMenu?.mode ?? null;
+
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  const applyFormat = (action: FormatAction) => {
+  const closeFormatMenu = useCallback(() => {
+    setFormatMenu(null);
+  }, []);
+
+  const rememberSelection = useCallback(() => {
     const el = textareaRef.current;
-    const start = el?.selectionStart ?? content.length;
-    const end = el?.selectionEnd ?? content.length;
+    if (!el) return null;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    if (start === end) {
+      savedSelectionRef.current = null;
+      return null;
+    }
+    savedSelectionRef.current = { start, end };
+    return savedSelectionRef.current;
+  }, []);
+
+  const applyFormat = useCallback((action: FormatAction) => {
+    const el = textareaRef.current;
+    const saved = savedSelectionRef.current;
+    const start = saved?.start ?? el?.selectionStart ?? content.length;
+    const end = saved?.end ?? el?.selectionEnd ?? content.length;
     const next = applyFeedFormat(content, start, end, action);
     setContent(next.value);
+    savedSelectionRef.current = {
+      start: next.selectionStart,
+      end: next.selectionEnd,
+    };
+    closeFormatMenu();
     requestAnimationFrame(() => {
       const field = textareaRef.current;
       if (!field) return;
       field.focus();
       field.setSelectionRange(next.selectionStart, next.selectionEnd);
+      // Keep mobile bar open after formatting if still selecting
+      if (isTouchFormatUi() && next.selectionStart !== next.selectionEnd) {
+        const anchor = getTextareaSelectionAnchor(field);
+        setFormatMenu({ mode: 'bar', x: anchor.x, y: anchor.y });
+      }
     });
-  };
+  }, [closeFormatMenu, content]);
+
+  const openContextMenu = useCallback((e: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (isTouchFormatUi()) return;
+    const sel = rememberSelection();
+    if (!sel) return;
+    e.preventDefault();
+    const pad = 8;
+    const menuW = 220;
+    const menuH = 320;
+    const x = Math.min(Math.max(e.clientX, pad), window.innerWidth - menuW - pad);
+    const y = Math.min(Math.max(e.clientY, pad), window.innerHeight - menuH - pad);
+    setFormatMenu({ mode: 'menu', x, y });
+  }, [rememberSelection]);
+
+  const syncMobileSelectionBar = useCallback(() => {
+    if (!isTouchFormatUi()) return;
+    const el = textareaRef.current;
+    if (!el || document.activeElement !== el) {
+      if (formatMenu?.mode === 'bar') closeFormatMenu();
+      return;
+    }
+    const sel = rememberSelection();
+    if (!sel) {
+      if (formatMenu?.mode === 'bar') closeFormatMenu();
+      return;
+    }
+    const anchor = getTextareaSelectionAnchor(el);
+    setFormatMenu({ mode: 'bar', x: anchor.x, y: anchor.y });
+  }, [closeFormatMenu, formatMenu?.mode, rememberSelection]);
+
+  const scheduleMobileBar = useCallback(() => {
+    if (!isTouchFormatUi()) return;
+    if (selectionTimerRef.current) window.clearTimeout(selectionTimerRef.current);
+    // Wait until native long-press selection settles
+    selectionTimerRef.current = window.setTimeout(() => {
+      syncMobileSelectionBar();
+    }, 180);
+  }, [syncMobileSelectionBar]);
+
+  useEffect(() => {
+    if (!formatMenu) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (formatMenuRef.current?.contains(target)) return;
+      if (textareaRef.current?.contains(target) && formatMenu.mode === 'bar') return;
+      closeFormatMenu();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeFormatMenu();
+    };
+    const onScroll = () => {
+      if (formatMenu.mode === 'bar') syncMobileSelectionBar();
+      else closeFormatMenu();
+    };
+    const onResize = () => closeFormatMenu();
+
+    window.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [closeFormatMenu, formatMenu, syncMobileSelectionBar]);
+
+  useEffect(() => {
+    return () => {
+      if (selectionTimerRef.current) window.clearTimeout(selectionTimerRef.current);
+    };
+  }, []);
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!(e.ctrlKey || e.metaKey)) return;
     const key = e.key.toLowerCase();
     if (key === 'b') {
       e.preventDefault();
+      rememberSelection();
       applyFormat('bold');
     } else if (key === 'i') {
       e.preventDefault();
+      rememberSelection();
       applyFormat('italic');
     } else if (key === 'e') {
       e.preventDefault();
+      rememberSelection();
       applyFormat('code');
     } else if (e.shiftKey && key === 'x') {
       e.preventDefault();
+      rememberSelection();
       applyFormat('strike');
     } else if (e.shiftKey && key === '.') {
       e.preventDefault();
+      rememberSelection();
       applyFormat('quote');
     }
   };
@@ -1404,7 +1678,7 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
     if (selectedFiles.length === 0) return;
 
     setFiles(prev => [...prev, ...selectedFiles]);
-    
+
     selectedFiles.forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -1424,15 +1698,15 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
 
   const handleSubmit = async () => {
     if (!content.trim() && files.length === 0) return;
-    
+
     setIsSubmitting(true);
     try {
-      // Передаём content и files отдельно
       await postsApi.createPost(content, files);
-      
+
       setContent('');
       setFiles([]);
       setPreviews([]);
+      closeFormatMenu();
       onPostCreated?.();
     } catch (error) {
       console.error('Failed to create post:', error);
@@ -1450,37 +1724,69 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
         ref={textareaRef}
         className="cp-textarea"
         value={content}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={(e) => {
+          setContent(e.target.value);
+          if (formatMenu?.mode === 'menu') closeFormatMenu();
+        }}
         onKeyDown={handleTextareaKeyDown}
-        placeholder="Что у вас нового? *жирный*, > цитата, #хештег"
+        onContextMenu={openContextMenu}
+        onSelect={scheduleMobileBar}
+        onTouchEnd={scheduleMobileBar}
+        onMouseUp={() => {
+          if (isTouchFormatUi()) scheduleMobileBar();
+        }}
+        onBlur={() => {
+          // Delay so format button taps still receive the click
+          window.setTimeout(() => {
+            if (formatMenuModeRef.current !== 'bar') return;
+            if (formatMenuRef.current?.contains(document.activeElement)) return;
+            closeFormatMenu();
+          }, 180);
+        }}
+        placeholder="Что у вас нового?"
         rows={3}
       />
-      <div className="cp-format-row">
-        <button type="button" className="cp-format-btn" title="Жирный (Ctrl+B)" onClick={() => applyFormat('bold')}>
-          <Bold />
-        </button>
-        <button type="button" className="cp-format-btn" title="Курсив (Ctrl+I)" onClick={() => applyFormat('italic')}>
-          <Italic />
-        </button>
-        <button type="button" className="cp-format-btn" title="Зачёркнутый (Ctrl+Shift+X)" onClick={() => applyFormat('strike')}>
-          <Strikethrough />
-        </button>
-        <button type="button" className="cp-format-btn" title="Код (Ctrl+E)" onClick={() => applyFormat('code')}>
-          <Code2 />
-        </button>
-        <button type="button" className="cp-format-btn" title="Спойлер" onClick={() => applyFormat('spoiler')}>
-          <EyeOff />
-        </button>
-        <button type="button" className="cp-format-btn" title="Цитата (Ctrl+Shift+.)" onClick={() => applyFormat('quote')}>
-          <Quote />
-          <span>Цитата</span>
-        </button>
-        <button type="button" className="cp-format-btn" title="Хештег" onClick={() => applyFormat('hashtag')}>
-          <Hash />
-          <span>Хештег</span>
-        </button>
-        <span className="cp-format-hint">как в Telegram</span>
-      </div>
+      <p className="cp-format-hint-inline">
+        Выделите текст и нажмите правой кнопкой — формат. На телефоне плашка появится сама.
+      </p>
+
+      {formatMenu && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={formatMenuRef}
+          className={`cp-format-menu ${formatMenu.mode}`}
+          style={{ left: formatMenu.x, top: formatMenu.y }}
+          role="menu"
+          aria-label="Форматирование"
+          onContextMenu={(e) => e.preventDefault()}
+          onMouseDown={(e) => {
+            // Keep textarea selection while clicking menu
+            e.preventDefault();
+          }}
+        >
+          {formatMenu.mode === 'menu' && (
+            <div className="cp-format-menu-label">Формат</div>
+          )}
+          {FORMAT_ACTIONS.map(({ action, label, icon: Icon, kbd, sepBefore }) => (
+            <Fragment key={action}>
+              {sepBefore && <div className="cp-format-sep" />}
+              <button
+                type="button"
+                className="cp-format-item"
+                role="menuitem"
+                title={label}
+                onClick={() => applyFormat(action)}
+              >
+                <Icon />
+                <span>{label}</span>
+                {kbd && formatMenu.mode === 'menu' ? (
+                  <span className="cp-format-item-kbd">{kbd}</span>
+                ) : null}
+              </button>
+            </Fragment>
+          ))}
+        </div>,
+        document.body,
+      )}
 
       {previews.length > 0 && (
         <div className="cp-preview">
