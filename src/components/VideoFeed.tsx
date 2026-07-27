@@ -1438,13 +1438,23 @@ export default function VideoFeed({
   const touchLastY = useRef(0);
   const touchVelocity = useRef(0);
   const lastTouchTime = useRef(0);
+  const lastTouchAtRef = useRef(0);
   const animationRef = useRef<number | null>(null);
   const wheelAccum = useRef(0);
   const wheelLockUntil = useRef(0);
   const wheelIdleTimer = useRef<number | null>(null);
   const isSeekingRef = useRef(false);
   const isAnimatingRef = useRef(false);
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
+  const dragOffsetRef = useRef(0);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const armNavLock = useCallback(() => {
+    const now = Date.now();
+    wheelLockUntil.current = now + NAV_LOCK_MS;
+    wheelAccum.current = 0;
+  }, []);
 
   const resizeCommentField = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
@@ -1463,7 +1473,8 @@ export default function VideoFeed({
   const FLING_VELOCITY_THRESHOLD = 0.85;
   const DRAG_THRESHOLD = 110;
   const WHEEL_THRESHOLD = 56;
-  const WHEEL_COOLDOWN_MS = 750;
+  /** Shared lock so touch swipe + residual wheel/trackpad can't advance twice. */
+  const NAV_LOCK_MS = 820;
 
   const getCommentCount = (tok: SoundTok) =>
     localCounts[tok.id] ?? tok.commentsCount ?? 0;
@@ -1604,7 +1615,13 @@ export default function VideoFeed({
     if (soundToks.length === 0) return;
     const safeIndex = Math.min(Math.max(initialIndex, 0), soundToks.length - 1);
     setCurrentIndex(safeIndex);
-  }, [initialIndex, soundToks.length]);
+  }, [initialIndex]);
+
+  useEffect(() => {
+    if (soundToks.length === 0) return;
+    // Clamp only — do not reset to initialIndex when load-more grows the list.
+    setCurrentIndex((prev) => Math.min(Math.max(prev, 0), soundToks.length - 1));
+  }, [soundToks.length]);
 
   useEffect(() => {
     if (!onNearEnd || soundToks.length === 0) return;
@@ -1842,6 +1859,7 @@ export default function VideoFeed({
   const handleTouchStart = (e: React.TouchEvent) => {
     if (commentsOpen || isSeekingRef.current || isAnimatingRef.current) return;
     enableSound();
+    lastTouchAtRef.current = Date.now();
     const touch = e.touches[0];
     touchStartY.current = touch.clientY;
     touchLastY.current = touch.clientY;
@@ -1868,19 +1886,24 @@ export default function VideoFeed({
       lastTouchTime.current = now;
       touchLastY.current = currentY;
       let resistance = 1;
-      if (currentIndex === 0 && diffY < 0) resistance = 0.35;
-      if (currentIndex === soundToks.length - 1 && diffY > 0) resistance = 0.35;
-      setDragOffset(diffY * resistance);
+      if (currentIndexRef.current === 0 && diffY < 0) resistance = 0.35;
+      if (currentIndexRef.current === soundToksRef.current.length - 1 && diffY > 0) resistance = 0.35;
+      const nextOffset = diffY * resistance;
+      dragOffsetRef.current = nextOffset;
+      setDragOffset(nextOffset);
     },
-    [isDragging, commentsOpen, currentIndex, soundToks.length]
+    [isDragging, commentsOpen]
   );
 
   const springToPosition = useCallback(
     (targetOffset: number, targetIndex: number | null = null) => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
       setIsAnimating(true);
       isAnimatingRef.current = true;
       setIsDragging(false);
-      const startOffset = dragOffset;
+      if (targetIndex !== null) armNavLock();
+
+      const startOffset = dragOffsetRef.current;
       const startTime = performance.now();
       const duration = targetIndex === null ? 220 : 320;
 
@@ -1889,35 +1912,44 @@ export default function VideoFeed({
         const progressAnim = Math.min(elapsed / duration, 1);
         // smoother ease-out like TikTok
         const eased = 1 - Math.pow(1 - progressAnim, 4);
-        setDragOffset(startOffset + (targetOffset - startOffset) * eased);
+        const nextOffset = startOffset + (targetOffset - startOffset) * eased;
+        dragOffsetRef.current = nextOffset;
+        setDragOffset(nextOffset);
         if (progressAnim < 1) {
           animationRef.current = requestAnimationFrame(animate);
         } else {
+          dragOffsetRef.current = 0;
           setDragOffset(0);
           setIsAnimating(false);
+          if (targetIndex !== null) {
+            currentIndexRef.current = targetIndex;
+            setCurrentIndex(targetIndex);
+          }
+          // Clear anim gate after index commit so wheel can't race the setState.
           isAnimatingRef.current = false;
-          if (targetIndex !== null) setCurrentIndex(targetIndex);
         }
       };
       animationRef.current = requestAnimationFrame(animate);
     },
-    [dragOffset]
+    [armNavLock]
   );
 
   const goToAdjacent = useCallback(
     (direction: 1 | -1) => {
       if (isAnimatingRef.current || isSeekingRef.current) return;
-      const next = currentIndex + direction;
-      if (next < 0 || next >= soundToks.length) return;
+      if (Date.now() < wheelLockUntil.current) return;
+      const next = currentIndexRef.current + direction;
+      if (next < 0 || next >= soundToksRef.current.length) return;
       const stageHeight = stageRef.current?.clientHeight || window.innerHeight;
       springToPosition(direction * stageHeight, next);
     },
-    [currentIndex, soundToks.length, springToPosition]
+    [springToPosition]
   );
 
   const handleTouchEnd = useCallback(() => {
-    if (!isDragging || commentsOpen || isSeekingRef.current) return;
-    const dragDistance = dragOffset;
+    if (!isDragging || commentsOpen || isSeekingRef.current || isAnimatingRef.current) return;
+    lastTouchAtRef.current = Date.now();
+    const dragDistance = dragOffsetRef.current;
     const velocity = touchVelocity.current;
     const dragDuration = Date.now() - touchStartTime.current;
     const isFlingUp = velocity > FLING_VELOCITY_THRESHOLD && dragDuration < 280;
@@ -1925,15 +1957,17 @@ export default function VideoFeed({
     const isSwipeUp = dragDistance > DRAG_THRESHOLD;
     const isSwipeDown = dragDistance < -DRAG_THRESHOLD;
     const stageHeight = stageRef.current?.clientHeight || window.innerHeight;
+    const idx = currentIndexRef.current;
+    const len = soundToksRef.current.length;
 
-    if ((isFlingUp || isSwipeUp) && currentIndex < soundToks.length - 1) {
-      springToPosition(stageHeight, currentIndex + 1);
-    } else if ((isFlingDown || isSwipeDown) && currentIndex > 0) {
-      springToPosition(-stageHeight, currentIndex - 1);
+    if ((isFlingUp || isSwipeUp) && idx < len - 1) {
+      springToPosition(stageHeight, idx + 1);
+    } else if ((isFlingDown || isSwipeDown) && idx > 0) {
+      springToPosition(-stageHeight, idx - 1);
     } else {
       springToPosition(0);
     }
-  }, [isDragging, commentsOpen, dragOffset, currentIndex, soundToks.length, springToPosition]);
+  }, [isDragging, commentsOpen, springToPosition]);
 
   useEffect(() => {
     return () => {
@@ -1949,7 +1983,15 @@ export default function VideoFeed({
       enableSound();
 
       const now = Date.now();
-      if (now < wheelLockUntil.current || isAnimatingRef.current) return;
+      // Touch/trackpad hybrid devices often emit wheel after a finger swipe.
+      if (now - lastTouchAtRef.current < NAV_LOCK_MS) {
+        wheelAccum.current = 0;
+        return;
+      }
+      if (now < wheelLockUntil.current || isAnimatingRef.current) {
+        wheelAccum.current = 0;
+        return;
+      }
 
       const raw =
         e.deltaMode === 1
@@ -1972,7 +2014,6 @@ export default function VideoFeed({
 
       const direction: 1 | -1 = wheelAccum.current > 0 ? 1 : -1;
       wheelAccum.current = 0;
-      wheelLockUntil.current = now + WHEEL_COOLDOWN_MS;
       goToAdjacent(direction);
     },
     [commentsOpen, enableSound, goToAdjacent]
@@ -2377,7 +2418,7 @@ export default function VideoFeed({
                     : 0,
                 visibility: Math.abs(index - currentIndex) <= 1 ? 'visible' : 'hidden',
                 transition:
-                  isDragging || isAnimating ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
+                  isDragging || isAnimating ? 'none' : 'opacity 0.2s ease-out',
                 pointerEvents: isActive ? 'auto' : 'none',
                 zIndex: isActive ? 10 : 0,
               }}
