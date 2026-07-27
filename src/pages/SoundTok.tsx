@@ -703,25 +703,18 @@ ${FONT_IMPORT}
   }
 
   .st-fab {
-    left: auto;
-    right: 14px;
+    left: 50%;
+    right: auto;
     bottom: calc(var(--app-bottom-nav, 0px) + 14px);
-    transform: none;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--purple), var(--pink));
-    border-color: transparent;
-    color: #fff;
+    transform: translateX(-50%);
     z-index: 30;
   }
 
   .st-fab:hover {
-    transform: scale(1.06);
+    transform: translateX(-50%) scale(1.06);
   }
 
   .st-root--guest .st-fab {
-    right: max(14px, env(safe-area-inset-right, 0px));
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   }
 
