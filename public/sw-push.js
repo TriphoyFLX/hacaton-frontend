@@ -7,6 +7,38 @@ self.addEventListener('message', (event) => {
   }
 });
 
+/**
+ * API must never be cached. Handle /api/* ourselves so a failed fetch returns
+ * a real 503 Response instead of Workbox throwing uncaught `no-response`.
+ * (Registered before Workbox routes via importScripts.)
+ */
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  let url;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return;
+  }
+  if (url.origin !== self.location.origin) return;
+  if (!url.pathname.startsWith('/api/')) return;
+
+  event.respondWith(
+    fetch(req)
+      .then((res) => res)
+      .catch(() =>
+        new Response(JSON.stringify({ error: 'network_unavailable' }), {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          },
+        }),
+      ),
+  );
+});
+
 self.addEventListener('push', (event) => {
   let data = {
     title: 'SoundLab',

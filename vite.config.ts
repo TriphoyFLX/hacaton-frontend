@@ -129,10 +129,9 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkOnly',
-          },
+          // /api/* is handled in public/sw-push.js (network-only + soft 503 on failure).
+          // Keeping a Workbox NetworkOnly route here causes uncaught `no-response` noise
+          // when the backend briefly restarts during deploys.
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/uploads/'),
             handler: 'CacheFirst',
