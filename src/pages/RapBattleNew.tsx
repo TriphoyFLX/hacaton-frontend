@@ -823,13 +823,17 @@ const MixedTrackPlayer = ({ voiceUrl, beatUrl, label, playerKey }: { voiceUrl: s
       {showVolumeControls && (
         <div className="rb-vol-panel">
           <div className="rb-vol-head">Микшер</div>
-          {([['Голос', voiceVolume, setVoiceVolume], ['Бит', beatVolume, setBeatVolume], ['Мастер', masterVolume, setMasterVolume]] as const).map(([name, val, set]) => (
+          {([['Голос', voiceVolume, setVoiceVolume], ['Бит', beatVolume, setBeatVolume], ['Мастер', masterVolume, setMasterVolume]] as const).map(([name, val, set], idx) => (
             <div className="rb-vol-row" key={String(name)}>
               <div className="rb-vol-lbl">
                 <span className="rb-vol-name">{name as string}</span>
                 <span className="rb-vol-val">{val as number}%</span>
               </div>
-              <input type="range" min="0" max="100" value={val as number}
+              <input
+                type="range"
+                id={`rb-vol-${idx}`}
+                name={`rb-vol-${idx}`}
+                min="0" max="100" value={val as number}
                 onChange={e=>(set as (v:number)=>void)(Number(e.target.value))}
                 className="rb-slider"/>
             </div>
@@ -1893,7 +1897,14 @@ export default function RapBattleNew() {
       <div className="rb-card">
         <span className="rb-section-label">Название (опционально)</span>
         <div className="rb-field rb-mb0">
-          <input className="rb-input" value={battleTitle} onChange={e=>setBattleTitle(e.target.value)} placeholder="Ranked Battle"/>
+          <input
+            id="rb-ranked-title"
+            name="rb-ranked-title"
+            className="rb-input"
+            value={battleTitle}
+            onChange={e=>setBattleTitle(e.target.value)}
+            placeholder="Ranked Battle"
+          />
         </div>
       </div>
       <div className="rb-card">
@@ -1904,7 +1915,14 @@ export default function RapBattleNew() {
             <div className="rb-upload-label">Нажмите для загрузки</div>
             <div className="rb-upload-hint">MP3, WAV — до 10 MB</div>
           </div>
-          <input type="file" accept="audio/mp3,audio/wav,audio/mpeg" className="hidden" onChange={e=>e.target.files?.[0]&&handleBeatUpload(e.target.files[0])}/>
+          <input
+            id="rb-ranked-beat"
+            name="rb-ranked-beat"
+            type="file"
+            accept="audio/mp3,audio/wav,audio/mpeg"
+            className="hidden"
+            onChange={e=>e.target.files?.[0]&&handleBeatUpload(e.target.files[0])}
+          />
         </label>
         {beatFile && (
           <div className="rb-beat-row rb-mt8">
@@ -1952,11 +1970,26 @@ export default function RapBattleNew() {
         <span className="rb-section-label">Информация</span>
         <div className="rb-field">
           <label className="rb-label">Название баттла</label>
-          <input className="rb-input" value={battleTitle} onChange={e=>setBattleTitle(e.target.value)} placeholder="Название..."/>
+          <input
+            id="rb-create-title"
+            name="rb-create-title"
+            className="rb-input"
+            value={battleTitle}
+            onChange={e=>setBattleTitle(e.target.value)}
+            placeholder="Название..."
+          />
         </div>
         <div className="rb-field rb-mb0">
           <label className="rb-label">Описание</label>
-          <textarea className="rb-input" value={battleDescription} onChange={e=>setBattleDescription(e.target.value)} placeholder="Условия и правила..." rows={3}/>
+          <textarea
+            id="rb-create-description"
+            name="rb-create-description"
+            className="rb-input"
+            value={battleDescription}
+            onChange={e=>setBattleDescription(e.target.value)}
+            placeholder="Условия и правила..."
+            rows={3}
+          />
         </div>
       </div>
 
@@ -1968,7 +2001,14 @@ export default function RapBattleNew() {
             <div className="rb-upload-label">Нажмите для загрузки</div>
             <div className="rb-upload-hint">MP3, WAV — до 10 MB</div>
           </div>
-          <input type="file" accept="audio/mp3,audio/wav,audio/mpeg" className="hidden" onChange={e=>e.target.files?.[0]&&handleBeatUpload(e.target.files[0])}/>
+          <input
+            id="rb-create-beat"
+            name="rb-create-beat"
+            type="file"
+            accept="audio/mp3,audio/wav,audio/mpeg"
+            className="hidden"
+            onChange={e=>e.target.files?.[0]&&handleBeatUpload(e.target.files[0])}
+          />
         </label>
         {beatFile && (
           <div className="rb-beat-row rb-mt8">
@@ -1987,6 +2027,8 @@ export default function RapBattleNew() {
         <span className="rb-section-label">Оппонент</span>
         <div className="rb-field">
           <input
+            id="rb-opponent-filter"
+            name="rb-opponent-filter"
             className="rb-input"
             value={opponentFilter}
             onChange={(e) => setOpponentFilter(e.target.value)}
@@ -2217,6 +2259,8 @@ export default function RapBattleNew() {
                   <span>{voiceFx[band.key] > 0 ? '+' : ''}{voiceFx[band.key]} dB</span>
                 </div>
                 <input
+                  id={`rb-eq-${band.key}`}
+                  name={`rb-eq-${band.key}`}
                   type="range" min={-EQ_GAIN_LIMIT} max={EQ_GAIN_LIMIT} step={1}
                   value={voiceFx[band.key]}
                   onChange={e => patchVoiceFx({ [band.key]: Number(e.target.value) })}
@@ -2236,6 +2280,8 @@ export default function RapBattleNew() {
                   <span>{Math.round(voiceFx[s.key] * 100)}%</span>
                 </div>
                 <input
+                  id={`rb-voice-fx-${s.key}`}
+                  name={`rb-voice-fx-${s.key}`}
                   type="range" min={0} max={1} step={0.01}
                   value={voiceFx[s.key]}
                   onChange={e => patchVoiceFx({ [s.key]: Number(e.target.value) })}
