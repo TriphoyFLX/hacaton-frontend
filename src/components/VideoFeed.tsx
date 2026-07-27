@@ -1443,6 +1443,8 @@ export default function VideoFeed({
   const wheelAccum = useRef(0);
   const wheelLockUntil = useRef(0);
   const wheelIdleTimer = useRef<number | null>(null);
+  /** One continuous trackpad/mouse-wheel gesture may only snap once. */
+  const wheelSnapConsumed = useRef(false);
   const isSeekingRef = useRef(false);
   const isAnimatingRef = useRef(false);
   const currentIndexRef = useRef(currentIndex);
@@ -1450,9 +1452,16 @@ export default function VideoFeed({
   const dragOffsetRef = useRef(0);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
+  const FLING_VELOCITY_THRESHOLD = 0.85;
+  const DRAG_THRESHOLD = 110;
+  const WHEEL_THRESHOLD = 56;
+  /** Shared lock so touch swipe + residual wheel/trackpad can't advance twice. */
+  const NAV_LOCK_MS = 1000;
+  /** Quiet gap that ends a trackpad gesture (inertia still ticks; wait for real idle). */
+  const WHEEL_GESTURE_IDLE_MS = 280;
+
   const armNavLock = useCallback(() => {
-    const now = Date.now();
-    wheelLockUntil.current = now + NAV_LOCK_MS;
+    wheelLockUntil.current = Date.now() + NAV_LOCK_MS;
     wheelAccum.current = 0;
   }, []);
 
@@ -1469,12 +1478,6 @@ export default function VideoFeed({
   const lastSeekApplyRef = useRef(0);
   const pendingSeekRatioRef = useRef<number | null>(null);
   const openedCommentsFromQueryRef = useRef(false);
-
-  const FLING_VELOCITY_THRESHOLD = 0.85;
-  const DRAG_THRESHOLD = 110;
-  const WHEEL_THRESHOLD = 56;
-  /** Shared lock so touch swipe + residual wheel/trackpad can't advance twice. */
-  const NAV_LOCK_MS = 820;
 
   const getCommentCount = (tok: SoundTok) =>
     localCounts[tok.id] ?? tok.commentsCount ?? 0;
@@ -1982,17 +1985,6 @@ export default function VideoFeed({
       e.preventDefault();
       enableSound();
 
-      const now = Date.now();
-      // Touch/trackpad hybrid devices often emit wheel after a finger swipe.
-      if (now - lastTouchAtRef.current < NAV_LOCK_MS) {
-        wheelAccum.current = 0;
-        return;
-      }
-      if (now < wheelLockUntil.current || isAnimatingRef.current) {
-        wheelAccum.current = 0;
-        return;
-      }
-
       const raw =
         e.deltaMode === 1
           ? e.deltaY * 16
@@ -2003,17 +1995,40 @@ export default function VideoFeed({
       // Ignore tiny trackpad noise
       if (Math.abs(raw) < 1.5) return;
 
-      wheelAccum.current += raw;
-
+      // Any real delta keeps the gesture alive — long inertia must not start a 2nd snap.
       if (wheelIdleTimer.current) window.clearTimeout(wheelIdleTimer.current);
       wheelIdleTimer.current = window.setTimeout(() => {
         wheelAccum.current = 0;
-      }, 140);
+        wheelSnapConsumed.current = false;
+      }, WHEEL_GESTURE_IDLE_MS);
 
+      const now = Date.now();
+      // Touch/trackpad hybrid devices often emit wheel after a finger swipe.
+      if (now - lastTouchAtRef.current < NAV_LOCK_MS) {
+        wheelAccum.current = 0;
+        return;
+      }
+      if (
+        now < wheelLockUntil.current ||
+        isAnimatingRef.current ||
+        wheelSnapConsumed.current
+      ) {
+        wheelAccum.current = 0;
+        return;
+      }
+
+      wheelAccum.current += raw;
       if (Math.abs(wheelAccum.current) < WHEEL_THRESHOLD) return;
 
       const direction: 1 | -1 = wheelAccum.current > 0 ? 1 : -1;
+      const next = currentIndexRef.current + direction;
+      if (next < 0 || next >= soundToksRef.current.length) {
+        wheelAccum.current = 0;
+        return;
+      }
+
       wheelAccum.current = 0;
+      wheelSnapConsumed.current = true;
       goToAdjacent(direction);
     },
     [commentsOpen, enableSound, goToAdjacent]
