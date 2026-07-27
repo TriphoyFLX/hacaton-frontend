@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AdminBadge from '../components/AdminBadge';
 import PlatinumBadge from '../components/PlatinumBadge';
 import { renderTextWithMentions } from '../utils/messageMentions';
-import { applyFeedFormat, renderFeedContent, type FormatAction } from '../utils/feedContent';
+import { applyFeedEditorFormat, isFeedEditorEmpty, renderFeedContent, serializeFeedEditor, type FormatAction } from '../utils/feedContent';
 import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
 
 // ── Styles ──
@@ -184,10 +184,56 @@ ${FONT_IMPORT}
   outline: none;
   padding: 0;
   margin-bottom: 16px;
-  min-height: 24px;
+  min-height: 72px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  caret-color: var(--text-primary);
 }
-.cp-textarea::placeholder {
+.cp-textarea:empty:before {
+  content: attr(data-placeholder);
   color: var(--text-muted);
+  pointer-events: none;
+}
+.cp-textarea strong,
+.cp-textarea b {
+  font-weight: 700;
+  color: #fff;
+}
+.cp-textarea em,
+.cp-textarea i {
+  font-style: italic;
+  color: rgba(240, 237, 232, 0.92);
+}
+.cp-textarea s,
+.cp-textarea strike,
+.cp-textarea del {
+  text-decoration: line-through;
+  opacity: 0.72;
+}
+.cp-textarea code {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.cp-textarea .cp-editor-spoiler {
+  border-radius: 5px;
+  padding: 0 4px;
+  background: rgba(255,255,255,0.1);
+  color: rgba(240, 237, 232, 0.55);
+  border-bottom: 1px dashed rgba(240, 237, 232, 0.35);
+}
+.cp-textarea blockquote {
+  margin: 6px 0;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid rgba(240, 237, 232, 0.35);
+  color: rgba(240, 237, 232, 0.72);
+}
+.cp-textarea .cp-editor-hashtag {
+  color: #9ecbff;
+  font-weight: 600;
 }
 .cp-preview {
   margin-bottom: 16px;
@@ -1449,52 +1495,27 @@ function isTouchFormatUi(): boolean {
   );
 }
 
-/** Approximate selected text rect inside a textarea (for floating format bar). */
-function getTextareaSelectionAnchor(el: HTMLTextAreaElement): { x: number; y: number } {
-  const style = window.getComputedStyle(el);
-  const mirror = document.createElement('div');
-  const props = [
-    'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
-    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
-    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-    'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize', 'fontFamily',
-    'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textIndent',
-    'whiteSpace', 'wordWrap', 'wordBreak',
-  ] as const;
-  mirror.style.position = 'absolute';
-  mirror.style.visibility = 'hidden';
-  mirror.style.whiteSpace = 'pre-wrap';
-  mirror.style.wordWrap = 'break-word';
-  mirror.style.overflow = 'auto';
-  mirror.style.left = '-9999px';
-  mirror.style.top = '0';
-  const mirrorStyle = mirror.style as CSSStyleDeclaration & Record<string, string>;
-  const srcStyle = style as CSSStyleDeclaration & Record<string, string>;
-  for (const prop of props) {
-    mirrorStyle[prop] = srcStyle[prop];
+/** Floating format bar position from the live DOM selection. */
+function getDomSelectionAnchor(fallbackEl: HTMLElement | null): { x: number; y: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  if (fallbackEl && !fallbackEl.contains(sel.anchorNode)) return null;
+
+  const range = sel.getRangeAt(0);
+  const rects = range.getClientRects();
+  const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) {
+    const elRect = fallbackEl?.getBoundingClientRect();
+    if (!elRect) return null;
+    return {
+      x: Math.min(Math.max(elRect.left + elRect.width / 2, 12), window.innerWidth - 12),
+      y: Math.min(Math.max(elRect.top - 10, 56), window.innerHeight - 12),
+    };
   }
-  mirror.style.width = `${el.clientWidth}px`;
-  mirror.style.height = `${el.clientHeight}px`;
-
-  const before = document.createTextNode(el.value.slice(0, el.selectionStart));
-  const mark = document.createElement('span');
-  mark.textContent = el.value.slice(el.selectionStart, el.selectionEnd) || '\u200b';
-  mirror.appendChild(before);
-  mirror.appendChild(mark);
-  document.body.appendChild(mirror);
-  mirror.scrollTop = el.scrollTop;
-  mirror.scrollLeft = el.scrollLeft;
-
-  const elRect = el.getBoundingClientRect();
-  const markRect = mark.getBoundingClientRect();
-  const mirrorRect = mirror.getBoundingClientRect();
-  document.body.removeChild(mirror);
-
-  const x = elRect.left + (markRect.left - mirrorRect.left) + markRect.width / 2;
-  const y = elRect.top + (markRect.top - mirrorRect.top) - 10;
-  const clampedX = Math.min(Math.max(x, 12), window.innerWidth - 12);
-  const clampedY = Math.min(Math.max(y, 56), window.innerHeight - 12);
-  return { x: clampedX, y: clampedY };
+  return {
+    x: Math.min(Math.max(rect.left + rect.width / 2, 12), window.innerWidth - 12),
+    y: Math.min(Math.max(rect.top - 10, 56), window.innerHeight - 12),
+  };
 }
 
 // ── Create Post Block ──
@@ -1505,9 +1526,9 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeMediaType, setActiveMediaType] = useState<'photo' | 'video' | 'audio' | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatMenuState | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const formatMenuRef = useRef<HTMLDivElement>(null);
-  const savedSelectionRef = useRef<{ start: number; end: number } | null>(null);
+  const savedRangeRef = useRef<Range | null>(null);
   const selectionTimerRef = useRef<number | null>(null);
   const formatMenuModeRef = useRef<FormatMenuState['mode'] | null>(null);
   formatMenuModeRef.current = formatMenu?.mode ?? null;
@@ -1516,52 +1537,58 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
+  const syncContentFromEditor = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    setContent(serializeFeedEditor(el));
+  }, []);
+
   const closeFormatMenu = useCallback(() => {
     setFormatMenu(null);
   }, []);
 
   const rememberSelection = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return null;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    if (start === end) {
-      savedSelectionRef.current = null;
+    const el = editorRef.current;
+    const sel = window.getSelection();
+    if (!el || !sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      savedRangeRef.current = null;
       return null;
     }
-    savedSelectionRef.current = { start, end };
-    return savedSelectionRef.current;
+    if (!el.contains(sel.anchorNode)) {
+      savedRangeRef.current = null;
+      return null;
+    }
+    const range = sel.getRangeAt(0).cloneRange();
+    savedRangeRef.current = range;
+    return range;
   }, []);
 
   const applyFormat = useCallback((action: FormatAction) => {
-    const el = textareaRef.current;
-    const saved = savedSelectionRef.current;
-    const start = saved?.start ?? el?.selectionStart ?? content.length;
-    const end = saved?.end ?? el?.selectionEnd ?? content.length;
-    const next = applyFeedFormat(content, start, end, action);
-    setContent(next.value);
-    savedSelectionRef.current = {
-      start: next.selectionStart,
-      end: next.selectionEnd,
-    };
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    applyFeedEditorFormat(action, savedRangeRef.current);
+    syncContentFromEditor();
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && el.contains(sel.anchorNode)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    } else {
+      savedRangeRef.current = null;
+    }
+
     closeFormatMenu();
     requestAnimationFrame(() => {
-      const field = textareaRef.current;
-      if (!field) return;
-      field.focus();
-      field.setSelectionRange(next.selectionStart, next.selectionEnd);
-      // Keep mobile bar open after formatting if still selecting
-      if (isTouchFormatUi() && next.selectionStart !== next.selectionEnd) {
-        const anchor = getTextareaSelectionAnchor(field);
-        setFormatMenu({ mode: 'bar', x: anchor.x, y: anchor.y });
-      }
+      if (!isTouchFormatUi()) return;
+      const anchor = getDomSelectionAnchor(el);
+      if (anchor) setFormatMenu({ mode: 'bar', x: anchor.x, y: anchor.y });
     });
-  }, [closeFormatMenu, content]);
+  }, [closeFormatMenu, syncContentFromEditor]);
 
-  const openContextMenu = useCallback((e: React.MouseEvent<HTMLTextAreaElement>) => {
+  const openContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (isTouchFormatUi()) return;
-    const sel = rememberSelection();
-    if (!sel) return;
+    const range = rememberSelection();
+    if (!range) return;
     e.preventDefault();
     const pad = 8;
     const menuW = 220;
@@ -1573,24 +1600,27 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
 
   const syncMobileSelectionBar = useCallback(() => {
     if (!isTouchFormatUi()) return;
-    const el = textareaRef.current;
+    const el = editorRef.current;
     if (!el || document.activeElement !== el) {
       if (formatMenu?.mode === 'bar') closeFormatMenu();
       return;
     }
-    const sel = rememberSelection();
-    if (!sel) {
+    const range = rememberSelection();
+    if (!range) {
       if (formatMenu?.mode === 'bar') closeFormatMenu();
       return;
     }
-    const anchor = getTextareaSelectionAnchor(el);
+    const anchor = getDomSelectionAnchor(el);
+    if (!anchor) {
+      if (formatMenu?.mode === 'bar') closeFormatMenu();
+      return;
+    }
     setFormatMenu({ mode: 'bar', x: anchor.x, y: anchor.y });
   }, [closeFormatMenu, formatMenu?.mode, rememberSelection]);
 
   const scheduleMobileBar = useCallback(() => {
     if (!isTouchFormatUi()) return;
     if (selectionTimerRef.current) window.clearTimeout(selectionTimerRef.current);
-    // Wait until native long-press selection settles
     selectionTimerRef.current = window.setTimeout(() => {
       syncMobileSelectionBar();
     }, 180);
@@ -1602,7 +1632,7 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node | null;
       if (formatMenuRef.current?.contains(target)) return;
-      if (textareaRef.current?.contains(target) && formatMenu.mode === 'bar') return;
+      if (editorRef.current?.contains(target) && formatMenu.mode === 'bar') return;
       closeFormatMenu();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -1632,7 +1662,7 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
     };
   }, []);
 
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!(e.ctrlKey || e.metaKey)) return;
     const key = e.key.toLowerCase();
     if (key === 'b') {
@@ -1656,6 +1686,13 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
       rememberSelection();
       applyFormat('quote');
     }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+    syncContentFromEditor();
   };
 
   const handleFileSelect = (type: 'photo' | 'video' | 'audio') => {
@@ -1697,12 +1734,15 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
   };
 
   const handleSubmit = async () => {
-    if (!content.trim() && files.length === 0) return;
+    const el = editorRef.current;
+    const markup = el ? serializeFeedEditor(el) : content;
+    if (!markup.trim() && files.length === 0) return;
 
     setIsSubmitting(true);
     try {
-      await postsApi.createPost(content, files);
+      await postsApi.createPost(markup, files);
 
+      if (el) el.innerHTML = '';
       setContent('');
       setFiles([]);
       setPreviews([]);
@@ -1720,15 +1760,23 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
 
   return (
     <div className="cp-card">
-      <textarea
-        ref={textareaRef}
+      <div
+        ref={editorRef}
         className="cp-textarea"
-        value={content}
-        onChange={(e) => {
-          setContent(e.target.value);
+        contentEditable
+        role="textbox"
+        aria-multiline="true"
+        aria-label="Текст публикации"
+        data-placeholder="Что у вас нового?"
+        suppressContentEditableWarning
+        onInput={() => {
+          const el = editorRef.current;
+          if (el && isFeedEditorEmpty(el)) el.innerHTML = '';
+          syncContentFromEditor();
           if (formatMenu?.mode === 'menu') closeFormatMenu();
         }}
-        onKeyDown={handleTextareaKeyDown}
+        onKeyDown={handleEditorKeyDown}
+        onPaste={handlePaste}
         onContextMenu={openContextMenu}
         onSelect={scheduleMobileBar}
         onTouchEnd={scheduleMobileBar}
@@ -1736,18 +1784,15 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
           if (isTouchFormatUi()) scheduleMobileBar();
         }}
         onBlur={() => {
-          // Delay so format button taps still receive the click
           window.setTimeout(() => {
             if (formatMenuModeRef.current !== 'bar') return;
             if (formatMenuRef.current?.contains(document.activeElement)) return;
             closeFormatMenu();
           }, 180);
         }}
-        placeholder="Что у вас нового?"
-        rows={3}
       />
       <p className="cp-format-hint-inline">
-        Выделите текст и нажмите правой кнопкой — формат. На телефоне плашка появится сама.
+        Выделите текст → ПКМ → формат. На телефоне плашка появится сама. Стили сразу в поле, без * и _.
       </p>
 
       {formatMenu && typeof document !== 'undefined' && createPortal(
@@ -1759,7 +1804,7 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
           aria-label="Форматирование"
           onContextMenu={(e) => e.preventDefault()}
           onMouseDown={(e) => {
-            // Keep textarea selection while clicking menu
+            // Keep selection while clicking menu
             e.preventDefault();
           }}
         >
@@ -1835,7 +1880,7 @@ function CreatePostBlock({ onPostCreated }: { onPostCreated?: () => void }) {
             <Music size={14} />
             <span>Аудио</span>
           </button>
-          
+
           {files.length > 0 && (
             <span className="cp-selected-info">
               +{files.length} файл{files.length > 1 ? 'а' : ''}

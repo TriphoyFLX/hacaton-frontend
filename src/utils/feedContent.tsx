@@ -284,3 +284,173 @@ export function applyFeedFormat(
   const selEnd = selStart + inner.length;
   return { value: next, selectionStart: selStart, selectionEnd: selEnd };
 }
+
+/** Serialize a contentEditable feed composer into Telegram-like markup for the API. */
+export function serializeFeedEditor(root: HTMLElement): string {
+  let out = '';
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += (node.textContent || '').replace(/\u00A0/g, ' ');
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === 'br') {
+      out += '\n';
+      return;
+    }
+
+    const wrap = (open: string, close: string) => {
+      const start = out.length;
+      Array.from(el.childNodes).forEach(walk);
+      const inner = out.slice(start);
+      if (!inner) return;
+      out = `${out.slice(0, start)}${open}${inner}${close}`;
+    };
+
+    if (tag === 'b' || tag === 'strong') {
+      wrap('*', '*');
+      return;
+    }
+    if (tag === 'i' || tag === 'em') {
+      wrap('_', '_');
+      return;
+    }
+    if (tag === 's' || tag === 'strike' || tag === 'del') {
+      wrap('~~', '~~');
+      return;
+    }
+    if (tag === 'code') {
+      wrap('`', '`');
+      return;
+    }
+    if (el.dataset.spoiler === '1' || el.classList.contains('cp-editor-spoiler')) {
+      wrap('||', '||');
+      return;
+    }
+    if (tag === 'blockquote') {
+      const start = out.length;
+      Array.from(el.childNodes).forEach(walk);
+      const block = out.slice(start);
+      out =
+        out.slice(0, start) +
+        block
+          .split('\n')
+          .map((line) => (line.startsWith('>') ? line : `> ${line}`))
+          .join('\n');
+      return;
+    }
+
+    const isBlock = tag === 'div' || tag === 'p' || tag === 'li' || tag === 'h1' || tag === 'h2' || tag === 'h3';
+    if (isBlock && out.length > 0 && !out.endsWith('\n')) {
+      out += '\n';
+    }
+    Array.from(el.childNodes).forEach(walk);
+  };
+
+  Array.from(root.childNodes).forEach(walk);
+  return out.replace(/\u200B/g, '').replace(/\n{3,}/g, '\n\n').trimEnd();
+}
+
+/** True when the rich editor has no meaningful text. */
+export function isFeedEditorEmpty(root: HTMLElement | null): boolean {
+  if (!root) return true;
+  const text = (root.textContent || '').replace(/\u00A0/g, ' ').replace(/\u200B/g, '').trim();
+  return text.length === 0;
+}
+
+/** Apply a format action to the current DOM selection inside a contentEditable. */
+export function applyFeedEditorFormat(action: FormatAction, savedRange: Range | null = null) {
+  const sel = window.getSelection();
+  if (!sel) return;
+
+  if (savedRange) {
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  }
+  if (sel.rangeCount === 0) return;
+
+  if (action === 'bold') {
+    document.execCommand('bold');
+    return;
+  }
+  if (action === 'italic') {
+    document.execCommand('italic');
+    return;
+  }
+  if (action === 'strike') {
+    document.execCommand('strikeThrough');
+    return;
+  }
+  if (action === 'quote') {
+    document.execCommand('formatBlock', false, 'blockquote');
+    return;
+  }
+  if (action === 'hashtag') {
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      document.execCommand('insertText', false, '#');
+      return;
+    }
+    const text = range.toString();
+    const withHash = text.startsWith('#') ? text : `#${text.replace(/^#+/, '')}`;
+    range.deleteContents();
+    const span = document.createElement('span');
+    span.className = 'cp-editor-hashtag';
+    span.textContent = withHash;
+    range.insertNode(span);
+    sel.removeAllRanges();
+    const after = document.createRange();
+    after.setStartAfter(span);
+    after.collapse(true);
+    sel.addRange(after);
+    return;
+  }
+
+  // code / spoiler — wrap selection
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) {
+    const placeholder = action === 'code' ? 'код' : 'спойлер';
+    const el =
+      action === 'code'
+        ? document.createElement('code')
+        : Object.assign(document.createElement('span'), {
+            className: 'cp-editor-spoiler',
+          });
+    if (action === 'spoiler') el.dataset.spoiler = '1';
+    el.textContent = placeholder;
+    range.insertNode(el);
+    const inner = document.createRange();
+    inner.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(inner);
+    return;
+  }
+
+  try {
+    const el =
+      action === 'code'
+        ? document.createElement('code')
+        : Object.assign(document.createElement('span'), {
+            className: 'cp-editor-spoiler',
+          });
+    if (action === 'spoiler') el.dataset.spoiler = '1';
+    range.surroundContents(el);
+  } catch {
+    const frag = range.extractContents();
+    const el =
+      action === 'code'
+        ? document.createElement('code')
+        : Object.assign(document.createElement('span'), {
+            className: 'cp-editor-spoiler',
+          });
+    if (action === 'spoiler') el.dataset.spoiler = '1';
+    el.appendChild(frag);
+    range.insertNode(el);
+  }
+}
+
