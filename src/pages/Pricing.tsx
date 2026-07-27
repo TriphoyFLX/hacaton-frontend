@@ -245,6 +245,7 @@ export default function Pricing() {
             <div className="pr-price">0 ₽ <span>/ всегда</span></div>
             <ul>
               <li>5 проектов секвенсора в облаке</li>
+              <li>До 100 МБ на проект</li>
               <li>0 AI-генераций</li>
               <li>Вокальные пресеты недоступны</li>
             </ul>
@@ -256,6 +257,7 @@ export default function Pricing() {
             <div className="pr-price">249 ₽ <span>/ 30 дней</span></div>
             <ul>
               <li>30 проектов в облаке</li>
+              <li>До 100 МБ на проект</li>
               <li>300 токенов (3 генерации)</li>
               <li>Вокальные пресеты</li>
             </ul>
@@ -268,7 +270,8 @@ export default function Pricing() {
             <h2>Platinum</h2>
             <div className="pr-price">499 ₽ <span>/ 30 дней</span></div>
             <ul>
-              <li>Безлимит функций</li>
+              <li>50 проектов в облаке</li>
+              <li>До 100 МБ на проект</li>
               <li>До 20 сохранений в облако в день</li>
               <li>700 токенов (7 генераций)</li>
               <li>Вокальные пресеты</li>

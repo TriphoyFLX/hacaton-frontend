@@ -11,6 +11,11 @@ import PublishBeatModal from '../components/PublishBeatModal';
 import { getAuthUserId } from '../lib/authToken';
 import { midiProjectsApi, type MidiProjectSummary } from '../api/midiProjects';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  const data = (error as { response?: { data?: { error?: string } } })?.response?.data;
+  return typeof data?.error === 'string' && data.error.trim() ? data.error : fallback;
+}
 import {
   EQ_GAIN_LIMIT,
   EQ_BANDS,
@@ -1791,6 +1796,7 @@ function MIDISequencer() {
     } catch (error) {
       console.error('Failed to save MIDI project:', error);
       setSaveStatus('error');
+      setLibraryError(apiErrorMessage(error, 'Не удалось сохранить проект.'));
       return false;
     }
   }, []);
@@ -2089,7 +2095,7 @@ function MIDISequencer() {
       setSaveStatus('saved');
     } catch (error) {
       console.error('Failed to create MIDI project:', error);
-      setLibraryError('Не удалось создать проект.');
+      setLibraryError(apiErrorMessage(error, 'Не удалось создать проект.'));
     } finally {
       setProjectActionLoading(false);
     }

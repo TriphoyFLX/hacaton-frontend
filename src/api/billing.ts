@@ -9,6 +9,7 @@ export type BillingSnapshot = {
   vocalPresets: boolean;
   maxCloudProjects: number | null;
   maxCloudSavesPerDay: number | null;
+  maxProjectBytes: number;
   cloudProjectCount: number;
   midiSavesToday: number;
   midiSavesRemainingToday: number | null;
