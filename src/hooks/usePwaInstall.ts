@@ -65,8 +65,11 @@ export function usePwaInstall() {
     iosSafari,
     canNativeInstall,
     canShowIosTip,
-    /** Show install blocks only when SoundLab is NOT installed on this device. */
-    canOfferInstall: !hideInstallUi,
+    /**
+     * Offer install only when we can actually install (native prompt) or iOS Safari tip.
+     * Never show a CTA that only opens an instruction alert on desktop/Android.
+     */
+    canOfferInstall: !hideInstallUi && (canNativeInstall || canShowIosTip),
     hasDeferred: Boolean(deferred),
     dismissed: snap.dismissed,
     install: promptPwaInstall,

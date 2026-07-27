@@ -679,11 +679,7 @@ export default function Sidebar() {
       window.alert(
         'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
       );
-      return;
     }
-    window.alert(
-      'SoundLab — PWA-приложение.\n\nChrome/Edge: меню → «Установить приложение».\niPhone: Safari → Поделиться → «На экран Домой».',
-    );
   };
 
   useEffect(() => {

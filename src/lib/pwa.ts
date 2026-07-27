@@ -173,9 +173,24 @@ function isSoundLabRelatedApp(app: RelatedApp): boolean {
   );
 }
 
+/** Chromium: detect installed WebAPK / desktop PWA while still in a normal tab. */
+async function queryRelatedAppsInstalled(): Promise<boolean | null> {
+  if (typeof navigator === 'undefined') return null;
+  const nav = navigator as Navigator & {
+    getInstalledRelatedApps?: () => Promise<RelatedApp[]>;
+  };
+  if (typeof nav.getInstalledRelatedApps !== 'function') return null;
+  try {
+    const apps = await nav.getInstalledRelatedApps();
+    return apps.some(isSoundLabRelatedApp);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Detect if SoundLab PWA is already installed on THIS device.
- * Uninstall is only confirmed via beforeinstallprompt (reliable Chromium signal).
+ * Uninstall is confirmed via beforeinstallprompt only after related-apps check.
  */
 export async function detectPwaInstalledOnDevice(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -185,23 +200,13 @@ export async function detectPwaInstalledOnDevice(): Promise<boolean> {
     return true;
   }
 
-  const nav = navigator as Navigator & {
-    getInstalledRelatedApps?: () => Promise<RelatedApp[]>;
-  };
-
-  if (typeof nav.getInstalledRelatedApps === 'function') {
-    try {
-      const apps = await nav.getInstalledRelatedApps();
-      if (apps.some(isSoundLabRelatedApp)) {
-        markPwaInstalledOnDevice();
-        return true;
-      }
-      // Empty / no match is NOT proof of uninstall — API is flaky across browsers.
-      // Uninstall is handled only when beforeinstallprompt fires.
-    } catch {
-      /* API unsupported / permission */
-    }
+  const related = await queryRelatedAppsInstalled();
+  if (related === true) {
+    markPwaInstalledOnDevice();
+    return true;
   }
+  // related === false / null is NOT proof of uninstall — API is flaky.
+  // Uninstall is handled in the beforeinstallprompt path after a related-apps check.
 
   return isPwaMarkedInstalledOnDevice();
 }
@@ -237,12 +242,33 @@ export function bindPwaInstallCapture() {
   const onBip = (event: Event) => {
     event.preventDefault();
     deferredPrompt = event as BeforeInstallPromptEvent;
-    // Browser only fires this when NOT already installed → treat as uninstall if we had a flag
-    if (isPwaMarkedInstalledOnDevice()) {
-      handlePwaUninstalledOnDevice();
-    } else {
+    // Keep installed UI hidden while we verify — BIP alone used to clear the flag and
+    // resurrect the banner even when the PWA was still on the device.
+    notify();
+    void (async () => {
+      const related = await queryRelatedAppsInstalled();
+      if (related === true) {
+        markPwaInstalledOnDevice();
+        deferredPrompt = null;
+        notify();
+        return;
+      }
+      // Confirmed not in related apps (or API unavailable): BIP means offer install.
+      if (isPwaMarkedInstalledOnDevice() && related === false) {
+        handlePwaUninstalledOnDevice();
+        return;
+      }
+      if (isPwaMarkedInstalledOnDevice() && related === null) {
+        // API unavailable — trust BIP only if we are not in standalone.
+        if (!isPwaStandalone()) handlePwaUninstalledOnDevice();
+        else {
+          deferredPrompt = null;
+          notify();
+        }
+        return;
+      }
       notify();
-    }
+    })();
   };
 
   const onInstalled = () => {

@@ -36,6 +36,14 @@ export default defineConfig({
         theme_color: '#050505',
         categories: ['music', 'entertainment', 'productivity'],
         prefer_related_applications: false,
+        // Lets getInstalledRelatedApps() detect an already-installed PWA in a browser tab
+        // so the install banner does not keep showing after install.
+        related_applications: [
+          {
+            platform: 'webapp',
+            url: 'https://soundlab-studio.ru/manifest.webmanifest',
+          },
+        ],
         launch_handler: {
           client_mode: ['navigate-existing', 'auto'],
         },

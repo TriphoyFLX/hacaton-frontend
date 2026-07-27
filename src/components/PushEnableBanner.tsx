@@ -8,7 +8,7 @@ import {
   supportsWebPush,
   wasPushBannerDismissed,
 } from '../lib/webPush';
-import { isPwaStandalone } from '../lib/pwa';
+import { detectPwaInstalledOnDevice, isPwaStandalone } from '../lib/pwa';
 import { useAuthStore } from '../store/authStore';
 
 const css = `
@@ -146,34 +146,52 @@ export default function PushEnableBanner() {
       return;
     }
 
-    const permission = getNotificationPermission();
-    if (permission === 'granted' && hasLocalPushEndpoint()) {
-      setVisible(false);
-      // Quietly re-sync subscription (no permission prompt)
-      void ensureWebPushSubscription();
-      return;
-    }
+    let cancelled = false;
 
-    // Desktop: never show the nudge UI (socket / tab notifications are enough)
-    if (isDesktopBrowser() || wasPushBannerDismissed()) {
-      setVisible(false);
-      return;
-    }
+    const run = async () => {
+      const permission = getNotificationPermission();
+      if (permission === 'granted' && hasLocalPushEndpoint()) {
+        if (!cancelled) setVisible(false);
+        // Quietly re-sync subscription (no permission prompt)
+        void ensureWebPushSubscription();
+        return;
+      }
 
-    if (permission === 'denied') {
-      setHint('Разрешите уведомления в настройках телефона для SoundLab, затем откройте приложение снова.');
+      // Desktop: never show the nudge UI (socket / tab notifications are enough)
+      if (isDesktopBrowser() || wasPushBannerDismissed()) {
+        if (!cancelled) setVisible(false);
+        return;
+      }
+
+      const installed = isPwaStandalone() || (await detectPwaInstalledOnDevice());
+      if (cancelled) return;
+
+      if (permission === 'denied') {
+        setHint('Разрешите уведомления в настройках телефона для SoundLab, затем откройте приложение снова.');
+        setVisible(true);
+        return;
+      }
+
+      // iOS push only works from the home-screen app — but don't nag if already installed
+      // and the user is just browsing in Safari.
+      if (isIosSafari() && !isPwaStandalone()) {
+        if (installed) {
+          setVisible(false);
+          return;
+        }
+        setHint('На iPhone: сначала «На экран Домой», потом откройте иконку и включите уведомления.');
+        setVisible(true);
+        return;
+      }
+
+      setHint('Сообщения и лайки будут приходить как на SMS, даже когда приложение закрыто.');
       setVisible(true);
-      return;
-    }
+    };
 
-    if (isIosSafari() && !isPwaStandalone()) {
-      setHint('На iPhone: сначала «На экран Домой», потом откройте иконку и включите уведомления.');
-      setVisible(true);
-      return;
-    }
-
-    setHint('Сообщения и лайки будут приходить как на SMS, даже когда приложение закрыто.');
-    setVisible(true);
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   if (!visible) return null;

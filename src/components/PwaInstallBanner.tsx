@@ -105,6 +105,8 @@ const css = `
 
 /**
  * Install prompt — hidden if SoundLab is already installed on this device.
+ * Chrome/Edge/Android: only when native install event is ready (real OS install dialog).
+ * iOS Safari: short Add-to-Home tip (Apple has no install API).
  */
 export default function PwaInstallBanner() {
   const location = useLocation();
@@ -127,29 +129,29 @@ export default function PwaInstallBanner() {
     (location.pathname.startsWith('/chats/') && location.pathname !== '/chats');
 
   useEffect(() => {
-    if (!ready || !canOfferInstall || wasPwaDismissed()) {
+    if (!ready || !canOfferInstall || wasPwaDismissed() || installedOnDevice || standalone) {
       setVisible(false);
       return;
     }
 
-    // Native install available (Chrome/Edge desktop & Android)
+    // Real install dialog available — show immediately
     if (canNativeInstall) {
       setVisible(true);
       return;
     }
 
-    // iOS tip only — no delayed spam on desktop browsers without install event
+    // iOS has no beforeinstallprompt; soft tip only
     if (!iosSafari) {
       setVisible(false);
       return;
     }
 
     const timer = window.setTimeout(() => {
-      if (!wasPwaDismissed() && canOfferInstall) setVisible(true);
+      if (!wasPwaDismissed() && canOfferInstall && !installedOnDevice) setVisible(true);
     }, 2800);
 
     return () => window.clearTimeout(timer);
-  }, [ready, canOfferInstall, canNativeInstall, iosSafari]);
+  }, [ready, canOfferInstall, canNativeInstall, iosSafari, installedOnDevice, standalone]);
 
   const onDismiss = () => {
     dismiss();
@@ -159,24 +161,17 @@ export default function PwaInstallBanner() {
   const onInstall = async () => {
     if (canNativeInstall) {
       const result = await install();
-      if (result === 'accepted') setVisible(false);
+      if (result === 'accepted' || result === 'dismissed') setVisible(false);
       return;
     }
+    // iOS: no programmatic install — open Share guidance once, then snooze banner
     if (iosSafari) {
       window.alert(
         'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
       );
-      return;
+      dismiss();
+      setVisible(false);
     }
-    // Android without BIP yet — guide to real Install, not bookmark shortcut
-    window.alert(
-      'Чтобы поставить как приложение (не ссылку):\n\n' +
-        '1. Открой сайт в Google Chrome\n' +
-        '2. Подожди 2–3 секунды и обнови страницу\n' +
-        '3. Меню ⋮ → «Установить приложение»\n\n' +
-        'Важно: не выбирай «Добавить на главный экран» / «Создать ярлык» — это просто ссылка в браузере.\n' +
-        'После установки открывай SoundLab только с новой иконки.',
-    );
   };
 
   if (!visible || immersive || standalone || installedOnDevice || !canOfferInstall) return null;
@@ -190,26 +185,21 @@ export default function PwaInstallBanner() {
         </div>
         <div className="pwa-banner-body">
           <p className="pwa-banner-title">Установить SoundLab</p>
-          {iosSafari ? (
+          {iosSafari && !canNativeInstall ? (
             <p className="pwa-banner-text">
-              Установите на домашний экран: <strong>Поделиться</strong>{' '}
+              Добавьте на домашний экран: <strong>Поделиться</strong>{' '}
               <Share size={12} style={{ display: 'inline', verticalAlign: '-2px' }} />
               {' '}→ <strong>«На экран Домой»</strong>.
             </p>
-          ) : canNativeInstall ? (
-            <p className="pwa-banner-text">
-              Поставьте как настоящее приложение: без адресной строки Chrome, со своими уведомлениями.
-            </p>
           ) : (
             <p className="pwa-banner-text">
-              Нужно <strong>«Установить приложение»</strong>, а не ярлык-ссылку.
-              Если кнопка ещё не готова — обнови страницу в Chrome и нажми снова.
+              Установите как приложение: ярлык на рабочем столе, без вкладки браузера.
             </p>
           )}
           <div className="pwa-banner-actions">
             <button type="button" className="pwa-banner-btn primary" onClick={() => void onInstall()}>
-              <Download size={14} />
-              {canNativeInstall ? 'Установить' : 'Как установить'}
+              {canNativeInstall ? <Download size={14} /> : <Share size={14} />}
+              {canNativeInstall ? 'Установить' : 'Показать шаги'}
             </button>
             <button type="button" className="pwa-banner-btn ghost" onClick={onDismiss}>
               Позже
