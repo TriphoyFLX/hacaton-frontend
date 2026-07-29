@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Wand2, Play, Download, History, Trash2 } from 'lucide-react';
-import { getAuthToken } from '../lib/authToken';
-import { API_ORIGIN } from '../api/client';
 import { Link } from 'react-router-dom';
 import { useBilling } from '../hooks/useBilling';
 import { buildEnhancedAiTags, enhanceAiLyricsPrompt } from '../utils/aiPromptEnhancer';
+import { aiApi } from '../api/ai';
 
 interface GenerationResult {
   id: number | string;
@@ -1087,31 +1086,7 @@ export default function AI() {
         model: settings.model
       };
 
-      const token = getAuthToken();
-      const response = await fetch(`${API_ORIGIN}/api/generate-music`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        let message = `API error: ${response.status}`;
-        try {
-          const errJson = await response.json();
-          message = errJson.error || message;
-          if (response.status === 402) {
-            message += ' — откройте раздел Тарифы.';
-          }
-        } catch {
-          message = `${message}`;
-        }
-        throw new Error(message);
-      }
-
-      const data = await response.json();
+      const data = await aiApi.generateMusic(requestBody);
       console.log("GENERATION RESPONSE FROM BACKEND:", data);
       void refreshBilling();
 
@@ -1180,17 +1155,8 @@ export default function AI() {
         setProgress(newProgress);
         setGeneratedAudio(prev => prev ? { ...prev, progress: newProgress } : null);
         
-        const token = getAuthToken();
-        const response = await fetch(`${API_ORIGIN}/api/check-generation/${id}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          }
-        });
-
-        if (response.ok) {
-          const result = await response.json();
+        const result = await aiApi.checkGeneration(id) as any;
+        if (result) {
           
           if (result.status === 'success' && result.result) {
             // Извлекаем аудио URLs из массива result.

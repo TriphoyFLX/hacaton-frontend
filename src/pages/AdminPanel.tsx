@@ -17,11 +17,9 @@ import {
   Music2,
   Upload,
 } from 'lucide-react';
-import { API_ORIGIN } from '../api/client';
-import { getAuthToken } from '../lib/authToken';
+import { api } from '../api/client';
 import { REPORT_REASON_OPTIONS, REPORT_STATUS_OPTIONS, reportReasonLabel, reportStatusLabel } from '../api/reports';
 
-const ADMIN_API = `${API_ORIGIN}/api/admin`;
 const PAGE_SIZE = 40;
 const ADMIN_CACHE_TTL = 30_000;
 
@@ -269,20 +267,20 @@ type ReportStatusFilter = 'OPEN' | 'REVIEWING' | 'RESOLVED' | 'DISMISSED' | 'ALL
 type ReportReasonFilter = 'ALL' | (typeof REPORT_REASON_OPTIONS)[number]['id'];
 type UserRoleFilter = 'ALL' | 'ADMIN' | 'USER';
 
-function authHeaders(): HeadersInit {
-  const token = getAuthToken();
-  return {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    'Content-Type': 'application/json',
-  };
-}
-
 async function adminFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${ADMIN_API}${path}`, { headers: authHeaders() });
-  if (!res.ok) {
-    throw new Error(res.status === 403 ? 'Нужна роль ADMIN' : `Ошибка ${res.status}`);
+  try {
+    const response = await api.get<T>(`/admin${path}`);
+    return response.data;
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status === 403) {
+      throw new Error('Нужна роль ADMIN');
+    }
+    if (status) {
+      throw new Error(`Ошибка ${status}`);
+    }
+    throw new Error(error?.message || 'Ошибка сети');
   }
-  return res.json() as Promise<T>;
 }
 
 interface Paged<T> {
@@ -701,11 +699,7 @@ export default function AdminPanel() {
   const deleteUser = async (userId: string) => {
     if (!confirm('Удалить этого пользователя?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/users/${userId}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Не удалось удалить');
+      await api.delete(`/admin/users/${userId}`);
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       setUsersTotal((n) => Math.max(0, n - 1));
     } catch {
@@ -716,11 +710,7 @@ export default function AdminPanel() {
   const banUser = async (userId: string) => {
     if (!confirm('Забанить (удалить) этого пользователя?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/users/${userId}/ban`, {
-        method: 'PATCH',
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Не удалось забанить');
+      await api.patch(`/admin/users/${userId}/ban`);
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       setUsersTotal((n) => Math.max(0, n - 1));
     } catch {
@@ -731,11 +721,7 @@ export default function AdminPanel() {
   const deletePost = async (postId: string) => {
     if (!confirm('Удалить этот пост?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/posts/${postId}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Не удалось удалить');
+      await api.delete(`/admin/posts/${postId}`);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
       setPostsTotal((n) => Math.max(0, n - 1));
     } catch {
@@ -746,11 +732,7 @@ export default function AdminPanel() {
   const deleteSoundTok = async (soundTokId: string) => {
     if (!confirm('Удалить это видео?')) return;
     try {
-      const res = await fetch(`${ADMIN_API}/soundtoks/${soundTokId}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Не удалось удалить');
+      await api.delete(`/admin/soundtoks/${soundTokId}`);
       setSoundToks((prev) => prev.filter((s) => s.id !== soundTokId));
       setSoundToksTotal((n) => Math.max(0, n - 1));
     } catch {
@@ -781,21 +763,15 @@ export default function AdminPanel() {
     let done = 0;
     const allErrors: string[] = [];
     try {
-      const token = getAuthToken();
       for (const batch of batches) {
         const form = new FormData();
         for (const f of batch) form.append('files', f, f.name);
-        const res = await fetch(`${ADMIN_API}/drumkits/greentrip/oneshots`, {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: form,
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          uploaded?: unknown[];
-          errors?: Array<{ file: string; error: string }>;
-        };
-        if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+        const data = (
+          await api.post<{ uploaded?: unknown[]; errors?: Array<{ file: string; error: string }> }>(
+            '/admin/drumkits/greentrip/oneshots',
+            form,
+          )
+        ).data;
         done += batch.length;
         setOneshotsProgress(`${done} / ${files.length}`);
         for (const e of data.errors || []) allErrors.push(`${e.file}: ${e.error}`);
@@ -815,11 +791,7 @@ export default function AdminPanel() {
   const deleteOneshot = async (fileName: string) => {
     if (!confirm(`Удалить ${fileName}?`)) return;
     try {
-      const res = await fetch(`${ADMIN_API}/drumkits/greentrip/oneshots/${encodeURIComponent(fileName)}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Не удалось удалить');
+      await api.delete(`/admin/drumkits/greentrip/oneshots/${encodeURIComponent(fileName)}`);
       setOneshots((prev) => prev.filter((s) => s.file !== fileName));
       setOneshotsOnDisk((n) => Math.max(0, n - 1));
     } catch {
@@ -833,12 +805,7 @@ export default function AdminPanel() {
   ) => {
     setReportSavingId(reportId);
     try {
-      const res = await fetch(`${ADMIN_API}/reports/${reportId}`, {
-        method: 'PATCH',
-        headers: authHeaders(),
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('Не удалось обновить');
+      await api.patch(`/admin/reports/${reportId}`, payload);
       if (payload.adminNote !== undefined) {
         setReportNotes((prev) => ({ ...prev, [reportId]: payload.adminNote || '' }));
       }

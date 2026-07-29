@@ -1,17 +1,16 @@
-import { getAuthToken } from '../lib/authToken';
-import { API_ORIGIN } from './client';
+import { api } from './client';
 
-const API_BASE = `${API_ORIGIN}/api`;
+type BattleMode = 'FRIENDLY' | 'RANKED';
+type BattleStatus =
+  | 'WAITING'
+  | 'INVITING'
+  | 'SELECTING_BEAT'
+  | 'USER1_TURN'
+  | 'USER2_TURN'
+  | 'JUDGING'
+  | 'FINISHED'
+  | 'CANCELLED';
 
-const getAuthHeaders = () => {
-  const token = getAuthToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` })
-  };
-};
-
-// Battle API types
 export interface User {
   id: string;
   username: string;
@@ -45,21 +44,16 @@ export interface BattleRatingSnapshot {
   scaleProgress: number;
 }
 
-export type QueueStatusResponse =
-  | { status: 'idle' }
-  | { status: 'waiting'; elo: number; rank: BattleRatingSnapshot; queueSize: number; joinedAt?: string }
-  | { status: 'matched'; battle: Battle };
-
 export interface Battle {
   id: string;
   title: string;
   description?: string;
-  mode?: 'FRIENDLY' | 'RANKED';
-  status: 'WAITING' | 'INVITING' | 'SELECTING_BEAT' | 'USER1_TURN' | 'USER2_TURN' | 'JUDGING' | 'FINISHED' | 'CANCELLED';
+  mode?: BattleMode;
+  status: BattleStatus;
   creatorId: string;
   beatUrl?: string;
   beatName?: string;
-  currentTurn?: 'USER1' | 'USER2'; // Текущий ход записи
+  currentTurn?: 'USER1' | 'USER2';
   winner?: 'USER1' | 'USER2' | 'DRAW';
   judgedBy?: string | null;
   judgedAt?: string | null;
@@ -103,7 +97,7 @@ export interface BattleRecording {
   id: string;
   battleId: string;
   userId: string;
-  round: 1 | 2; // Номер раунда записи
+  round: 1 | 2;
   voiceUrl: string;
   beatUrl: string;
   duration: number;
@@ -132,199 +126,6 @@ export interface BattleJudge {
   createdAt: string;
 }
 
-// API Functions
-
-// Get available users for battle invitations
-export const getAvailableUsers = async (): Promise<User[]> => {
-  const response = await fetch(`${API_BASE}/users/available`, {
-    headers: getAuthHeaders()
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch users');
-  }
-  
-  return response.json();
-};
-
-// Create new battle
-export const createBattle = async (title: string, description: string, opponentId: string): Promise<Battle> => {
-  const response = await fetch(`${API_BASE}/battles`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ title, description, opponentId })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create battle');
-  }
-  
-  return response.json();
-};
-
-// Get user's battles
-export const getUserBattles = async (): Promise<Battle[]> => {
-  const response = await fetch(`${API_BASE}/battles`, {
-    headers: getAuthHeaders()
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch battles');
-  }
-  
-  return response.json();
-};
-
-// Get pending battle invitations
-export const getBattleInvitations = async (): Promise<Battle[]> => {
-  const response = await fetch(`${API_BASE}/battles/invitations`, {
-    headers: getAuthHeaders()
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch invitations');
-  }
-  
-  return response.json();
-};
-
-// Respond to battle invitation
-export const respondToBattle = async (battleId: string, accept: boolean): Promise<void> => {
-  console.log(`Frontend: Responding to battle ${battleId}, accept=${accept}`);
-  console.log(`Frontend: Token exists:`, !!getAuthToken());
-  
-  const response = await fetch(`${API_BASE}/battles/${battleId}/respond`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ accept })
-  });
-  
-  console.log(`Frontend: Response status: ${response.status}`);
-  
-  if (!response.ok) {
-    const error = await response.json();
-    console.log(`Frontend: Error response:`, error);
-    throw new Error(error.error || 'Failed to respond to battle');
-  }
-  
-  console.log(`Frontend: Battle response successful`);
-};
-
-// Upload beat file to server
-export const uploadBeatFile = async (file: File): Promise<{ url: string }> => {
-  const formData = new FormData();
-  formData.append('beat', file);
-  
-  const token = getAuthToken();
-  console.log('Debug: Uploading beat file, token exists:', !!token);
-  console.log('Debug: File:', file.name, file.type);
-  
-  const response = await fetch(`${API_BASE}/upload/beat`, {
-    method: 'POST',
-    headers: {
-      ...(token && { Authorization: `Bearer ${token}` })
-    },
-    body: formData
-  });
-  
-  console.log('Debug: Upload response status:', response.status);
-  console.log('Debug: Upload response headers:', response.headers.get('content-type'));
-  
-  if (!response.ok) {
-    const text = await response.text();
-    console.log('Debug: Error response text:', text);
-    throw new Error(`Upload failed: ${response.status} - ${text}`);
-  }
-  
-  const result = await response.json();
-  console.log('Debug: Upload success:', result);
-  return result;
-};
-
-// Update battle beat
-export const updateBattleBeat = async (battleId: string, beatUrl: string, beatName: string): Promise<void> => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/beat`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ beatUrl, beatName })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to update beat');
-  }
-};
-
-// Update battle status
-export const updateBattleStatus = async (battleId: string, status: string): Promise<void> => {
-  console.log('Debug: Updating battle status:', battleId, 'to', status);
-  
-  const response = await fetch(`${API_BASE}/battles/${battleId}/status`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ status })
-  });
-  
-  console.log('Debug: Status update response:', response.status);
-  
-  if (!response.ok) {
-    const text = await response.text();
-    console.log('Debug: Status update error:', text);
-    const error = await response.json().catch(() => ({ error: text }));
-    throw new Error(error.error || 'Failed to update battle status');
-  }
-  
-  const result = await response.json();
-  console.log('Debug: Status update success:', result);
-};
-
-// Save battle recording
-export const saveBattleRecording = async (
-  battleId: string,
-  audioFile: File,
-  beatUrl: string,
-  duration: number,
-  recordingQuality: string = 'medium',
-  round: 1 | 2 = 1
-): Promise<BattleRecording> => {
-  const formData = new FormData();
-  formData.append('audio', audioFile);
-  formData.append('beatUrl', beatUrl);
-  formData.append('duration', duration.toString());
-  formData.append('recordingQuality', recordingQuality);
-  formData.append('round', round.toString()); // Добавляем номер раунда
-  
-  const response = await fetch(`${API_BASE}/battles/${battleId}/recordings`, {
-    method: 'POST',
-    headers: {
-      ...(getAuthToken() && { Authorization: `Bearer ${getAuthToken()}` })
-    },
-    body: formData
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to save recording');
-  }
-  
-  return response.json();
-};
-
-// Get battle recordings
-export const getBattleRecordings = async (battleId: string): Promise<BattleRecording[]> => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/recordings`, {
-    headers: getAuthHeaders()
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to get battle recordings');
-  }
-  
-  return response.json();
-};
-
 export interface SpectatorTally {
   user1: number;
   user2: number;
@@ -342,7 +143,7 @@ export interface BattleRatingResult {
   user1Score?: number | null;
   user2Score?: number | null;
   status: string;
-  mode?: 'FRIENDLY' | 'RANKED';
+  mode?: BattleMode;
   judgedBy?: string | null;
   judgedAt?: string | null;
   votingEndsAt?: string | null;
@@ -376,100 +177,208 @@ export interface JudgingFeedBattle {
   }>;
 }
 
-// Submit user rating for battle
-export const submitRating = async (battleId: string, rating: number): Promise<{
-  success: boolean;
-  message: string;
-} & BattleRatingResult> => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/rate`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ rating })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to submit rating');
-  }
-  
-  return response.json();
-};
-
-// Get peer ratings for battle (polling)
-export const getBattleRatings = async (battleId: string): Promise<BattleRatingResult> => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/ratings`, {
-    headers: getAuthHeaders()
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch ratings');
-  }
-
-  return response.json();
-};
-
-// Submit human judge verdict (ranked)
-export const submitJudgeVerdict = async (
-  battleId: string,
-  choice: 'USER1' | 'USER2',
-): Promise<{
-  success: boolean;
-  winner: 'USER1' | 'USER2';
-  judgedBy: string;
-  status: string;
-}> => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/judge-verdict`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ choice }),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Failed to submit verdict');
-  }
-  return response.json();
-};
+export type QueueStatusResponse =
+  | { status: 'idle' }
+  | { status: 'waiting'; elo: number; rank: BattleRatingSnapshot; queueSize: number; joinedAt?: string }
+  | { status: 'matched'; battle: Battle };
 
 export type JudgeQueueStatusResponse =
   | { status: 'idle' }
   | { status: 'waiting'; queueSize: number; joinedAt?: string }
   | { status: 'assigned'; battle: Battle };
 
-export const joinJudgeQueue = async (): Promise<JudgeQueueStatusResponse> => {
-  const response = await fetch(`${API_BASE}/battles/judge-queue`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Failed to join judge queue');
+type VoteStatus = {
+  status: string;
+  phase: string;
+  votingEndsAt: string | null;
+  peerGraceEndsAt: string | null;
+  voteCount: number;
+  myVote: 'USER1' | 'USER2' | null;
+  tally: SpectatorTally | null;
+  canSeeTally: boolean;
+  winner?: 'USER1' | 'USER2' | 'DRAW' | null;
+  judgedBy?: string | null;
+  minSpectatorVotes: number;
+};
+
+type ApiError = { response?: { data?: { error?: string } }; message?: string };
+const toError = (error: unknown, fallback: string) =>
+  new Error((error as ApiError)?.response?.data?.error || (error as ApiError)?.message || fallback);
+
+export const getAvailableUsers = async (): Promise<User[]> => {
+  try {
+    const response = await api.get<User[]>('/users/available');
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to fetch users');
   }
-  return response.json();
+};
+
+export const createBattle = async (title: string, description: string, opponentId: string): Promise<Battle> => {
+  try {
+    const response = await api.post<Battle>('/battles', { title, description, opponentId });
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to create battle');
+  }
+};
+
+export const getUserBattles = async (): Promise<Battle[]> => {
+  try {
+    const response = await api.get<Battle[]>('/battles');
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to fetch battles');
+  }
+};
+
+export const getBattleInvitations = async (): Promise<Battle[]> => {
+  try {
+    const response = await api.get<Battle[]>('/battles/invitations');
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to fetch invitations');
+  }
+};
+
+export const respondToBattle = async (battleId: string, accept: boolean): Promise<void> => {
+  try {
+    await api.patch(`/battles/${battleId}/respond`, { accept });
+  } catch (error) {
+    throw toError(error, 'Failed to respond to battle');
+  }
+};
+
+export const uploadBeatFile = async (file: File): Promise<{ url: string }> => {
+  try {
+    const formData = new FormData();
+    formData.append('beat', file);
+    const response = await api.post<{ url: string }>('/upload/beat', formData);
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Upload failed');
+  }
+};
+
+export const updateBattleBeat = async (battleId: string, beatUrl: string, beatName: string): Promise<void> => {
+  try {
+    await api.patch(`/battles/${battleId}/beat`, { beatUrl, beatName });
+  } catch (error) {
+    throw toError(error, 'Failed to update beat');
+  }
+};
+
+export const updateBattleStatus = async (battleId: string, status: string): Promise<void> => {
+  try {
+    await api.patch(`/battles/${battleId}/status`, { status });
+  } catch (error) {
+    throw toError(error, 'Failed to update battle status');
+  }
+};
+
+export const saveBattleRecording = async (
+  battleId: string,
+  audioFile: File,
+  beatUrl: string,
+  duration: number,
+  recordingQuality = 'medium',
+  round: 1 | 2 = 1,
+): Promise<BattleRecording> => {
+  try {
+    const formData = new FormData();
+    formData.append('audio', audioFile);
+    formData.append('beatUrl', beatUrl);
+    formData.append('duration', duration.toString());
+    formData.append('recordingQuality', recordingQuality);
+    formData.append('round', round.toString());
+    const response = await api.post<BattleRecording>(`/battles/${battleId}/recordings`, formData);
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to save recording');
+  }
+};
+
+export const getBattleRecordings = async (battleId: string): Promise<BattleRecording[]> => {
+  try {
+    const response = await api.get<BattleRecording[]>(`/battles/${battleId}/recordings`);
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to get battle recordings');
+  }
+};
+
+export const submitRating = async (
+  battleId: string,
+  rating: number,
+): Promise<{ success: boolean; message: string } & BattleRatingResult> => {
+  try {
+    const response = await api.post<{ success: boolean; message: string } & BattleRatingResult>(
+      `/battles/${battleId}/rate`,
+      { rating },
+    );
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to submit rating');
+  }
+};
+
+export const getBattleRatings = async (battleId: string): Promise<BattleRatingResult> => {
+  try {
+    const response = await api.get<BattleRatingResult>(`/battles/${battleId}/ratings`);
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to fetch ratings');
+  }
+};
+
+export const submitJudgeVerdict = async (
+  battleId: string,
+  choice: 'USER1' | 'USER2',
+): Promise<{ success: boolean; winner: 'USER1' | 'USER2'; judgedBy: string; status: string }> => {
+  try {
+    const response = await api.post<{ success: boolean; winner: 'USER1' | 'USER2'; judgedBy: string; status: string }>(
+      `/battles/${battleId}/judge-verdict`,
+      { choice },
+    );
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to submit verdict');
+  }
+};
+
+export const joinJudgeQueue = async (): Promise<JudgeQueueStatusResponse> => {
+  try {
+    const response = await api.post<JudgeQueueStatusResponse>('/battles/judge-queue');
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to join judge queue');
+  }
 };
 
 export const getJudgeQueueStatus = async (): Promise<JudgeQueueStatusResponse> => {
-  const response = await fetch(`${API_BASE}/battles/judge-queue/status`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) throw new Error('Failed to check judge queue');
-  return response.json();
+  try {
+    const response = await api.get<JudgeQueueStatusResponse>('/battles/judge-queue/status');
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to check judge queue');
+  }
 };
 
 export const leaveJudgeQueue = async (): Promise<void> => {
-  const response = await fetch(`${API_BASE}/battles/judge-queue`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) throw new Error('Failed to leave judge queue');
+  try {
+    await api.delete('/battles/judge-queue');
+  } catch (error) {
+    throw toError(error, 'Failed to leave judge queue');
+  }
 };
 
 export const getMyBattleRating = async (): Promise<BattleRatingSnapshot> => {
-  const response = await fetch(`${API_BASE}/battles/me/rating`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) throw new Error('Failed to fetch battle rating');
-  return response.json();
+  try {
+    const response = await api.get<BattleRatingSnapshot>('/battles/me/rating');
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to fetch battle rating');
+  }
 };
 
 export const joinBattleQueue = async (payload: {
@@ -477,44 +386,38 @@ export const joinBattleQueue = async (payload: {
   beatUrl: string;
   beatName?: string;
 }): Promise<QueueStatusResponse> => {
-  const response = await fetch(`${API_BASE}/battles/queue`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Failed to join queue');
+  try {
+    const response = await api.post<QueueStatusResponse>('/battles/queue', payload);
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to join queue');
   }
-  return response.json();
 };
 
 export const getBattleQueueStatus = async (): Promise<QueueStatusResponse> => {
-  const response = await fetch(`${API_BASE}/battles/queue/status`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) throw new Error('Failed to check queue');
-  return response.json();
+  try {
+    const response = await api.get<QueueStatusResponse>('/battles/queue/status');
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to check queue');
+  }
 };
 
 export const leaveBattleQueue = async (): Promise<void> => {
-  const response = await fetch(`${API_BASE}/battles/queue`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) throw new Error('Failed to leave queue');
+  try {
+    await api.delete('/battles/queue');
+  } catch (error) {
+    throw toError(error, 'Failed to leave queue');
+  }
 };
 
 export const listJudgingBattles = async (): Promise<JudgingFeedBattle[]> => {
-  const response = await fetch(`${API_BASE}/battles/judging`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Failed to list judging battles');
+  try {
+    const response = await api.get<{ battles?: JudgingFeedBattle[] }>('/battles/judging');
+    return response.data.battles || [];
+  } catch (error) {
+    throw toError(error, 'Failed to list judging battles');
   }
-  const data = await response.json();
-  return data.battles || [];
 };
 
 export const castBattleVote = async (
@@ -527,37 +430,25 @@ export const castBattleVote = async (
   tally: SpectatorTally;
   votingEndsAt: string | null;
 }> => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/vote`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ choice }),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Failed to vote');
+  try {
+    const response = await api.post<{
+      success: boolean;
+      myVote: 'USER1' | 'USER2';
+      voteCount: number;
+      tally: SpectatorTally;
+      votingEndsAt: string | null;
+    }>(`/battles/${battleId}/vote`, { choice });
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to vote');
   }
-  return response.json();
 };
 
-export const getBattleVoteStatus = async (battleId: string) => {
-  const response = await fetch(`${API_BASE}/battles/${battleId}/vote-status`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Failed to fetch vote status');
+export const getBattleVoteStatus = async (battleId: string): Promise<VoteStatus> => {
+  try {
+    const response = await api.get<VoteStatus>(`/battles/${battleId}/vote-status`);
+    return response.data;
+  } catch (error) {
+    throw toError(error, 'Failed to fetch vote status');
   }
-  return response.json() as Promise<{
-    status: string;
-    phase: string;
-    votingEndsAt: string | null;
-    peerGraceEndsAt: string | null;
-    voteCount: number;
-    myVote: 'USER1' | 'USER2' | null;
-    tally: SpectatorTally | null;
-    canSeeTally: boolean;
-    winner?: 'USER1' | 'USER2' | 'DRAW' | null;
-    judgedBy?: string | null;
-    minSpectatorVotes: number;
-  }>;
 };

@@ -1,22 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { billingApi, type PaymentKind } from '../api/billing';
+import { billingApi, type BillingCatalog, type PaymentKind, type PlanId } from '../api/billing';
 import { useBilling } from '../hooks/useBilling';
 import { useAuthStore } from '../store/authStore';
 
-const TOKEN_PACK_UI: Array<{
-  kind: Extract<PaymentKind, `TOKENS_${number}`>;
-  tokens: number;
-  gens: number;
-  price: number;
-  badge: string | null;
-  highlight?: boolean;
-}> = [
-  { kind: 'TOKENS_400', tokens: 400, gens: 4, price: 199, badge: null },
-  { kind: 'TOKENS_800', tokens: 800, gens: 8, price: 399, badge: null },
-  { kind: 'TOKENS_1200', tokens: 1200, gens: 12, price: 549, badge: '-8%' },
-  { kind: 'TOKENS_2400', tokens: 2400, gens: 24, price: 999, badge: '-16%', highlight: true },
-];
+const PLAN_ORDER: PlanId[] = ['FREE', 'PRO', 'PLATINUM'];
 
 const css = `
 .pr {
@@ -127,24 +115,53 @@ const css = `
 export default function Pricing() {
   const user = useAuthStore((s) => s.user);
   const { billing, refresh, loading } = useBilling();
+  const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [params] = useSearchParams();
 
-  const basePerGen = TOKEN_PACK_UI[0].price / TOKEN_PACK_UI[0].gens;
-
   const packs = useMemo(
-    () =>
-      TOKEN_PACK_UI.map((pack) => {
-        const compareAt = Math.round(basePerGen * pack.gens);
-        const saveRub = Math.max(0, compareAt - pack.price);
+    () => {
+      const tokenPacks = catalog?.tokenPacks
+        ? Object.values(catalog.tokenPacks).sort((a, b) => a.tokens - b.tokens)
+        : [];
+      const base = tokenPacks[0];
+      const basePerGen = base ? base.priceRub / base.generations : 0;
+      return tokenPacks.map((pack) => {
+        const compareAt = Math.round(basePerGen * pack.generations);
+        const saveRub = Math.max(0, compareAt - pack.priceRub);
         const savePercent = compareAt > 0 ? Math.round((saveRub / compareAt) * 100) : 0;
-        const perGen = Math.round((pack.price / pack.gens) * 10) / 10;
-        return { ...pack, compareAt, saveRub, savePercent, perGen };
-      }),
-    [basePerGen]
+        const perGen = Math.round((pack.priceRub / pack.generations) * 10) / 10;
+        return {
+          kind: pack.id as Extract<PaymentKind, `TOKENS_${number}`>,
+          tokens: pack.tokens,
+          gens: pack.generations,
+          price: pack.priceRub,
+          badge: pack.badge,
+          highlight: pack.id === 'TOKENS_2400',
+          compareAt,
+          saveRub,
+          savePercent,
+          perGen,
+        };
+      });
+    },
+    [catalog]
   );
+
+  useEffect(() => {
+    let active = true;
+    void billingApi
+      .catalog()
+      .then((data) => {
+        if (active) setCatalog(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     // Only after YooKassa return (or explicit paymentId) — never on a plain /pricing visit
@@ -206,6 +223,10 @@ export default function Pricing() {
   };
 
   const plan = billing?.plan || (user as any)?.plan || 'FREE';
+  const plans = catalog?.plans;
+  const free = plans?.FREE;
+  const pro = plans?.PRO;
+  const platinum = plans?.PLATINUM;
 
   return (
     <div className="pr">
@@ -244,22 +265,22 @@ export default function Pricing() {
             <h2>Free</h2>
             <div className="pr-price">0 ₽ <span>/ всегда</span></div>
             <ul>
-              <li>5 проектов секвенсора в облаке</li>
+              <li>{free?.maxCloudProjects ?? 5} проектов секвенсора в облаке</li>
               <li>До 100 МБ на проект</li>
-              <li>0 AI-генераций</li>
-              <li>Вокальные пресеты недоступны</li>
+              <li>{free?.monthlyTokens ?? 0} токенов ({Math.floor((free?.monthlyTokens ?? 0) / 100)} генераций)</li>
+              <li>{free?.vocalPresets ? 'Вокальные пресеты доступны' : 'Вокальные пресеты недоступны'}</li>
             </ul>
             <button className="pr-btn" disabled>Текущий / базовый</button>
           </article>
 
           <article className={`pr-card${plan === 'PRO' ? ' current' : ''}`}>
             <h2>Pro</h2>
-            <div className="pr-price">249 ₽ <span>/ 30 дней</span></div>
+            <div className="pr-price">{pro?.priceRub ?? 249} ₽ <span>/ 30 дней</span></div>
             <ul>
-              <li>30 проектов в облаке</li>
+              <li>{pro?.maxCloudProjects ?? 30} проектов в облаке</li>
               <li>До 100 МБ на проект</li>
-              <li>300 токенов (3 генерации)</li>
-              <li>Вокальные пресеты</li>
+              <li>{pro?.monthlyTokens ?? 300} токенов ({Math.floor((pro?.monthlyTokens ?? 300) / 100)} генерации)</li>
+              <li>{pro?.vocalPresets ? 'Вокальные пресеты' : 'Без вокальных пресетов'}</li>
             </ul>
             <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay('PLAN_PRO')}>
               {busy === 'PLAN_PRO' ? 'Переход…' : 'Оформить Pro'}
@@ -268,13 +289,13 @@ export default function Pricing() {
 
           <article className={`pr-card${plan === 'PLATINUM' ? ' current' : ''}`}>
             <h2>Platinum</h2>
-            <div className="pr-price">499 ₽ <span>/ 30 дней</span></div>
+            <div className="pr-price">{platinum?.priceRub ?? 499} ₽ <span>/ 30 дней</span></div>
             <ul>
-              <li>50 проектов в облаке</li>
+              <li>{platinum?.maxCloudProjects ?? 50} проектов в облаке</li>
               <li>До 100 МБ на проект</li>
-              <li>До 20 сохранений в облако в день</li>
-              <li>700 токенов (7 генераций)</li>
-              <li>Вокальные пресеты</li>
+              <li>До {platinum?.maxCloudSavesPerDay ?? 20} сохранений в облако в день</li>
+              <li>{platinum?.monthlyTokens ?? 700} токенов ({Math.floor((platinum?.monthlyTokens ?? 700) / 100)} генераций)</li>
+              <li>{platinum?.vocalPresets ? 'Вокальные пресеты' : 'Без вокальных пресетов'}</li>
             </ul>
             <button className="pr-btn primary" disabled={!!busy} onClick={() => void pay('PLAN_PLATINUM')}>
               {busy === 'PLAN_PLATINUM' ? 'Переход…' : 'Оформить Platinum'}
