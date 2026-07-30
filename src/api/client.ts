@@ -51,20 +51,12 @@ api.interceptors.response.use(
     const requestUrl = String(error.config?.url || '');
     const isCredentialRequest = /\/auth\/(login|register|verify-email|resend-code)$/.test(requestUrl);
     const isAuthProbe = /\/auth\/me$/.test(requestUrl);
-    if (error.response.status === 401 && getAuthToken() && !isCredentialRequest) {
+    // Only the canonical session probe is allowed to clear global auth.
+    // A 401 from an individual action can be endpoint-specific and must not
+    // throw the user out in the middle of a swipe, upload, or chat.
+    if (error.response.status === 401 && getAuthToken() && !isCredentialRequest && isAuthProbe) {
       const { useAuthStore } = await import('../store/authStore');
       useAuthStore.getState().logout();
-
-      // Soft probe failures shouldn't hard-bounce mid-upload / mid-swipe
-      if (isAuthProbe) {
-        return Promise.reject(error);
-      }
-
-      const path = window.location.pathname;
-      if (!path.startsWith('/login') && !path.startsWith('/register')) {
-        const next = encodeURIComponent(`${path}${window.location.search || ''}`);
-        window.location.href = `/login?next=${next}`;
-      }
     }
     return Promise.reject(error);
   }

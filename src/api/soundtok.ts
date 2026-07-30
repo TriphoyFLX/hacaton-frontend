@@ -76,20 +76,51 @@ export const soundTokApi = {
   createSoundTok: async (
     description: string,
     videoFile: File,
-    opts?: { soundId?: string }
+    opts?: {
+      soundId?: string;
+      signal?: AbortSignal;
+      onUploadProgress?: (event: { loaded: number; total?: number }) => void;
+    }
   ) => {
     const formData = new FormData();
     formData.append('description', description);
-    formData.append('video', videoFile);
+    // Normalize phone MediaRecorder / gallery MIME so multer never rejects the clip
+    const rawType = (videoFile.type || '').toLowerCase().split(';')[0].trim();
+    const nameLower = (videoFile.name || '').toLowerCase();
+    const isMp4 =
+      rawType.includes('mp4') ||
+      rawType.includes('quicktime') ||
+      rawType.includes('m4v') ||
+      rawType.includes('3gpp') ||
+      /\.(mp4|m4v|mov|3gp|3gpp)$/i.test(nameLower);
+    const ext = isMp4
+      ? /\.mov$/i.test(nameLower)
+        ? 'mov'
+        : 'mp4'
+      : 'webm';
+    const safeMime =
+      ext === 'mov'
+        ? 'video/quicktime'
+        : isMp4
+          ? 'video/mp4'
+          : 'video/webm';
+    const safeName = `soundtok-${Date.now()}.${ext}`;
+    const uploadBlob = new File([videoFile], safeName, {
+      type: safeMime,
+      lastModified: videoFile.lastModified || Date.now(),
+    });
+    formData.append('video', uploadBlob, safeName);
     if (opts?.soundId) {
       formData.append('soundId', opts.soundId);
     }
 
     const response = await api.post('/soundtok', formData, {
-      // Let Axios set multipart boundary; phone uploads need a longer timeout
-      timeout: 180_000,
+      // Compress + large phone uploads need a long window
+      timeout: 300_000,
+      signal: opts?.signal,
+      onUploadProgress: opts?.onUploadProgress,
     });
-    return response.data;
+    return response.data as SoundTok;
   },
 
   getSoundToks: async (opts?: {

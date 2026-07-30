@@ -309,8 +309,19 @@ export default function Header() {
   const notificationsLoadedRef = useRef(false);
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const token = useAuthStore((state) => state.token);
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const navigate = useNavigate();
   const { canOfferInstall, ready } = usePwaInstall();
+
+  const isIncomingNotification = useCallback(
+    (notification: AppNotification) => {
+      // Never treat own actions / self-targeted rows as inbox items or chimes.
+      if (!notification?.actor?.id) return true;
+      if (currentUserId && notification.actor.id === currentUserId) return false;
+      return true;
+    },
+    [currentUserId],
+  );
 
   const loadUnreadBadge = useCallback(async () => {
     if (!token) return;
@@ -326,13 +337,14 @@ export default function Header() {
     if (!token) return;
     try {
       const result = await notificationsApi.getAll();
-      setNotifications(result.items);
+      const items = result.items.filter(isIncomingNotification);
+      setNotifications(items);
       setUnreadCount(result.unreadCount);
       notificationsLoadedRef.current = true;
     } catch {
       // Keep the header usable when a request is temporarily unavailable.
     }
-  }, [token]);
+  }, [token, isIncomingNotification]);
 
   // Lightweight badge only — defer off critical path
   useEffect(() => {
@@ -357,10 +369,15 @@ export default function Header() {
     if (!token) return;
     const socket = appSocket.acquire(token);
     const onNotification = (notification: AppNotification) => {
-      setNotifications((current) => {
-        if (!notificationsLoadedRef.current) return current;
-        return [notification, ...current.filter((item) => item.id !== notification.id)];
-      });
+      // Incoming only: no chime / no inbox row for own outbound actions
+      // (e.g. message you just sent must not ding or appear in the bell).
+      if (!isIncomingNotification(notification)) return;
+      // Always show in the bell list (even before the panel was opened once)
+      setNotifications((current) => [
+        notification,
+        ...current.filter((item) => item.id !== notification.id),
+      ]);
+      notificationsLoadedRef.current = true;
       setUnreadCount((current) => current + 1);
       playNotificationSound();
     };
@@ -369,7 +386,7 @@ export default function Header() {
       socket.off('notification:new', onNotification);
       appSocket.release();
     };
-  }, [token]);
+  }, [token, isIncomingNotification]);
 
   // Unlock AudioContext on any user gesture so later socket chimes can play
   useEffect(() => {
@@ -434,14 +451,20 @@ export default function Header() {
 
   const clearNotifications = async () => {
     if (notifications.length === 0 || clearingNotifications) return;
-    if (!window.confirm('Очистить все уведомления?')) return;
+    // Desktop: clear instantly (optimistic). Mobile keeps a short confirm.
+    const isDesktop = window.matchMedia('(min-width: 769px)').matches;
+    if (!isDesktop && !window.confirm('Очистить все уведомления?')) return;
 
+    const snapshot = notifications;
+    const prevUnread = unreadCount;
     setClearingNotifications(true);
+    setNotifications([]);
+    setUnreadCount(0);
     try {
       await notificationsApi.clear();
-      setNotifications([]);
-      setUnreadCount(0);
     } catch {
+      setNotifications(snapshot);
+      setUnreadCount(prevUnread);
       window.alert('Не удалось очистить уведомления. Попробуйте ещё раз.');
     } finally {
       setClearingNotifications(false);

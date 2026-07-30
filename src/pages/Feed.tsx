@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { postsApi, Post, PostComment } from '../api/posts';
-import { API_ORIGIN } from '../api/client';
 import { Chat, chatsApi } from '../api/chats';
 import { followsApi } from '../api/follows';
 import { useAuthStore } from '../store/authStore';
@@ -17,6 +16,7 @@ import PlatinumBadge from '../components/PlatinumBadge';
 import { renderTextWithMentions } from '../utils/messageMentions';
 import { applyFeedEditorFormat, isFeedEditorEmpty, renderFeedContent, serializeFeedEditor, type FormatAction } from '../utils/feedContent';
 import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
+import { resolveMediaUrl } from '../lib/mediaUrl';
 
 // ── Styles ──
 const FONT_IMPORT = '';
@@ -487,6 +487,7 @@ ${FONT_IMPORT}
   cursor: pointer;
 }
 .post-avatar {
+  position: relative;
   flex-shrink: 0;
   width: 42px;
   height: 42px;
@@ -503,6 +504,8 @@ ${FONT_IMPORT}
   overflow: hidden;
 }
 .post-avatar img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1334,13 +1337,24 @@ ${FONT_IMPORT}
 .feed-tag-filter button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 
 @media (max-width: 768px) {
+  .feed-root {
+    width: 100%;
+    min-width: 0;
+  }
   .feed-wrapper {
-    padding: var(--page-pad-top, 20px) var(--page-pad-x, 16px) var(--page-pad-bottom, 24px);
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: var(--page-pad-top, 16px) var(--page-pad-x, 12px) var(--page-pad-bottom, 24px);
+  }
+  .feed-topbar {
+    margin-bottom: 20px;
   }
   .feed-tabs {
     width: 100%;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 18px;
   }
   .feed-tab {
     min-height: 44px;
@@ -1380,6 +1394,33 @@ ${FONT_IMPORT}
   .post-card-footer {
     padding-left: 14px;
     padding-right: 14px;
+  }
+  .post-card,
+  .post-author-row,
+  .post-author,
+  .post-author > div:last-child {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .post-author {
+    flex: 1;
+  }
+  .post-handle,
+  .post-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .post-actions-top {
+    flex-shrink: 0;
+  }
+  .post-media img,
+  .post-media video {
+    max-height: min(70svh, 520px);
+    object-fit: contain;
+  }
+  .media-audio {
+    padding: 18px 14px;
   }
   .post-comments-panel {
     margin-left: 14px;
@@ -1429,6 +1470,10 @@ ${FONT_IMPORT}
 }
 
 @media (max-width: 480px) {
+  .feed-wrapper {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
   .feed-tabs {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1440,8 +1485,31 @@ ${FONT_IMPORT}
     grid-template-columns: 1fr;
   }
   .post-footer-row {
-    flex-wrap: wrap;
-    gap: 4px;
+    width: 100%;
+    gap: 0;
+  }
+  .stat-btn {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    padding: 8px 4px;
+  }
+  .post-card {
+    border-radius: 11px;
+  }
+  .post-card-header,
+  .post-body,
+  .post-card-footer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .post-avatar {
+    width: 38px;
+    height: 38px;
+  }
+  .btn-follow {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 }
 `;
@@ -1946,6 +2014,7 @@ function PostCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [votingCommentId, setVotingCommentId] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null);
+  const [failedMediaUrls, setFailedMediaUrls] = useState<Record<string, true>>({});
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   const resizeCommentField = (el: HTMLTextAreaElement | null) => {
@@ -1979,17 +2048,31 @@ function PostCard({
     const video = mediaList.find((m: any) => m?.type === 'VIDEO' && m?.url);
     const media = image || audio || video || mediaList[0];
     if (!media?.url) return null;
-    const fullUrl = media.url.startsWith('http') ? media.url : `${API_ORIGIN}${media.url}`;
+    const fullUrl = resolveMediaUrl(media.url);
+    if (!fullUrl || failedMediaUrls[fullUrl]) return null;
     const audioUrl = audio
-      ? (audio.url.startsWith('http') ? audio.url : `${API_ORIGIN}${audio.url}`)
+      ? resolveMediaUrl(audio.url)
       : null;
+    const markMediaFailed = (url: string | null) => {
+      if (url) setFailedMediaUrls((current) => ({ ...current, [url]: true }));
+    };
 
     if (image && audioUrl) {
       return (
         <div className="post-media">
-          <img src={fullUrl} alt="Cover" loading="lazy" />
+          <img
+            src={fullUrl}
+            alt="Cover"
+            loading="lazy"
+            onError={() => markMediaFailed(fullUrl)}
+          />
           <div className="media-audio" style={{ marginTop: 10 }}>
-            <audio src={audioUrl} controls className="audio-player" />
+            <audio
+              src={audioUrl || undefined}
+              controls
+              className="audio-player"
+              onError={() => markMediaFailed(audioUrl)}
+            />
           </div>
         </div>
       );
@@ -1999,13 +2082,26 @@ function PostCard({
       case 'IMAGE':
         return (
           <div className="post-media">
-            <img src={fullUrl} alt="Post" loading="lazy" />
+            <img
+              src={fullUrl}
+              alt="Post"
+              loading="lazy"
+              onError={() => markMediaFailed(fullUrl)}
+            />
           </div>
         );
       case 'VIDEO':
         return (
           <div className="post-media">
-            <video src={fullUrl} controls playsInline disablePictureInPicture controlsList="nopictureinpicture" />
+            <video
+              src={fullUrl}
+              controls
+              playsInline
+              preload="metadata"
+              disablePictureInPicture
+              controlsList="nopictureinpicture"
+              onError={() => markMediaFailed(fullUrl)}
+            />
           </div>
         );
       case 'AUDIO':
@@ -2017,7 +2113,12 @@ function PostCard({
               ))}
             </div>
             <div className="audio-label">Аудио</div>
-            <audio src={fullUrl} controls className="audio-player" />
+            <audio
+              src={fullUrl}
+              controls
+              className="audio-player"
+              onError={() => markMediaFailed(fullUrl)}
+            />
           </div>
         );
       default:
@@ -2240,7 +2341,7 @@ function PostCard({
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 20 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.35, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
@@ -2253,11 +2354,17 @@ function PostCard({
             onClick={() => post?.author?.username && navigate(`/profile/${post.author.username}`)}
           >
             <div className="post-avatar">
-              {post.author.avatar ? (
-                <img src={post.author.avatar.startsWith('http') ? post.author.avatar : `${API_ORIGIN}${post.author.avatar}`} alt="" />
-              ) : (
-                post?.author?.username?.[0]?.toUpperCase() ?? '?'
-              )}
+              {post?.author?.username?.[0]?.toUpperCase() ?? '?'}
+              {resolveMediaUrl(post.author.avatar) ? (
+                <img
+                  src={resolveMediaUrl(post.author.avatar)!}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : null}
             </div>
             <div>
               <div className="post-handle">

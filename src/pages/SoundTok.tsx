@@ -1,9 +1,19 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import VideoFeed from '../components/VideoFeed';
 import { SoundTok, soundTokApi } from '../api/soundtok';
 import { useAuthStore } from '../store/authStore';
 import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
+import { resolveMediaUrl } from '../lib/mediaUrl';
+import {
+  cancelSoundTokUpload,
+  consumeFinishedSoundTokUploads,
+  dismissSoundTokUpload,
+  enqueueSoundTokUpload,
+  getSoundTokUploadJobs,
+  subscribeSoundTokUploads,
+  type SoundTokUploadJob,
+} from '../lib/soundtokUploadQueue';
 
 const GUEST_KEY_STORAGE = 'sl_guest_key';
 
@@ -548,7 +558,7 @@ ${FONT_IMPORT}
 
 .st-upload-progress {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   padding: 9px 11px;
   border-radius: 10px;
@@ -559,7 +569,13 @@ ${FONT_IMPORT}
   letter-spacing: 0.04em;
 }
 
-.st-upload-progress::before {
+.st-upload-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-upload-progress-row::before {
   content: '✓';
   display: grid;
   width: 16px;
@@ -569,6 +585,113 @@ ${FONT_IMPORT}
   background: var(--purple);
   color: #fff;
   font-size: 10px;
+  flex-shrink: 0;
+}
+
+.st-upload-progress.is-busy .st-upload-progress-row::before {
+  content: '';
+  border: 1.5px solid rgba(255,255,255,0.25);
+  border-top-color: #fff;
+  background: transparent;
+  animation: st-spin 0.7s linear infinite;
+}
+
+.st-upload-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+
+.st-upload-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #9b7fd4, #c4a8f5);
+  transition: width 0.15s ease;
+}
+
+.st-bg-upload {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.st-bg-upload-chip {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(18, 18, 18, 0.92);
+  border: 1px solid rgba(255,255,255,0.1);
+  backdrop-filter: blur(12px);
+  color: #f0ede8;
+  font-size: 12px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+}
+.st-bg-upload-chip strong {
+  font-weight: 700;
+}
+.st-bg-upload-chip .st-upload-bar {
+  flex: 1;
+  min-width: 0;
+}
+.st-bg-upload-chip button {
+  appearance: none;
+  border: 0;
+  background: rgba(255,255,255,0.08);
+  color: #c5c0b8;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+}
+.st-bg-upload-chip button.st-bg-cancel {
+  background: rgba(255, 90, 90, 0.18);
+  color: #ffb4b4;
+}
+.st-create-choice {
+  display: grid;
+  gap: 10px;
+}
+.st-create-choice-btn {
+  appearance: none;
+  width: 100%;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-radius: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.st-create-choice-btn:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+}
+.st-create-choice-btn strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.st-create-choice-btn span {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 /* ── LOADING ── */
@@ -703,18 +826,26 @@ ${FONT_IMPORT}
   }
 
   .st-fab {
-    left: 50%;
+    left: 14px;
     right: auto;
     bottom: calc(var(--app-bottom-nav, 0px) + 14px);
-    transform: translateX(-50%);
+    transform: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    border-color: transparent;
+    color: #fff;
     z-index: 30;
   }
 
   .st-fab:hover {
-    transform: translateX(-50%) scale(1.06);
+    transform: scale(1.06);
   }
 
   .st-root--guest .st-fab {
+    left: max(14px, env(safe-area-inset-left, 0px));
+    right: auto;
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   }
 
@@ -831,6 +962,13 @@ const IconClose = () => (
   </svg>
 );
 
+const IconVideo = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" />
+  </svg>
+);
+
 const IconUpload = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -871,39 +1009,23 @@ export default function SoundTok() {
   const [hasMore, setHasMore] = useState(() =>
     Boolean(getStalePageData<{ hasMore: boolean }>('soundtok:feed')?.hasMore),
   );
+  const [showCreateChoice, setShowCreateChoice] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [description, setDescription] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploadJobs, setUploadJobs] = useState<SoundTokUploadJob[]>(() => getSoundTokUploadJobs());
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [guestKey] = useState(() => (guestMode ? getOrCreateGuestKey() : undefined));
   const [sharedLoadError, setSharedLoadError] = useState(false);
+  const [feedRevision, setFeedRevision] = useState(0);
   const PAGE_SIZE = 8;
 
   const sharedVideoId = (searchParams.get('v') || '').trim() || null;
   const openCommentsFromQuery = searchParams.get('c') === '1';
   const hasVideos = soundToks.length > 0;
-  const [mobileChrome, setMobileChrome] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches,
-  );
   const authNext = encodeURIComponent(
     sharedVideoId ? `/soundtok?v=${encodeURIComponent(sharedVideoId)}` : '/soundtok'
   );
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 1024px)');
-    const sync = () => setMobileChrome(mq.matches);
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
-
-  useEffect(() => {
-    if (!guestMode) return;
-    const root = document.documentElement;
-    if (hasVideos && mobileChrome) root.classList.add('sl-soundtok-chrome');
-    else root.classList.remove('sl-soundtok-chrome');
-    return () => root.classList.remove('sl-soundtok-chrome');
-  }, [guestMode, hasVideos, mobileChrome]);
 
   const orderedSoundToks = useMemo(() => {
     if (!sharedVideoId || soundToks.length === 0) return soundToks;
@@ -913,7 +1035,16 @@ export default function SoundTok() {
     return [selected, ...soundToks.slice(0, index), ...soundToks.slice(index + 1)];
   }, [soundToks, sharedVideoId]);
 
-  const initialIndex = 0;
+  const resumeIdRef = useRef(
+    typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('soundtok:resumeId') : null
+  );
+  const initialIndex = useMemo(() => {
+    if (sharedVideoId) return 0;
+    const resumeId = resumeIdRef.current;
+    if (!resumeId || orderedSoundToks.length === 0) return 0;
+    const idx = orderedSoundToks.findIndex((tok) => tok.id === resumeId);
+    return idx >= 0 ? idx : 0;
+  }, [orderedSoundToks, sharedVideoId]);
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -924,7 +1055,7 @@ export default function SoundTok() {
     navigate(`/login?next=${authNext}`);
   }, [navigate, authNext]);
 
-  const fetchSoundToks = async () => {
+  const fetchSoundToks = useCallback(async (opts?: { silent?: boolean }) => {
     try {
       setSharedLoadError(false);
       if (guestMode) {
@@ -943,7 +1074,7 @@ export default function SoundTok() {
       }
 
       const stale = getStalePageData<{ items: SoundTok[]; hasMore: boolean }>('soundtok:feed');
-      if (!stale && !sharedVideoId) setLoading(true);
+      if (!opts?.silent && !stale && !sharedVideoId) setLoading(true);
 
       const data = await soundTokApi.getSoundToks({ limit: PAGE_SIZE, offset: 0 });
       let items = data.items;
@@ -970,7 +1101,23 @@ export default function SoundTok() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [guestMode, sharedVideoId, guestKey]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void fetchSoundToks({ silent: true }).finally(() => {
+        resumeIdRef.current = null;
+        try {
+          sessionStorage.removeItem('soundtok:resumeId');
+        } catch {
+          // Private mode can block session storage.
+        }
+        setFeedRevision((value) => value + 1);
+      });
+    };
+    window.addEventListener('soundtok:refresh', onRefresh);
+    return () => window.removeEventListener('soundtok:refresh', onRefresh);
+  }, [fetchSoundToks]);
 
   const loadMoreSoundToks = useCallback(async () => {
     if (guestMode || loadingMore || !hasMore) return;
@@ -991,20 +1138,6 @@ export default function SoundTok() {
       setLoadingMore(false);
     }
   }, [guestMode, loadingMore, hasMore, soundToks.length]);
-
-  const removeBrokenSoundTok = useCallback(
-    (id: string) => {
-      setSoundToks((prev) => {
-        const next = prev.filter((tok) => tok.id !== id);
-        if (next.length === prev.length) return prev;
-        if (!sharedVideoId) {
-          setCachedPageData('soundtok:feed', { items: next, hasMore });
-        }
-        return next;
-      });
-    },
-    [hasMore, sharedVideoId],
-  );
 
   useEffect(() => {
     if (!guestMode && !sharedVideoId) {
@@ -1088,7 +1221,56 @@ export default function SoundTok() {
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
+  const openCreateMenu = () => setShowCreateChoice(true);
+
+  const insertPublishedTok = useCallback((created: SoundTok) => {
+    setSoundToks((prev) => [created, ...prev.filter((tok) => tok.id !== created.id)]);
+    setHasMore(true);
+    resumeIdRef.current = created.id;
+    try {
+      sessionStorage.setItem('soundtok:resumeId', created.id);
+    } catch {
+      /* ignore */
+    }
+    const warmUrl = resolveMediaUrl(created.videoUrl);
+    if (warmUrl) {
+      void fetch(warmUrl, { mode: 'cors', credentials: 'omit', cache: 'force-cache' }).catch(
+        () => undefined,
+      );
+      try {
+        const warm = document.createElement('video');
+        warm.preload = 'auto';
+        warm.muted = true;
+        warm.playsInline = true;
+        warm.src = warmUrl;
+        warm.load();
+      } catch {
+        /* ignore */
+      }
+    }
+    void fetchSoundToks().catch(() => undefined);
+  }, [fetchSoundToks]);
+
+  useEffect(() => {
+    const onQueue = () => {
+      setUploadJobs(getSoundTokUploadJobs());
+      const finished = consumeFinishedSoundTokUploads();
+      for (const created of finished.done) {
+        insertPublishedTok(created);
+        showToast('Видео опубликовано!', 'success');
+      }
+      for (const message of finished.errors) {
+        showToast(message, 'error');
+      }
+      for (const message of finished.cancelled) {
+        showToast(message, 'success');
+      }
+    };
+    onQueue();
+    return subscribeSoundTokUploads(onQueue);
+  }, [insertPublishedTok]);
+
+  const handleUpload = (e: React.FormEvent) => {
     e.preventDefault();
     if (!videoFile) return;
 
@@ -1098,28 +1280,15 @@ export default function SoundTok() {
       return;
     }
 
-    setUploading(true);
-    try {
-      await soundTokApi.createSoundTok(description, videoFile);
-      setDescription('');
-      setVideoFile(null);
-      setShowUpload(false);
-      await fetchSoundToks();
-      showToast('Видео опубликовано!', 'success');
-    } catch (error) {
-      console.error('Failed to upload:', error);
-      const status = (error as { response?: { status?: number; data?: { error?: string } } })?.response?.status;
-      const serverError = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      if (status === 413) {
-        showToast(serverError || 'Файл слишком большой — максимум 50 MB', 'error');
-      } else if (status === 401) {
-        showToast('Сессия истекла — войдите снова', 'error');
-      } else {
-        showToast(serverError || 'Не удалось загрузить видео', 'error');
-      }
-    } finally {
-      setUploading(false);
-    }
+    enqueueSoundTokUpload({
+      description,
+      file: videoFile,
+      forceCompress: true,
+    });
+    setDescription('');
+    setVideoFile(null);
+    setShowUpload(false);
+    showToast('Загрузка в фоне — можно листать ленту', 'success');
   };
 
   if (loading) {
@@ -1160,7 +1329,7 @@ export default function SoundTok() {
             </div>
             {!guestMode && (
               <div className="st-header-right">
-                <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
+                <button className="st-btn st-btn-gradient" onClick={openCreateMenu}>
                   <IconPlus />
                   Создать
                 </button>
@@ -1214,9 +1383,9 @@ export default function SoundTok() {
                 <div className="st-empty-desc">
                   Поделись треком, покажи процесс создания или собери первые реакции от сообщества.
                 </div>
-                <button className="st-btn st-btn-gradient" onClick={() => setShowUpload(true)}>
+                <button className="st-btn st-btn-gradient" onClick={openCreateMenu}>
                   <IconUpload />
-                  Опубликовать видео
+                  Создать видео
                 </button>
                 <div className="st-empty-hint">MP4 · MOV · WebM</div>
                 <div className="st-empty-steps" aria-label="Как начать">
@@ -1232,6 +1401,7 @@ export default function SoundTok() {
         /* Video feed with content */
         <div className="st-feed-mode">
           <VideoFeed
+            key={feedRevision}
             soundToks={orderedSoundToks}
             initialIndex={initialIndex}
             initialOpenComments={openCommentsFromQuery && !guestMode}
@@ -1239,6 +1409,7 @@ export default function SoundTok() {
             onNeedAuth={goNeedAuth}
             onLike={handleLike}
             onNearEnd={guestMode ? undefined : loadMoreSoundToks}
+            onCreateClick={guestMode ? undefined : openCreateMenu}
             onCommentCountChange={(id, count) => {
               setSoundToks((prev) =>
                 prev.map((tok) => (tok.id === id ? { ...tok, commentsCount: count } : tok))
@@ -1247,17 +1418,64 @@ export default function SoundTok() {
             onDeleted={(id) => {
               setSoundToks((prev) => prev.filter((tok) => tok.id !== id));
             }}
-            onBrokenMedia={removeBrokenSoundTok}
           />
 
           {!guestMode && (
             <button
               className="st-fab"
-              onClick={() => setShowUpload(true)}
-              title="Загрузить видео"
+              onClick={openCreateMenu}
+              title="Создать видео"
             >
               <IconPlus />
             </button>
+          )}
+
+          {!guestMode && uploadJobs.some((j) => j.phase === 'compress' || j.phase === 'upload' || j.phase === 'error' || j.phase === 'cancelled') && (
+            <div className="st-bg-upload">
+              {uploadJobs
+                .filter((j) => j.phase === 'compress' || j.phase === 'upload' || j.phase === 'error' || j.phase === 'cancelled')
+                .map((job) => (
+                  <div key={job.id} className="st-bg-upload-chip">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong>
+                        {job.phase === 'compress'
+                          ? `Сжатие ${job.percent}%`
+                          : job.phase === 'upload'
+                            ? `Отправка ${job.percent}%`
+                            : job.phase === 'cancelled'
+                              ? 'Отменено'
+                              : 'Ошибка'}
+                      </strong>
+                      <div style={{ opacity: 0.65, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {job.phase === 'error' || job.phase === 'cancelled'
+                          ? job.error
+                          : job.fileName}
+                      </div>
+                      {(job.phase === 'compress' || job.phase === 'upload') && (
+                        <div className="st-upload-bar" style={{ marginTop: 8 }} aria-hidden>
+                          <span style={{ width: `${Math.max(4, job.percent)}%` }} />
+                        </div>
+                      )}
+                    </div>
+                    {(job.phase === 'compress' || job.phase === 'upload') && (
+                      <button
+                        type="button"
+                        className="st-bg-cancel"
+                        onClick={() => cancelSoundTokUpload(job.id)}
+                        aria-label="Отменить публикацию"
+                        title="Отменить"
+                      >
+                        Отмена
+                      </button>
+                    )}
+                    {(job.phase === 'error' || job.phase === 'cancelled') && (
+                      <button type="button" onClick={() => dismissSoundTokUpload(job.id)} aria-label="Закрыть">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+            </div>
           )}
 
           {guestMode && (
@@ -1278,7 +1496,53 @@ export default function SoundTok() {
         </div>
       )}
 
-      {/* Upload modal */}
+      {/* Create chooser: record or gallery */}
+      {!guestMode && showCreateChoice && (
+        <div
+          className="st-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowCreateChoice(false);
+          }}
+        >
+          <div className="st-modal">
+            <div className="st-modal-header">
+              <div>
+                <div className="st-modal-title">Новое видео</div>
+                <div className="st-modal-subtitle">Снимите клип или загрузите из галереи</div>
+              </div>
+              <button className="st-modal-close" onClick={() => setShowCreateChoice(false)}>
+                <IconClose />
+              </button>
+            </div>
+            <div className="st-create-choice">
+              <button
+                type="button"
+                className="st-create-choice-btn"
+                onClick={() => {
+                  setShowCreateChoice(false);
+                  navigate('/soundtok/record');
+                }}
+              >
+                <strong>Снять видео</strong>
+                <span>Камера · зум · до 30 секунд</span>
+              </button>
+              <button
+                type="button"
+                className="st-create-choice-btn"
+                onClick={() => {
+                  setShowCreateChoice(false);
+                  setShowUpload(true);
+                }}
+              >
+                <strong>Загрузить из галереи</strong>
+                <span>Сжатие в фоне · сразу в ленту</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gallery upload modal */}
       {!guestMode && showUpload && (
         <div className="st-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) setShowUpload(false);
@@ -1286,8 +1550,8 @@ export default function SoundTok() {
           <div className="st-modal">
             <div className="st-modal-header">
               <div>
-                <div className="st-modal-title">Новое видео</div>
-                <div className="st-modal-subtitle">Загрузите ваш контент</div>
+                <div className="st-modal-title">Из галереи</div>
+                <div className="st-modal-subtitle">Загрузка продолжится в фоне</div>
               </div>
               <button className="st-modal-close" onClick={() => setShowUpload(false)}>
                 <IconClose />
@@ -1315,8 +1579,8 @@ export default function SoundTok() {
                     required
                     id="video-upload"
                   />
-                  <label 
-                    htmlFor="video-upload" 
+                  <label
+                    htmlFor="video-upload"
                     className={`st-file-label ${videoFile ? 'has-file' : ''}`}
                   >
                     <div className="st-file-icon">
@@ -1327,7 +1591,7 @@ export default function SoundTok() {
                         <>
                           <div className="st-file-name">{videoFile.name}</div>
                           <div className="st-file-hint">
-                            {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
+                            {(videoFile.size / (1024 * 1024)).toFixed(1)} MB · сожмём для ПК
                           </div>
                         </>
                       ) : (
@@ -1340,7 +1604,11 @@ export default function SoundTok() {
                   </label>
                 </div>
                 {videoFile && (
-                  <div className="st-upload-progress">Видео готово к публикации</div>
+                  <div className="st-upload-progress">
+                    <div className="st-upload-progress-row">
+                      После «Опубликовать» можно закрыть окно — загрузка пойдёт в фоне
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -1354,21 +1622,21 @@ export default function SoundTok() {
                   rows={3}
                   maxLength={500}
                 />
-                <div style={{ 
-                  fontFamily: "'DM Mono', monospace", 
-                  fontSize: 9, 
-                  color: 'var(--text-faint)', 
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 9,
+                  color: 'var(--text-faint)',
                   textAlign: 'right',
-                  marginTop: 4 
+                  marginTop: 4
                 }}>
                   {description.length}/500
                 </div>
               </div>
 
               <div className="st-actions">
-                <button 
-                  type="button" 
-                  className="st-btn st-btn-ghost" 
+                <button
+                  type="button"
+                  className="st-btn st-btn-ghost"
                   onClick={() => {
                     setShowUpload(false);
                     setVideoFile(null);
@@ -1377,22 +1645,13 @@ export default function SoundTok() {
                 >
                   Отмена
                 </button>
-                <button 
-                  type="submit" 
-                  className="st-btn st-btn-gradient" 
-                  disabled={uploading || !videoFile}
+                <button
+                  type="submit"
+                  className="st-btn st-btn-gradient"
+                  disabled={!videoFile}
                 >
-                  {uploading ? (
-                    <>
-                      <div className="st-spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
-                      Загрузка...
-                    </>
-                  ) : (
-                    <>
-                      <IconSparkles />
-                      Опубликовать
-                    </>
-                  )}
+                  <IconSparkles />
+                  Опубликовать
                 </button>
               </div>
             </form>

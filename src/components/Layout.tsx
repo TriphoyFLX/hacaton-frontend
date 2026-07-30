@@ -149,7 +149,9 @@ export default function Layout() {
               : 'overflow-y-auto overflow-x-clip overscroll-contain md:[scrollbar-gutter:stable]'
           }`}
         >
-          <Outlet />
+          <div key={pathname} className="app-route-stage">
+            <Outlet />
+          </div>
         </main>
       </div>
 

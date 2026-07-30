@@ -63,6 +63,31 @@ if (typeof document !== 'undefined') {
     } catch {
       /* ignore */
     }
+    // Phone PWA: prefer OS portrait lock; CSS counter-rotates if lock is denied
+    const syncPhonePortrait = () => {
+      const phone = window.matchMedia('(max-width: 768px)').matches
+      if (!phone) return
+      const angle =
+        (screen.orientation && typeof screen.orientation.angle === 'number'
+          ? screen.orientation.angle
+          : typeof (window as Window & { orientation?: number }).orientation === 'number'
+            ? (window as Window & { orientation?: number }).orientation
+            : 0) || 0
+      document.documentElement.dataset.slOrient = String(angle)
+      const lock = (
+        screen.orientation as ScreenOrientation & {
+          lock?: (orientation: string) => Promise<void>
+        }
+      )?.lock
+      if (typeof lock === 'function') {
+        void lock.call(screen.orientation, 'portrait').catch(() => {
+          void lock.call(screen.orientation, 'portrait-primary').catch(() => undefined)
+        })
+      }
+    }
+    syncPhonePortrait()
+    window.addEventListener('orientationchange', syncPhonePortrait)
+    screen.orientation?.addEventListener?.('change', syncPhonePortrait)
   }
 }
 

@@ -17,7 +17,10 @@ export interface FollowActionResponse {
 
 export const followsApi = {
   getFollowingIds: async (): Promise<string[]> => {
-    const response = await api.get('/follows/following-ids');
+    const response = await api.get('/follows/following-ids', {
+      // Large follow graphs can exceed the default 20s axios timeout
+      timeout: 60_000,
+    });
     return response.data.ids;
   },
 

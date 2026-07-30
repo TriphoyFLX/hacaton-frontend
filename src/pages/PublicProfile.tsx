@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, type TouchEvent } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, Calendar, Swords, Flag } from 'lucide-react';
 import { chatsApi } from '../api/chats';
 import { profileApi, UserProfile } from '../api/profile';
@@ -13,15 +13,6 @@ import AdminBadge from '../components/AdminBadge';
 import PlatinumBadge, { isPlatinumUser, PLATINUM_PROFILE_CSS } from '../components/PlatinumBadge';
 import ReportUserModal from '../components/ReportUserModal';
 import ProfileMediaTabs from '../components/ProfileMediaTabs';
-import { getStalePageData, setCachedPageData } from '../lib/pageDataCache';
-
-function getProfileCacheKey(identifier: string) {
-  return `profile:public:${identifier.toLowerCase()}`;
-}
-
-function getProfileMediaCacheKey(identifier: string) {
-  return `profile:media:${identifier.toLowerCase()}:soundtoks:0`;
-}
 
 // ── Styles ──
 const FONT_IMPORT = '';
@@ -47,6 +38,8 @@ ${FONT_IMPORT}
   background: var(--bg);
   min-height: 100vh;
   color: var(--text-primary);
+  touch-action: pan-y;
+  will-change: transform;
 }
 
 .profile-wrapper {
@@ -169,6 +162,7 @@ ${FONT_IMPORT}
   margin-bottom: 32px;
 }
 .profile-avatar {
+  position: relative;
   flex-shrink: 0;
   width: 80px;
   height: 80px;
@@ -191,6 +185,8 @@ ${FONT_IMPORT}
   border: none;
 }
 .profile-avatar img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -516,9 +512,15 @@ ${FONT_IMPORT}
 export default function PublicProfile() {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
-  const staleProfile = username ? getStalePageData<UserProfile>(getProfileCacheKey(username)) : null;
-  const [user, setUser] = useState<UserProfile | null>(staleProfile);
-  const [loading, setLoading] = useState(() => !staleProfile);
+  const location = useLocation();
+  const cameFromSoundTok = Boolean(
+    (location.state as { fromSoundTok?: boolean } | null)?.fromSoundTok,
+  );
+  const returnSwipeStartRef = useRef({ x: 0, y: 0, at: 0 });
+  const returnSwipeAxisRef = useRef<'x' | 'y' | null>(null);
+  const [returnSwipeX, setReturnSwipeX] = useState(0);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
@@ -532,50 +534,63 @@ export default function PublicProfile() {
     const fetchUser = async () => {
       if (!username) return;
 
-      const cached = getStalePageData<UserProfile>(getProfileCacheKey(username));
-      if (cached) {
-        setUser(cached);
-        setLoading(false);
-      } else {
-        setLoading(true);
-      }
-
+      setLoading(true);
       try {
-        const [profileResult, mediaResult] = await Promise.allSettled([
-          profileApi.getPublicProfile(username),
-          profileApi.getUserSoundToks(username, { limit: 24, offset: 0 }),
-        ]);
-
-        if (mediaResult.status === 'fulfilled') {
-          setCachedPageData(getProfileMediaCacheKey(username), mediaResult.value);
-        }
-
-        if (profileResult.status !== 'fulfilled') {
-          throw profileResult.reason;
-        }
-
-        const data = profileResult.value;
-        setCachedPageData(getProfileCacheKey(username), data);
+        const data = await profileApi.getPublicProfile(username);
         setUser(data);
         if (currentUser?.id !== data.id) addRecentProfile(data);
         setIsFollowing(!!data.isFollowing);
         setFollowersCount(data.followersCount ?? 0);
         // Canonicalize URL after username rename / case differences
         if (data.username && data.username !== username) {
-          navigate(`/profile/${data.username}`, { replace: true });
+          navigate(`/profile/${data.username}`, { replace: true, state: location.state });
         }
       } catch (error) {
         console.error('Failed to fetch user:', error);
-        if (!cached) {
-          setUser(null);
-        }
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
     fetchUser();
-  }, [username, currentUser?.id, navigate]);
+  }, [username, currentUser?.id, navigate, location.state]);
+
+  const handleReturnSwipeStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (!cameFromSoundTok || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    returnSwipeStartRef.current = { x: touch.clientX, y: touch.clientY, at: Date.now() };
+    returnSwipeAxisRef.current = null;
+  };
+
+  const handleReturnSwipeMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!cameFromSoundTok || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - returnSwipeStartRef.current.x;
+    const dy = touch.clientY - returnSwipeStartRef.current.y;
+    if (!returnSwipeAxisRef.current && Math.max(Math.abs(dx), Math.abs(dy)) > 10) {
+      returnSwipeAxisRef.current = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+    }
+    if (returnSwipeAxisRef.current === 'x' && dx > 0) {
+      setReturnSwipeX(Math.min(window.innerWidth, dx));
+    }
+  };
+
+  const handleReturnSwipeEnd = () => {
+    if (!cameFromSoundTok) return;
+    const elapsed = Math.max(1, Date.now() - returnSwipeStartRef.current.at);
+    const velocity = returnSwipeX / elapsed;
+    const shouldReturn =
+      returnSwipeAxisRef.current === 'x' &&
+      (returnSwipeX > Math.min(110, window.innerWidth * 0.28) || velocity > 0.65);
+    returnSwipeAxisRef.current = null;
+    if (shouldReturn) {
+      setReturnSwipeX(window.innerWidth);
+      window.setTimeout(() => navigate(-1), 140);
+      return;
+    }
+    setReturnSwipeX(0);
+  };
 
   const handleFollow = async () => {
     if (!user || followLoading || currentUser?.id === user.id) return;
@@ -656,7 +671,20 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className="profile-root">
+    <div
+      className="profile-root"
+      style={{
+        transform: returnSwipeX ? `translate3d(${returnSwipeX}px, 0, 0)` : undefined,
+        transition: returnSwipeAxisRef.current === 'x' ? 'none' : 'transform 160ms ease-out',
+      }}
+      onTouchStart={handleReturnSwipeStart}
+      onTouchMove={handleReturnSwipeMove}
+      onTouchEnd={handleReturnSwipeEnd}
+      onTouchCancel={() => {
+        returnSwipeAxisRef.current = null;
+        setReturnSwipeX(0);
+      }}
+    >
       <style>{css}</style>
       <style>{PLATINUM_PROFILE_CSS}</style>
 
@@ -683,11 +711,17 @@ export default function PublicProfile() {
         <div className="profile-header">
           <div className={isPlatinumUser(user) ? 'pt-avatar-ring' : undefined}>
             <div className="profile-avatar">
+              {user.username[0].toUpperCase()}
               {user.avatar ? (
-                <img src={resolveMediaUrl(user.avatar) ?? ''} alt={user.username} />
-              ) : (
-                user.username[0].toUpperCase()
-              )}
+                <img
+                  src={resolveMediaUrl(user.avatar) ?? ''}
+                  alt={user.username}
+                  referrerPolicy="no-referrer"
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : null}
             </div>
           </div>
           <div className="profile-info">

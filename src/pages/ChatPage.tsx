@@ -16,6 +16,7 @@ import {
   insertMention,
   renderTextWithMentions,
 } from '../utils/messageMentions';
+import { isPlatinumUser } from '../components/PlatinumBadge';
 
 // ── Styles ──
 const FONT_IMPORT = '';
@@ -2573,6 +2574,10 @@ export default function ChatPage() {
 
   const acceptImageFile = (file: File | null | undefined) => {
     if (!file) return;
+    if (!isPlatinumUser(user)) {
+      setSendError('Отправка фото доступна на тарифе Platinum');
+      return;
+    }
     const looksLikeImage =
       file.type.startsWith('image/') ||
       (!file.type && /\.(jpe?g|png|gif|webp)$/i.test(file.name || ''));
@@ -3293,9 +3298,19 @@ export default function ChatPage() {
                 type="button"
                 className="attach-btn"
                 disabled={sending || isMessagingBlocked || !canSendMessages || !!editingId}
-                onClick={() => imageInputRef.current?.click()}
+                onClick={() => {
+                  if (!isPlatinumUser(user)) {
+                    setSendError('Отправка фото доступна на тарифе Platinum');
+                    return;
+                  }
+                  imageInputRef.current?.click();
+                }}
                 aria-label="Прикрепить фото"
-                title="Прикрепить фото"
+                title={
+                  isPlatinumUser(user)
+                    ? 'Прикрепить фото'
+                    : 'Отправка фото — только Platinum'
+                }
               >
                 <ImagePlus size={18} />
               </button>

@@ -29,7 +29,7 @@ const EXACT: Record<string, string> = {
   Unauthorized: 'Войдите в аккаунт, чтобы продолжить',
 
   // SoundTok / uploads
-  'Video must not exceed 15 MB': 'Видео слишком большое — максимум 15 МБ',
+  'Video must not exceed 50 MB': 'Видео слишком большое — максимум 50 МБ',
   'Video file required': 'Выберите видеофайл для загрузки',
   'Invalid video': 'Этот файл нельзя загрузить. Нужно видео (MP4, WebM или похожий формат)',
   'Invalid file type': 'Неподходящий тип файла. Загрузите видео',
@@ -51,7 +51,7 @@ const PATTERNS: Array<{ re: RegExp; message: string }> = [
   { re: /invalid credentials/i, message: EXACT['Invalid credentials'] },
   { re: /invalid email/i, message: EXACT['Invalid email address'] },
   { re: /password must/i, message: EXACT['Password must be 8–128 characters'] },
-  { re: /not exceed 15\s*mb/i, message: EXACT['Video must not exceed 15 MB'] },
+  { re: /not exceed (?:15|50)\s*mb/i, message: EXACT['Video must not exceed 50 MB'] },
   { re: /invalid file type/i, message: EXACT['Invalid file type'] },
   { re: /invalid video/i, message: EXACT['Invalid video'] },
   { re: /video file required/i, message: EXACT['Video file required'] },

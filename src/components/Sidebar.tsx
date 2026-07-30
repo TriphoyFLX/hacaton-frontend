@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -668,18 +668,30 @@ export default function Sidebar() {
   const isAdmin = user?.role === 'ADMIN';
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const avatarUrl = resolveMediaUrl(user?.avatar);
-  const { canOfferInstall, canNativeInstall, iosSafari, install, ready } = usePwaInstall();
+  const location = useLocation();
+  const { canOfferInstall, canNativeInstall, iosSafari, install, ready, clearDismiss, hasDeferred } =
+    usePwaInstall();
 
   const handleInstallClick = async () => {
-    if (canNativeInstall) {
-      await install();
+    clearDismiss();
+    if (canNativeInstall || hasDeferred) {
+      const result = await install();
+      if (result === 'unavailable') {
+        window.alert(
+          'Кнопка установки ещё не готова.\n\nОбнови страницу в Chrome/Edge и нажми снова — или меню ⋮ → «Установить приложение».',
+        );
+      }
       return;
     }
     if (iosSafari) {
       window.alert(
         'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
       );
+      return;
     }
+    window.alert(
+      'SoundLab — PWA-приложение.\n\n1. Открой сайт в Chrome или Edge\n2. Обнови страницу\n3. Меню → «Установить приложение»\n\nИли нажми «Установить на ПК» ещё раз через пару секунд после обновления.',
+    );
   };
 
   useEffect(() => {
@@ -718,6 +730,14 @@ export default function Sidebar() {
     setSoundTokAudioPreference(true);
   };
 
+  const handleSoundTokNavClick = (e: React.MouseEvent) => {
+    prepareSoundTokAudio();
+    if (location.pathname === '/soundtok') {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('soundtok:refresh'));
+    }
+  };
+
   return (
     <aside className="sb-root">
       <style>{css}</style>
@@ -753,7 +773,7 @@ export default function Sidebar() {
             to={path}
             className={linkClass}
             {...routePrefetchHandlers(path)}
-            onClick={path === '/soundtok' ? prepareSoundTokAudio : undefined}
+            onClick={path === '/soundtok' ? handleSoundTokNavClick : undefined}
           >
             <span className="sb-item-icon">{icon}</span>
             <span className="sb-item-label">{label}</span>
@@ -816,7 +836,7 @@ export default function Sidebar() {
           to="/soundtok"
           className={({ isActive }) => `sb-mobile-item${isActive ? ' active' : ''}`}
           {...routePrefetchHandlers('/soundtok')}
-          onClick={prepareSoundTokAudio}
+          onClick={handleSoundTokNavClick}
         >
           <span className="sb-mobile-icon"><IconVideo /></span>
           <span className="sb-mobile-label">SoundTok</span>

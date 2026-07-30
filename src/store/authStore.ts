@@ -164,7 +164,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (err: unknown) {
           // Only drop session on real auth rejection — keep it on offline/5xx/timeouts
           const status = (err as { response?: { status?: number } })?.response?.status;
-          if (status === 401 || status === 403) {
+          if (status === 401 || status === 403 || status === 404) {
             clearAuthSession();
             set({ user: null, token: null });
           }

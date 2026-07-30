@@ -3,6 +3,11 @@ import { useAuthStore } from '../store/authStore';
 import { profileApi, UserProfile, ValidationError } from '../api/profile';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { syncRecentProfile } from '../lib/recentProfiles';
+import {
+  getNotificationSoundVolume,
+  previewNotificationSound,
+  setNotificationSoundVolume,
+} from '../lib/notificationSound';
 import FollowListModal from '../components/FollowListModal';
 import BattleRatingCard from '../components/BattleRatingCard';
 import AdminBadge from '../components/AdminBadge';
@@ -429,6 +434,123 @@ ${FONT_IMPORT}
   border-color: var(--accent);
 }
 
+/* ── NOTIFICATION SOUND ── */
+.notif-sound-section {
+  margin: 28px 0 8px;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+}
+.notif-sound-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.notif-sound-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
+.notif-sound-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.notif-sound-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  min-width: 52px;
+}
+.notif-sound-track {
+  position: relative;
+  flex: 1;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.notif-sound-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  border-radius: 999px;
+  background: #2e2e2e;
+  border: 1px solid var(--border-mid);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  pointer-events: none;
+}
+.notif-sound-fill {
+  height: 100%;
+  width: var(--vol-pct, 70%);
+  background: linear-gradient(90deg, #c5c0b8, #f0ede8);
+  border-radius: inherit;
+}
+.notif-sound-slider {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+.notif-sound-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  background: transparent;
+  border: none;
+}
+.notif-sound-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #f0ede8;
+  border: 2px solid #0b0b0b;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.notif-sound-slider::-moz-range-track {
+  height: 10px;
+  background: transparent;
+  border: none;
+}
+.notif-sound-slider::-moz-range-progress {
+  height: 10px;
+  background: transparent;
+  border: none;
+}
+.notif-sound-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f0ede8;
+  border: 2px solid #0b0b0b;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.notif-sound-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 40px;
+  text-align: right;
+}
+
 /* ── POSTS ── */
 .posts-section {}
 .posts-empty {
@@ -593,8 +715,23 @@ export default function Profile() {
   const [bio, setBio] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
   const [listModal, setListModal] = useState<'followers' | 'following' | null>(null);
+  const [notifVolume, setNotifVolume] = useState(() => getNotificationSoundVolume());
+  const volumePreviewTimer = useRef<number | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleNotifVolumeChange = (raw: number) => {
+    const next = Math.min(1, Math.max(0, raw));
+    setNotifVolume(next);
+    setNotificationSoundVolume(next);
+    if (volumePreviewTimer.current != null) {
+      window.clearTimeout(volumePreviewTimer.current);
+    }
+    // Debounce preview so dragging isn't a wall of chimes
+    volumePreviewTimer.current = window.setTimeout(() => {
+      previewNotificationSound(next);
+    }, 80);
+  };
 
   // Load profile
   useEffect(() => {
@@ -1011,6 +1148,38 @@ export default function Profile() {
         </div>
 
         <BattleRatingCard rating={profile} />
+
+        <div className="notif-sound-section">
+          <div className="notif-sound-title">Звук уведомлений</div>
+          <p className="notif-sound-hint">
+            Минимум — без звука, максимум — громко. При движении ползунка сразу слышно пример.
+          </p>
+          <div className="notif-sound-row">
+            <span className="notif-sound-label">Тихо</span>
+            <div
+              className="notif-sound-track"
+              style={{ ['--vol-pct' as string]: `${Math.round(notifVolume * 100)}%` }}
+            >
+              <div className="notif-sound-rail" aria-hidden>
+                <div className="notif-sound-fill" />
+              </div>
+              <input
+                type="range"
+                className="notif-sound-slider"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(notifVolume * 100)}
+                onChange={(e) => handleNotifVolumeChange(Number(e.target.value) / 100)}
+                aria-label="Громкость звука уведомлений"
+              />
+            </div>
+            <span className="notif-sound-label">Громко</span>
+            <span className="notif-sound-value">
+              {notifVolume <= 0.001 ? 'Выкл' : `${Math.round(notifVolume * 100)}%`}
+            </span>
+          </div>
+        </div>
 
         {/* Details */}
         <div className="details-section">

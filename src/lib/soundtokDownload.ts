@@ -15,6 +15,7 @@ function pickRecorderMime(): string {
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
     'video/webm',
+    'video/mp4',
   ];
   for (const type of candidates) {
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
@@ -132,6 +133,28 @@ function drawWatermark(
   ctx.restore();
 }
 
+function guessExtension(url: string, mime: string): string {
+  const fromMime = mime.split(';')[0]?.trim().toLowerCase();
+  if (fromMime === 'video/mp4') return 'mp4';
+  if (fromMime === 'video/webm') return 'webm';
+  if (fromMime === 'video/quicktime') return 'mov';
+  const path = url.split('?')[0] || '';
+  const m = path.match(/\.([a-z0-9]{2,5})$/i);
+  if (m) return m[1].toLowerCase();
+  return 'mp4';
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+}
+
 export type SoundTokDownloadOptions = {
   videoUrl: string;
   /** When the clip uses a borrowed SoundTok sound, pass its audio URL. */
@@ -141,9 +164,8 @@ export type SoundTokDownloadOptions = {
 };
 
 /**
- * Re-encodes a SoundTok with a SoundLab watermark (logo + "SoundLab Studio").
- * Watermark position is randomized and moves between corners during the clip.
- * Must be called from a user gesture.
+ * Re-encodes a SoundTok with a moving SoundLab watermark (logo + "SoundLab Studio").
+ * Uses native resolution + high bitrate to keep visual quality close to the source.
  */
 export async function downloadSoundTokWithWatermark(
   opts: SoundTokDownloadOptions
@@ -159,8 +181,6 @@ export async function downloadSoundTokWithWatermark(
     opts.audioUrl && opts.audioUrl !== opts.videoUrl ? resolveMediaUrl(opts.audioUrl) : null;
 
   const video = document.createElement('video');
-  video.disablePictureInPicture = true;
-  video.setAttribute('disablepictureinpicture', '');
   video.playsInline = true;
   video.preload = 'auto';
   if (!videoSrc.startsWith(window.location.origin) && /^https?:\/\//i.test(videoSrc)) {
@@ -186,17 +206,24 @@ export async function downloadSoundTokWithWatermark(
     audio ? waitForEvent(audio, 'loadedmetadata') : Promise.resolve(),
   ]);
 
+  // Prefetch into buffer so recording doesn't stall
+  try {
+    video.currentTime = 0.001;
+    await waitForEvent(video, 'seeked', 8000);
+  } catch {
+    /* ignore */
+  }
+
   const width = Math.max(2, video.videoWidth || 720);
   const height = Math.max(2, video.videoHeight || 1280);
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) throw new Error('Canvas unavailable');
 
   const logo = await loadImage('/icons/icon-192.png');
   const watermarkPath = shuffleCorners();
-  // Change corner every ~2.4s (or sooner on short clips)
   const hopSeconds = Math.max(
     1.6,
     Math.min(
@@ -204,7 +231,8 @@ export async function downloadSoundTokWithWatermark(
       Number.isFinite(video.duration) && video.duration > 0 ? video.duration / 4 : 2.4
     )
   );
-  const canvasStream = canvas.captureStream(30);
+  const fps = 30;
+  const canvasStream = canvas.captureStream(fps);
 
   const AudioCtx =
     window.AudioContext ||
@@ -229,9 +257,11 @@ export async function downloadSoundTokWithWatermark(
 
   const mimeType = pickRecorderMime();
   const chunks: BlobPart[] = [];
+  // High bitrate ≈ source quality for typical phone vertical clips
   const recorder = new MediaRecorder(combined, {
     mimeType,
-    videoBitsPerSecond: 5_000_000,
+    videoBitsPerSecond: 12_000_000,
+    audioBitsPerSecond: 192_000,
   });
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) chunks.push(event.data);
@@ -239,13 +269,14 @@ export async function downloadSoundTokWithWatermark(
 
   const stopped = new Promise<Blob>((resolve, reject) => {
     recorder.onerror = () => reject(new Error('Ошибка записи видео'));
-    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType.split(';')[0] || 'video/webm' }));
+    recorder.onstop = () =>
+      resolve(new Blob(chunks, { type: mimeType.split(';')[0] || 'video/webm' }));
   });
 
   video.currentTime = 0;
   if (audio) audio.currentTime = 0;
   await audioCtx.resume();
-  recorder.start(250);
+  recorder.start(200);
 
   let raf = 0;
   let finished = false;
@@ -291,7 +322,6 @@ export async function downloadSoundTokWithWatermark(
   }
   raf = requestAnimationFrame(tick);
 
-  // Safety timeout: duration + buffer, or 3 minutes max
   const maxMs =
     Number.isFinite(video.duration) && video.duration > 0
       ? Math.min(180_000, Math.ceil(video.duration * 1000) + 4000)
@@ -312,12 +342,46 @@ export async function downloadSoundTokWithWatermark(
     throw new Error('Пустой файл после обработки');
   }
 
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = opts.filename || `soundlab-soundtok-${Date.now()}.webm`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const base = (opts.filename || `soundlab-soundtok-${Date.now()}`).replace(/\.[a-z0-9]+$/i, '');
+  triggerBlobDownload(blob, `${base}.${ext}`);
+  opts.onProgress?.(1);
+}
+
+/** Fast original-file download (no watermark). Used as fallback. */
+export async function downloadSoundTokFast(opts: {
+  videoUrl: string;
+  filename?: string;
+  onProgress?: (ratio: number) => void;
+}): Promise<void> {
+  const videoSrc = resolveMediaUrl(opts.videoUrl);
+  if (!videoSrc) throw new Error('Нет видео для скачивания');
+
+  opts.onProgress?.(0.05);
+
+  try {
+    const res = await fetch(videoSrc, {
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'force-cache',
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    opts.onProgress?.(0.4);
+    const blob = await res.blob();
+    if (!blob.size) throw new Error('Пустой файл');
+    opts.onProgress?.(1);
+    const ext = guessExtension(videoSrc, blob.type || res.headers.get('content-type') || '');
+    const base = (opts.filename || `soundlab-soundtok-${Date.now()}`).replace(/\.[a-z0-9]+$/i, '');
+    triggerBlobDownload(blob, `${base}.${ext}`);
+  } catch {
+    const anchor = document.createElement('a');
+    anchor.href = videoSrc;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener';
+    anchor.download = opts.filename || '';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
 }

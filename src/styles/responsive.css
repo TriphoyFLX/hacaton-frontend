@@ -16,6 +16,24 @@
     --page-pad-top: 20px;
     --page-pad-bottom: 24px;
   }
+
+  /* Compact header while watching SoundTok — more room for video */
+  .app-shell--soundtok {
+    --app-header-h: 32px;
+  }
+  .app-shell--soundtok .header-inner {
+    min-height: 32px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .app-shell--soundtok .header-btn {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  .app-shell--soundtok .header-icon {
+    width: 15px !important;
+    height: 15px !important;
+  }
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
@@ -450,14 +468,24 @@ select {
   }
 
   .vf-actions {
-    right: 6px !important;
-    bottom: 48px !important;
+    top: auto !important;
+    right: max(8px, env(safe-area-inset-right, 0px)) !important;
+    bottom: 56px !important;
+    transform: none !important;
   }
 
   .vf-bottom-info {
     left: 12px !important;
     right: 72px !important;
-    bottom: 8px !important;
+    bottom: 56px !important;
+  }
+
+  .vf-create-bar {
+    bottom: 14px !important;
+  }
+
+  .st-fab {
+    display: none !important;
   }
 }
 
@@ -761,6 +789,35 @@ select {
 .pr {
   max-width: 100%;
   overflow-x: clip;
+}
+
+.app-route-stage {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  animation: app-route-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.app-main--immersive .app-route-stage {
+  height: 100%;
+  min-height: 0;
+}
+
+@keyframes app-route-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-route-stage {
+    animation: none;
+  }
 }
 
 /* Mobile polish: kill horizontal shake + keep chrome fully visible */

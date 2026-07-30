@@ -1,10 +1,12 @@
 /**
  * Soft, calm in-app notification chime (Web Audio — no asset file).
  * Debounced so bursts of events don't spam.
+ * Volume: 0 = mute, 1 = loud (persisted in localStorage).
  */
 
 const MIN_GAP_MS = 900;
 const MUTE_KEY = 'sl_notification_sound_muted_v1';
+const VOLUME_KEY = 'sl_notification_sound_volume_v1';
 
 let audioCtx: AudioContext | null = null;
 let lastPlayedAt = 0;
@@ -18,6 +20,36 @@ function getCtx(): AudioContext | null {
   if (!AC) return null;
   if (!audioCtx) audioCtx = new AC();
   return audioCtx;
+}
+
+function clampVolume(value: number): number {
+  if (!Number.isFinite(value)) return 0.7;
+  return Math.min(1, Math.max(0, value));
+}
+
+export function getNotificationSoundVolume(): number {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY);
+    if (raw == null) {
+      // Migrate legacy mute flag → volume 0
+      if (localStorage.getItem(MUTE_KEY) === '1') return 0;
+      return 0.7;
+    }
+    return clampVolume(Number(raw));
+  } catch {
+    return 0.7;
+  }
+}
+
+export function setNotificationSoundVolume(volume: number) {
+  const next = clampVolume(volume);
+  try {
+    localStorage.setItem(VOLUME_KEY, String(next));
+    if (next <= 0.001) localStorage.setItem(MUTE_KEY, '1');
+    else localStorage.removeItem(MUTE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 function tone(
@@ -38,9 +70,8 @@ function tone(
   filter.frequency.setValueAtTime(2200, start);
   filter.Q.setValueAtTime(0.6, start);
 
-  // Soft attack / calm decay
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peak, start + 0.04);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), start + 0.04);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
   osc.connect(filter);
@@ -52,20 +83,12 @@ function tone(
 }
 
 export function isNotificationSoundMuted(): boolean {
-  try {
-    return localStorage.getItem(MUTE_KEY) === '1';
-  } catch {
-    return false;
-  }
+  return getNotificationSoundVolume() <= 0.001;
 }
 
 export function setNotificationSoundMuted(muted: boolean) {
-  try {
-    if (muted) localStorage.setItem(MUTE_KEY, '1');
-    else localStorage.removeItem(MUTE_KEY);
-  } catch {
-    /* ignore */
-  }
+  if (muted) setNotificationSoundVolume(0);
+  else if (getNotificationSoundVolume() <= 0.001) setNotificationSoundVolume(0.7);
 }
 
 async function ensureRunning(): Promise<AudioContext | null> {
@@ -81,13 +104,13 @@ async function ensureRunning(): Promise<AudioContext | null> {
   return ctx.state === 'running' ? ctx : null;
 }
 
-/** Gentle two-note chime — quiet and non-jarring. */
-export function playNotificationSound(): void {
+function playChime(volume: number, force = false): void {
   if (typeof window === 'undefined') return;
-  if (isNotificationSoundMuted()) return;
+  const vol = clampVolume(volume);
+  if (vol <= 0.001) return;
 
   const now = Date.now();
-  if (now - lastPlayedAt < MIN_GAP_MS) return;
+  if (!force && now - lastPlayedAt < MIN_GAP_MS) return;
   lastPlayedAt = now;
 
   void (async () => {
@@ -96,13 +119,30 @@ export function playNotificationSound(): void {
       if (!ctx) return;
 
       const t0 = ctx.currentTime + 0.03;
-      // Soft ascending fifth — calm “ding-dong” (audible but gentle)
-      tone(ctx, 523.25, t0, 0.48, 0.14); // C5
-      tone(ctx, 659.25, t0 + 0.16, 0.62, 0.11); // E5
+      // Wide perceptual range: quiet near 0, clearly loud near 1 (squared curve).
+      const shaped = vol * vol;
+      const peakA = 0.012 + shaped * 0.52;
+      const peakB = 0.01 + shaped * 0.4;
+      tone(ctx, 523.25, t0, 0.48, peakA); // C5
+      tone(ctx, 659.25, t0 + 0.16, 0.62, peakB); // E5
     } catch {
       /* blocked until a user gesture */
     }
   })();
+}
+
+/** Gentle two-note chime — quiet and non-jarring. */
+export function playNotificationSound(): void {
+  playChime(getNotificationSoundVolume(), false);
+}
+
+/**
+ * Preview at an explicit volume (slider drag). Bypasses mute/volume store read
+ * but still uses the given level; skips debounce gap for snappy feedback.
+ */
+export function previewNotificationSound(volume: number): void {
+  unlockNotificationSound();
+  playChime(volume, true);
 }
 
 /**

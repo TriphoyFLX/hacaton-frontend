@@ -30,13 +30,18 @@ function createSilentWavBlobUrl(): string {
 
 function readFlag(key: string): string | null {
   try {
-    return sessionStorage.getItem(key);
+    return localStorage.getItem(key) ?? sessionStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
 function writeFlag(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore quota / private mode
+  }
   try {
     sessionStorage.setItem(key, value);
   } catch {

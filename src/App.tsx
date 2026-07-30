@@ -83,6 +83,7 @@ function App() {
           <Route path="studio" element={<Lazy><Studio /></Lazy>} />
           <Route path="feed" element={<Lazy><Feed /></Lazy>} />
           <Route path="projects" element={<Lazy><Projects /></Lazy>} />
+          <Route path="soundtok/record" element={<Lazy><SoundRecordPage /></Lazy>} />
           <Route path="soundtok/sound/:id" element={<Lazy><SoundPage /></Lazy>} />
           <Route path="soundtok/sound/:id/record" element={<Lazy><SoundRecordPage /></Lazy>} />
           <Route path="profile" element={<Lazy><Profile /></Lazy>} />
