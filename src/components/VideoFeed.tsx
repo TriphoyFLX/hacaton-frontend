@@ -1980,7 +1980,7 @@ export default function VideoFeed({
   }, []);
 
   const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+    (e: WheelEvent) => {
       if (commentsOpen || isSeekingRef.current) return;
       e.preventDefault();
       enableSound();
@@ -2033,6 +2033,18 @@ export default function VideoFeed({
     },
     [commentsOpen, enableSound, goToAdjacent]
   );
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    // Wheel navigation intentionally cancels native page scroll while SoundTok is active.
+    // React's delegated wheel listener can be passive in production, so attach this one explicitly.
+    stage.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      stage.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel]);
 
   const formatSeekTime = (seconds: number) => {
     if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -2397,7 +2409,6 @@ export default function VideoFeed({
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          onWheel={handleWheel}
         >
           <div className="vf-top-bar">
             <span className="vf-top-title">SoundTok</span>
