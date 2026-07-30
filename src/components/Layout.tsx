@@ -21,6 +21,19 @@ function isImmersiveRoute(pathname: string): boolean {
 
 /** Quietly warm API payloads for the hottest tabs after chunks load. */
 function warmHotApiData() {
+  if (typeof window !== 'undefined') {
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
+      ('standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (standalone || coarse || conn?.saveData || conn?.effectiveType === '2g' || conn?.effectiveType === 'slow-2g') {
+      return;
+    }
+  }
+
   void import('../api/posts').then(({ postsApi }) => {
     if (isPageDataFresh('feed:trending:')) return;
     void postsApi
@@ -104,7 +117,7 @@ export default function Layout() {
   useEffect(() => {
     if (!token) return;
     const stopWarm = warmAppRoutes();
-    const apiTimer = window.setTimeout(() => warmHotApiData(), 1800);
+    const apiTimer = window.setTimeout(() => warmHotApiData(), 5000);
     return () => {
       stopWarm();
       window.clearTimeout(apiTimer);

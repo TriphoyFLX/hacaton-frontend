@@ -115,13 +115,14 @@ export default defineConfig({
         ],
         maximumFileSizeToCacheInBytes: 400_000,
         runtimeCaching: [
-          // Prefer network for navigations so installed PWA picks up new index.html quickly
+          // Keep installed PWA startup responsive: show the cached shell quickly,
+          // then let the SW update flow refresh stale builds in the background.
           {
             urlPattern: ({ request }) => request.mode === 'navigate',
             handler: 'NetworkFirst',
             options: {
               cacheName: 'soundlab-pages',
-              networkTimeoutSeconds: 3,
+              networkTimeoutSeconds: 1,
               expiration: {
                 maxEntries: 8,
                 maxAgeSeconds: 60 * 60 * 24,

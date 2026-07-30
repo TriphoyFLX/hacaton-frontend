@@ -1303,6 +1303,7 @@ interface VideoFeedProps {
   onNearEnd?: () => void;
   guestMode?: boolean;
   onNeedAuth?: () => void;
+  onBrokenMedia?: (id: string) => void;
 }
 
 function ShareCurvedIcon({ size = 28 }: { size?: number }) {
@@ -1328,6 +1329,7 @@ function CommentAvatar({
   onOpen: () => void;
 }) {
   const url = resolveMediaUrl(author.avatar);
+  const [broken, setBroken] = useState(false);
   const label = (author.displayName || author.username)[0]?.toUpperCase() ?? '?';
 
   return (
@@ -1338,7 +1340,11 @@ function CommentAvatar({
       title={`@${author.username}`}
       aria-label={`Профиль @${author.username}`}
     >
-      {url ? <img src={url} alt={author.username} /> : label}
+      {url && !broken ? (
+        <img src={url} alt={author.username} onError={() => setBroken(true)} />
+      ) : (
+        label
+      )}
     </button>
   );
 }
@@ -1353,6 +1359,7 @@ export default function VideoFeed({
   onNearEnd,
   guestMode = false,
   onNeedAuth,
+  onBrokenMedia,
 }: VideoFeedProps) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
@@ -2486,6 +2493,10 @@ export default function VideoFeed({
                 onPlaying={() => {
                   if (index === currentIndex) setVideoLoading(false);
                 }}
+                onError={() => {
+                  if (index === currentIndex) setVideoLoading(false);
+                  onBrokenMedia?.(soundTok.id);
+                }}
                 onTimeUpdate={() => {
                   if (index !== currentIndex || !usesExternalSound(soundTok)) return;
                   const bed = bedAudioRefs.current[index];
@@ -2693,7 +2704,13 @@ export default function VideoFeed({
                         }}
                       >
                         {authorAvatar ? (
-                          <img src={authorAvatar} alt={soundTok.author.username} />
+                          <img
+                            src={authorAvatar}
+                            alt={soundTok.author.username}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
                         ) : (
                           (soundTok.author?.username?.[0] ?? 'U').toUpperCase()
                         )}
@@ -2836,7 +2853,13 @@ export default function VideoFeed({
                       aria-label="Открыть звук"
                     >
                       {soundAvatar ? (
-                        <img src={soundAvatar} alt="" />
+                        <img
+                          src={soundAvatar}
+                          alt=""
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                       ) : (
                         <span className="vf-music-disc-letter">
                           {(soundAuthor?.username?.[0] || soundTok.author?.username?.[0] || 'S').toUpperCase()}

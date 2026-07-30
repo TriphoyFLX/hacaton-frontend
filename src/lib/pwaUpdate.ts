@@ -30,15 +30,15 @@ export function startPwaAutoUpdate(
 
   const reg = registration as RegistrationLike;
 
-  // If an update was already installed but stuck waiting, activate it now.
-  activateWaiting(reg);
+  // Do not interrupt cold start: activate a waiting worker after first paint/interaction window.
+  window.setTimeout(() => activateWaiting(reg), 8_000);
 
   reg.addEventListener('updatefound', () => {
     const installing = reg.installing;
     if (!installing) return;
     installing.addEventListener('statechange', () => {
       if (installing.state === 'installed') {
-        activateWaiting(reg);
+        window.setTimeout(() => activateWaiting(reg), 2_000);
       }
     });
   });
@@ -57,11 +57,11 @@ export function startPwaAutoUpdate(
   // Foreground poll — background timers often freeze on mobile PWAs
   window.setInterval(() => {
     if (document.visibilityState === 'visible') ping(reg);
-  }, 60 * 1000);
+  }, 5 * 60 * 1000);
 
-  // First checks soon after launch (covers cold start from home screen)
-  window.setTimeout(() => ping(reg), 3_000);
-  window.setTimeout(() => ping(reg), 15_000);
+  // First checks after launch, but not during the critical startup window.
+  window.setTimeout(() => ping(reg), 20_000);
+  window.setTimeout(() => ping(reg), 2 * 60_000);
 }
 
 /** Reload once when the new SW takes control. */

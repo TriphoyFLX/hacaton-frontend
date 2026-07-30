@@ -28,6 +28,27 @@ const EXTRA_LOADERS: Loader[] = [
 
 const warmed = new Set<string>();
 
+function isStandalonePwa(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
+    ('standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone))
+  );
+}
+
+function isCoarsePointer(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+}
+
+function keepStartupLight(): boolean {
+  if (isStandalonePwa() || isCoarsePointer()) return true;
+  if (typeof navigator === 'undefined') return false;
+  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return typeof memory === 'number' && memory <= 4;
+}
+
 function shouldWarmRoutes(): boolean {
   if (typeof navigator === 'undefined') return true;
   const conn = (navigator as Navigator & {
@@ -90,11 +111,12 @@ export function prefetchRoute(path: string): void {
 /** Prefetch handlers for NavLink — pointer/focus warm the chunk before click. */
 export function routePrefetchHandlers(path: string) {
   const run = () => prefetchRoute(path);
-  return {
+  const handlers = {
     onMouseEnter: run,
     onFocus: run,
-    onTouchStart: run,
   };
+  if (keepStartupLight()) return handlers;
+  return { ...handlers, onTouchStart: run };
 }
 
 type WarmHandle = { kind: 'idle'; id: number } | { kind: 'timeout'; id: ReturnType<typeof setTimeout> };
@@ -134,17 +156,20 @@ function cancelScheduled(handle: WarmHandle | undefined) {
 export function warmAppRoutes(): () => void {
   if (typeof window === 'undefined' || !shouldWarmRoutes()) return () => undefined;
 
-  const priority = [
-    '/feed',
-    '/soundtok',
-    '/chats',
-    '/projects',
-    '/profile',
-    '/dashboard',
-    '/ai',
-    '/presets',
-    '/pricing',
-  ];
+  const lightStartup = keepStartupLight();
+  const priority = lightStartup
+    ? ['/feed', '/soundtok', '/chats']
+    : [
+        '/feed',
+        '/soundtok',
+        '/chats',
+        '/projects',
+        '/profile',
+        '/dashboard',
+        '/ai',
+        '/presets',
+        '/pricing',
+      ];
 
   let cancelled = false;
   let idx = 0;
@@ -155,16 +180,17 @@ export function warmAppRoutes(): () => void {
     if (idx < priority.length) {
       prefetchRoute(priority[idx]);
       idx += 1;
-      handle = schedule(step, 1200);
+      handle = schedule(step, lightStartup ? 3000 : 1200);
       return;
     }
+    if (lightStartup) return;
     // Nested heavy chunks after main tabs
     for (const loader of EXTRA_LOADERS) {
       void loader().catch(() => undefined);
     }
   };
 
-  handle = schedule(step, 400);
+  handle = schedule(step, lightStartup ? 3500 : 400);
 
   return () => {
     cancelled = true;
