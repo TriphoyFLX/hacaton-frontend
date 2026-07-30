@@ -13,6 +13,7 @@ import AdminBadge from '../components/AdminBadge';
 import PlatinumBadge, { isPlatinumUser, PLATINUM_PROFILE_CSS } from '../components/PlatinumBadge';
 import ReportUserModal from '../components/ReportUserModal';
 import ProfileMediaTabs from '../components/ProfileMediaTabs';
+import { saveSoundTokResume } from '../lib/soundtokResume';
 
 // ── Styles ──
 const FONT_IMPORT = '';
@@ -516,6 +517,8 @@ export default function PublicProfile() {
   const cameFromSoundTok = Boolean(
     (location.state as { fromSoundTok?: boolean } | null)?.fromSoundTok,
   );
+  const returnSoundTokId =
+    (location.state as { soundTokId?: string | null } | null)?.soundTokId ?? null;
   const returnSwipeStartRef = useRef({ x: 0, y: 0, at: 0 });
   const returnSwipeAxisRef = useRef<'x' | 'y' | null>(null);
   const [returnSwipeX, setReturnSwipeX] = useState(0);
@@ -556,6 +559,16 @@ export default function PublicProfile() {
     fetchUser();
   }, [username, currentUser?.id, navigate, location.state]);
 
+  const returnToSoundTok = () => {
+    if (returnSoundTokId) saveSoundTokResume(returnSoundTokId);
+    // Prefer history back so the feed remounts with the saved snapshot/resume id.
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/soundtok');
+  };
+
   const handleReturnSwipeStart = (event: TouchEvent<HTMLDivElement>) => {
     if (!cameFromSoundTok || event.touches.length !== 1) return;
     const touch = event.touches[0];
@@ -586,7 +599,7 @@ export default function PublicProfile() {
     returnSwipeAxisRef.current = null;
     if (shouldReturn) {
       setReturnSwipeX(window.innerWidth);
-      window.setTimeout(() => navigate(-1), 140);
+      window.setTimeout(() => returnToSoundTok(), 140);
       return;
     }
     setReturnSwipeX(0);
@@ -700,7 +713,7 @@ export default function PublicProfile() {
         {/* Top Bar */}
         <div className="profile-topbar">
           <div className="topbar-left">
-            <button onClick={() => navigate(-1)} className="back-btn">
+            <button onClick={returnToSoundTok} className="back-btn">
               <ArrowLeft size={16} />
             </button>
             <span className="topbar-label">Профиль</span>

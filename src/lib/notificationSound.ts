@@ -119,10 +119,10 @@ function playChime(volume: number, force = false): void {
       if (!ctx) return;
 
       const t0 = ctx.currentTime + 0.03;
-      // Wide perceptual range: quiet near 0, clearly loud near 1 (squared curve).
-      const shaped = vol * vol;
-      const peakA = 0.012 + shaped * 0.52;
-      const peakB = 0.01 + shaped * 0.4;
+      // Stronger steps across the slider (desktop preview): quiet near 0, clearly louder near 1.
+      const shaped = Math.pow(vol, 1.35);
+      const peakA = 0.018 + shaped * 0.78;
+      const peakB = 0.014 + shaped * 0.62;
       tone(ctx, 523.25, t0, 0.48, peakA); // C5
       tone(ctx, 659.25, t0 + 0.16, 0.62, peakB); // E5
     } catch {

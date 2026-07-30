@@ -13,7 +13,7 @@ import {
   setSoundTokAudioPreference,
 } from '../lib/mediaUnlock';
 import { downloadSoundTokWithWatermark } from '../lib/soundtokDownload';
-import { saveSoundTokResume } from '../lib/soundtokResume';
+import { saveSoundTokFeedSnapshot, saveSoundTokResume } from '../lib/soundtokResume';
 import { authApi } from '../api/auth';
 import ShareSoundTokModal from './ShareSoundTokModal';
 import AdminBadge from './AdminBadge';
@@ -1593,11 +1593,11 @@ html.vf-keyboard-open .vf-composer-hint {
   }
 
   .vf-action-group {
-    margin-bottom: 4px;
+    margin-bottom: 0;
   }
 
   .vf-author-block {
-    margin-bottom: 6px;
+    margin-bottom: 2px;
   }
 
   .vf-music-disc {
@@ -1651,7 +1651,8 @@ html.vf-keyboard-open .vf-composer-hint {
   }
   .vf-action-count {
     font-size: 11px;
-    margin-top: 1px;
+    margin-top: 0;
+    line-height: 1.1;
   }
 
   .vf-sheet.vf-sheet--comments {
@@ -2730,6 +2731,8 @@ export default function VideoFeed({
       if (!username) return;
       const tok = feedToks[currentIndex];
       if (tok?.id) saveSoundTokResume(tok.id);
+      // Persist full loaded feed so return lands on the same clip (not just page 1).
+      saveSoundTokFeedSnapshot(feedToks);
       navigate(`/profile/${username}`, {
         state: {
           fromSoundTok: true,

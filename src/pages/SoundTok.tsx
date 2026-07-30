@@ -14,6 +14,12 @@ import {
   subscribeSoundTokUploads,
   type SoundTokUploadJob,
 } from '../lib/soundtokUploadQueue';
+import {
+  clearSoundTokFeedSnapshot,
+  clearSoundTokResume,
+  peekSoundTokFeedSnapshot,
+  peekSoundTokResume,
+} from '../lib/soundtokResume';
 
 const GUEST_KEY_STORAGE = 'sl_guest_key';
 
@@ -1001,14 +1007,30 @@ export default function SoundTok() {
   const token = useAuthStore((s) => s.token);
   const guestMode = !token;
   const [soundToks, setSoundToks] = useState<SoundTok[]>(() => {
+    const resumeId = peekSoundTokResume();
+    const snapshot = peekSoundTokFeedSnapshot<SoundTok>();
+    if (resumeId && snapshot?.some((tok) => tok.id === resumeId)) {
+      return snapshot;
+    }
     const stale = getStalePageData<{ items: SoundTok[]; hasMore: boolean }>('soundtok:feed');
     return stale?.items ?? [];
   });
-  const [loading, setLoading] = useState(() => !getStalePageData('soundtok:feed'));
+  const [loading, setLoading] = useState(() => {
+    const resumeId = peekSoundTokResume();
+    const snapshot = peekSoundTokFeedSnapshot<SoundTok>();
+    if (resumeId && snapshot?.some((tok) => tok.id === resumeId)) return false;
+    return !getStalePageData('soundtok:feed');
+  });
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(() =>
-    Boolean(getStalePageData<{ hasMore: boolean }>('soundtok:feed')?.hasMore),
-  );
+  const [hasMore, setHasMore] = useState(() => {
+    const resumeId = peekSoundTokResume();
+    const snapshot = peekSoundTokFeedSnapshot<SoundTok>();
+    if (resumeId && snapshot && snapshot.length > 0) {
+      // Assume more may exist if we had a deep scroll snapshot
+      return Boolean(getStalePageData<{ hasMore: boolean }>('soundtok:feed')?.hasMore) || snapshot.length >= 8;
+    }
+    return Boolean(getStalePageData<{ hasMore: boolean }>('soundtok:feed')?.hasMore);
+  });
   const [showCreateChoice, setShowCreateChoice] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [description, setDescription] = useState('');
@@ -1035,9 +1057,7 @@ export default function SoundTok() {
     return [selected, ...soundToks.slice(0, index), ...soundToks.slice(index + 1)];
   }, [soundToks, sharedVideoId]);
 
-  const resumeIdRef = useRef(
-    typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('soundtok:resumeId') : null
-  );
+  const resumeIdRef = useRef(peekSoundTokResume());
   const initialIndex = useMemo(() => {
     if (sharedVideoId) return 0;
     const resumeId = resumeIdRef.current;
@@ -1055,7 +1075,7 @@ export default function SoundTok() {
     navigate(`/login?next=${authNext}`);
   }, [navigate, authNext]);
 
-  const fetchSoundToks = useCallback(async (opts?: { silent?: boolean }) => {
+  const fetchSoundToks = useCallback(async (opts?: { silent?: boolean; preserveResume?: boolean }) => {
     try {
       setSharedLoadError(false);
       if (guestMode) {
@@ -1073,6 +1093,45 @@ export default function SoundTok() {
         return;
       }
 
+      const preserveResume = opts?.preserveResume !== false;
+      const resumeId = preserveResume ? peekSoundTokResume() : null;
+      const snapshot = preserveResume ? peekSoundTokFeedSnapshot<SoundTok>() : null;
+      const snapshotReady = Boolean(
+        resumeId && snapshot?.some((tok) => tok.id === resumeId),
+      );
+
+      // Returning from profile: keep deep-scroll list so the same clip stays under the finger.
+      if (snapshotReady && snapshot && !sharedVideoId) {
+        setSoundToks(snapshot);
+        setHasMore(
+          Boolean(getStalePageData<{ hasMore: boolean }>('soundtok:feed')?.hasMore) ||
+            snapshot.length >= PAGE_SIZE,
+        );
+        setLoading(false);
+        try {
+          const data = await soundTokApi.getSoundToks({ limit: PAGE_SIZE, offset: 0 });
+          setSoundToks((prev) => {
+            const byId = new Map(prev.map((t) => [t.id, t]));
+            data.items.forEach((t) => {
+              const old = byId.get(t.id);
+              byId.set(t.id, old ? { ...old, ...t } : t);
+            });
+            const ordered = prev.map((t) => byId.get(t.id) || t);
+            const extras = data.items.filter((t) => !prev.some((p) => p.id === t.id));
+            return [...ordered, ...extras];
+          });
+          setCachedPageData('soundtok:feed', {
+            items: data.items,
+            hasMore: Boolean(data.hasMore),
+          });
+        } catch {
+          /* keep snapshot */
+        }
+        // One-shot: don't pin an old deep list forever after profile return
+        clearSoundTokFeedSnapshot();
+        return;
+      }
+
       const stale = getStalePageData<{ items: SoundTok[]; hasMore: boolean }>('soundtok:feed');
       if (!opts?.silent && !stale && !sharedVideoId) setLoading(true);
 
@@ -1084,6 +1143,14 @@ export default function SoundTok() {
           items = [shared, ...items];
         } catch {
           // shared video may be deleted — keep feed as-is
+        }
+      }
+      if (resumeId && !sharedVideoId && !items.some((tok) => tok.id === resumeId)) {
+        try {
+          const resumed = await soundTokApi.getSoundTok(resumeId);
+          items = [resumed, ...items];
+        } catch {
+          /* deleted */
         }
       }
       setSoundToks(items);
@@ -1105,13 +1172,10 @@ export default function SoundTok() {
 
   useEffect(() => {
     const onRefresh = () => {
-      void fetchSoundToks({ silent: true }).finally(() => {
-        resumeIdRef.current = null;
-        try {
-          sessionStorage.removeItem('soundtok:resumeId');
-        } catch {
-          // Private mode can block session storage.
-        }
+      clearSoundTokResume();
+      clearSoundTokFeedSnapshot();
+      resumeIdRef.current = null;
+      void fetchSoundToks({ silent: true, preserveResume: false }).finally(() => {
         setFeedRevision((value) => value + 1);
       });
     };
@@ -1140,7 +1204,20 @@ export default function SoundTok() {
   }, [guestMode, loadingMore, hasMore, soundToks.length]);
 
   useEffect(() => {
-    if (!guestMode && !sharedVideoId) {
+    const resumeId = peekSoundTokResume();
+    const snapshot = peekSoundTokFeedSnapshot<SoundTok>();
+    const resuming = Boolean(
+      !guestMode && !sharedVideoId && resumeId && snapshot?.some((tok) => tok.id === resumeId),
+    );
+
+    if (resuming && snapshot) {
+      setSoundToks(snapshot);
+      setHasMore(
+        Boolean(getStalePageData<{ hasMore: boolean }>('soundtok:feed')?.hasMore) ||
+          snapshot.length >= PAGE_SIZE,
+      );
+      setLoading(false);
+    } else if (!guestMode && !sharedVideoId) {
       const stale = getStalePageData<{ items: SoundTok[]; hasMore: boolean }>('soundtok:feed');
       if (stale) {
         setSoundToks(stale.items);
@@ -1152,7 +1229,7 @@ export default function SoundTok() {
     } else {
       setLoading(true);
     }
-    fetchSoundToks();
+    fetchSoundToks({ preserveResume: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once / when deep-link id or auth changes
   }, [sharedVideoId, guestMode]);
 

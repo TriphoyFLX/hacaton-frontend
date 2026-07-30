@@ -427,7 +427,7 @@ export default function SoundRecordPage() {
     setZoomCaps(null);
   }, [teardownSoundMix]);
 
-  const forceMinZoom = useCallback(async (track: MediaStreamTrack) => {
+  const forceNormalZoom = useCallback(async (track: MediaStreamTrack) => {
     const caps = track.getCapabilities?.() as {
       zoom?: { min: number; max: number; step?: number };
     };
@@ -438,17 +438,20 @@ export default function SoundRecordPage() {
     const step =
       caps?.zoom?.step && caps.zoom.step > 0 ? caps.zoom.step : 0.05;
 
-    // Try the absolute lowest values first (ultra-wide / 0.5x), then API min
+    // Prefer optical 1× (same feel as desktop webcam), not ultra-wide / tele.
     const candidates: number[] = [];
-    for (const v of [0.5, 0.55, 0.6, 0.67, 0.7, 0.75, 0.8, 0.9, 1]) {
+    for (const v of [1, 1.0, 1.1, 1.2, 0.9]) {
       if (reportedMin != null && v + 0.001 < reportedMin) continue;
       if (reportedMax != null && v - 0.001 > reportedMax) continue;
       candidates.push(v);
     }
-    if (reportedMin != null) candidates.unshift(reportedMin);
-    const unique = [...new Set(candidates.map((v) => Math.round(v * 1000) / 1000))].sort(
-      (a, b) => a - b,
-    );
+    if (reportedMin != null && reportedMax != null) {
+      // Fallback: clamp 1 into range, else mid of range closest to 1
+      const clamped = Math.min(reportedMax, Math.max(reportedMin, 1));
+      candidates.unshift(clamped);
+    }
+
+    const unique = [...new Set(candidates.map((v) => Math.round(v * 1000) / 1000))];
 
     let applied: number | null = null;
     for (const z of unique) {
@@ -472,12 +475,12 @@ export default function SoundRecordPage() {
     if (caps?.zoom && reportedMin != null && reportedMax != null && reportedMax > reportedMin) {
       setZoomCaps({ min: reportedMin, max: reportedMax, step });
     } else if (applied != null && reportedMax != null && reportedMax > applied) {
-      setZoomCaps({ min: applied, max: reportedMax, step });
+      setZoomCaps({ min: reportedMin ?? applied, max: reportedMax, step });
     } else {
       setZoomCaps(null);
     }
 
-    setZoom(applied ?? reportedMin ?? 1);
+    setZoom(applied ?? 1);
     return applied;
   }, []);
 
@@ -488,20 +491,20 @@ export default function SoundRecordPage() {
         setZoomCaps(null);
         return;
       }
-      await forceMinZoom(track);
-      // Some phones reset zoom after play — pin it again
+      await forceNormalZoom(track);
+      // Some phones reset zoom after play — pin 1× again
       window.setTimeout(() => {
         if (streamRef.current?.getVideoTracks()[0] === track) {
-          void forceMinZoom(track);
+          void forceNormalZoom(track);
         }
       }, 120);
       window.setTimeout(() => {
         if (streamRef.current?.getVideoTracks()[0] === track) {
-          void forceMinZoom(track);
+          void forceNormalZoom(track);
         }
       }, 400);
     },
-    [forceMinZoom],
+    [forceNormalZoom],
   );
 
   const applyZoom = useCallback(async (value: number) => {
@@ -519,7 +522,7 @@ export default function SoundRecordPage() {
     }
   }, []);
 
-  const pickWidestDeviceId = async (mode: 'user' | 'environment') => {
+  const pickMainCameraDeviceId = async (mode: 'user' | 'environment') => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter((d) => d.kind === 'videoinput');
@@ -535,9 +538,10 @@ export default function SoundRecordPage() {
           if (/back|rear|environment/i.test(label)) score += 5;
           if (/front|user|face|selfie/i.test(label)) score -= 5;
         }
-        // Prefer ultra-wide / 0.5x lenses
-        if (/ultra|uw|wide|0\.5|0,5|широкий/i.test(label)) score += 8;
-        if (/tele|zoom|перископ|теле/i.test(label)) score -= 8;
+        // Prefer main / 1× lens — same framing as desktop, not ultra-wide or tele
+        if (/main|wide(?!.*ultra)|camera 0|задняя|основн/i.test(label)) score += 6;
+        if (/ultra|uw|0\.5|0,5|широкий|fisheye/i.test(label)) score -= 10;
+        if (/tele|zoom|перископ|теле|2x|3x|5x/i.test(label)) score -= 10;
         return { id: cam.deviceId, score, label };
       });
 
@@ -554,7 +558,7 @@ export default function SoundRecordPage() {
     stopStream();
     setError(null);
     try {
-      // Unlock device labels (needed to pick ultra-wide)
+      // Unlock device labels (needed to pick the main lens)
       try {
         const warm = await navigator.mediaDevices.getUserMedia({
           audio: false,
@@ -565,12 +569,12 @@ export default function SoundRecordPage() {
         /* continue */
       }
 
-      const wideId = await pickWidestDeviceId(mode);
+      const mainId = await pickMainCameraDeviceId(mode);
 
-      // Lower ideal resolution → phones often keep the wider main/ultra sensor
-      const videoConstraints: MediaTrackConstraints = wideId
+      // Vertical 9:16 like desktop record stage; normal 1× zoom (not cropped tele)
+      const videoConstraints: MediaTrackConstraints = mainId
         ? {
-            deviceId: { exact: wideId },
+            deviceId: { exact: mainId },
             width: { ideal: 720 },
             height: { ideal: 1280 },
             aspectRatio: { ideal: 9 / 16 },
@@ -582,9 +586,8 @@ export default function SoundRecordPage() {
             aspectRatio: { ideal: 9 / 16 },
           };
 
-      // Ask for the widest zoom the browser will accept up-front
       try {
-        Object.assign(videoConstraints, { zoom: { ideal: 0.5 } });
+        Object.assign(videoConstraints, { zoom: { ideal: 1 } });
       } catch {
         /* ignore */
       }
@@ -613,6 +616,7 @@ export default function SoundRecordPage() {
             facingMode: { ideal: mode },
             width: { ideal: 720 },
             height: { ideal: 1280 },
+            aspectRatio: { ideal: 9 / 16 },
           },
         });
       }
