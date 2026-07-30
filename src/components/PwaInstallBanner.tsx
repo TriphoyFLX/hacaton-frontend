@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Download, Share, X } from 'lucide-react';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { wasPwaDismissed } from '../lib/pwa';
+import { useAuthStore } from '../store/authStore';
 
 const css = `
 .pwa-banner {
@@ -98,6 +99,34 @@ const css = `
   flex-shrink: 0;
 }
 .pwa-banner-close:hover { color: rgba(240, 237, 232, 0.8); }
+@media (max-width: 480px) {
+  .pwa-banner {
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + var(--app-bottom-nav, 0px));
+    gap: 10px;
+    padding: 12px;
+    max-width: none;
+  }
+  .pwa-banner-icon {
+    width: 38px;
+    height: 38px;
+  }
+  .pwa-banner-actions {
+    width: 100%;
+  }
+  .pwa-banner-btn.primary {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+  .pwa-banner-close {
+    min-width: 40px;
+    min-height: 40px;
+    display: grid;
+    place-items: center;
+  }
+}
 @media (min-width: 900px) {
   .pwa-banner { left: auto; right: 20px; bottom: 20px; width: 360px; margin: 0; }
 }
@@ -110,6 +139,8 @@ const css = `
  */
 export default function PwaInstallBanner() {
   const location = useLocation();
+  const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   const {
     ready,
     standalone,
@@ -120,7 +151,7 @@ export default function PwaInstallBanner() {
     install,
     dismiss,
   } = usePwaInstall();
-  const [visible, setVisible] = useState(false);
+  const [iosTipReady, setIosTipReady] = useState(false);
 
   const immersive =
     location.pathname === '/soundtok' ||
@@ -128,40 +159,33 @@ export default function PwaInstallBanner() {
     location.pathname === '/studio' ||
     (location.pathname.startsWith('/chats/') && location.pathname !== '/chats');
 
+  const eligible =
+    Boolean(token && user) &&
+    ready &&
+    canOfferInstall &&
+    !wasPwaDismissed() &&
+    !installedOnDevice &&
+    !standalone;
+
   useEffect(() => {
-    if (!ready || !canOfferInstall || wasPwaDismissed() || installedOnDevice || standalone) {
-      setVisible(false);
-      return;
-    }
-
-    // Real install dialog available — show immediately
-    if (canNativeInstall) {
-      setVisible(true);
-      return;
-    }
-
-    // iOS has no beforeinstallprompt; soft tip only
-    if (!iosSafari) {
-      setVisible(false);
-      return;
-    }
+    if (!eligible || canNativeInstall || !iosSafari) return;
 
     const timer = window.setTimeout(() => {
-      if (!wasPwaDismissed() && canOfferInstall && !installedOnDevice) setVisible(true);
+      if (!wasPwaDismissed()) setIosTipReady(true);
     }, 2800);
 
     return () => window.clearTimeout(timer);
-  }, [ready, canOfferInstall, canNativeInstall, iosSafari, installedOnDevice, standalone]);
+  }, [eligible, canNativeInstall, iosSafari]);
 
   const onDismiss = () => {
     dismiss();
-    setVisible(false);
+    setIosTipReady(false);
   };
 
   const onInstall = async () => {
     if (canNativeInstall) {
       const result = await install();
-      if (result === 'accepted' || result === 'dismissed') setVisible(false);
+      if (result === 'accepted' || result === 'dismissed') setIosTipReady(false);
       return;
     }
     // iOS: no programmatic install — open Share guidance once, then snooze banner
@@ -170,9 +194,11 @@ export default function PwaInstallBanner() {
         'Чтобы установить SoundLab на iPhone:\n\n1. Нажмите «Поделиться» в Safari\n2. Выберите «На экран Домой»\n3. Подтвердите «Добавить»',
       );
       dismiss();
-      setVisible(false);
+      setIosTipReady(false);
     }
   };
+
+  const visible = eligible && (canNativeInstall || (iosSafari && iosTipReady));
 
   if (!visible || immersive || standalone || installedOnDevice || !canOfferInstall) return null;
 

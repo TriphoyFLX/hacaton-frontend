@@ -1,5 +1,6 @@
 import { Download, Share } from 'lucide-react';
 import { usePwaInstall } from '../hooks/usePwaInstall';
+import { useAuthStore } from '../store/authStore';
 
 type Props = {
   className?: string;
@@ -12,9 +13,11 @@ type Props = {
  * Never shows a button that only opens generic desktop instruction alerts.
  */
 export default function PwaInstallButton({ className = '', variant = 'button', onDone }: Props) {
+  const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   const { canOfferInstall, canNativeInstall, iosSafari, install, dismiss } = usePwaInstall();
 
-  if (!canOfferInstall) return null;
+  if (!token || !user || !canOfferInstall) return null;
 
   const handleClick = async () => {
     if (canNativeInstall) {
